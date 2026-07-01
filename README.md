@@ -86,6 +86,26 @@ lmas install
 
 The installer detects OpenCode and Codex, lists installed agents first, and can configure either or both.
 
+## Automated Publishing
+
+Pushing a new `packages/let-my-agent-sleep/package.json` version to `master` runs `.github/workflows/publish.yml`.
+
+The workflow:
+
+- checks whether `let-my-agent-sleep@<version>` already exists on npm
+- runs smoke tests and `npm pack --dry-run` when the version is unpublished
+- publishes with npm Trusted Publishing/OIDC
+- creates a GitHub Release named `v<version>`
+
+Before relying on automation, configure npm trusted publishing for the package:
+
+- publisher: GitHub Actions
+- repository owner/name: `jaein4722/Let-My-Agent-Sleep`
+- workflow filename: `publish.yml`
+- allowed action: `npm publish`
+
+Then release by bumping `packages/let-my-agent-sleep/package.json`, committing, and pushing to `master`.
+
 ## Codex Prototype
 
 Codex support is secondary and uses the packaged skill under `codex/let-my-agent-sleep`.

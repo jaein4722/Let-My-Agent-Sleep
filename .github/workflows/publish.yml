@@ -1,0 +1,97 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - packages/let-my-agent-sleep/package.json
+      - .github/workflows/publish.yml
+  workflow_dispatch:
+
+concurrency:
+  group: publish-let-my-agent-sleep
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Detect release state
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/let-my-agent-sleep/package.json').version")
+          tag="v${version}"
+
+          if npm view "let-my-agent-sleep@${version}" version >/dev/null 2>&1; then
+            publish_needed=false
+          else
+            publish_needed=true
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            release_needed=false
+          else
+            release_needed=true
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "publish_needed=$publish_needed"
+            echo "release_needed=$release_needed"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "version=$version"
+          echo "tag=$tag"
+          echo "publish_needed=$publish_needed"
+          echo "release_needed=$release_needed"
+
+      - name: Run smoke tests
+        if: steps.release.outputs.publish_needed == 'true'
+        run: npm run test:smoke
+
+      - name: Pack dry run
+        if: steps.release.outputs.publish_needed == 'true'
+        run: npm pack --workspace let-my-agent-sleep --dry-run
+
+      - name: Publish to npm
+        if: steps.release.outputs.publish_needed == 'true'
+        run: npm publish --workspace let-my-agent-sleep --provenance
+
+      - name: Create GitHub release
+        if: steps.release.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.release.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "let-my-agent-sleep ${{ steps.release.outputs.tag }}" \
+            --generate-notes
