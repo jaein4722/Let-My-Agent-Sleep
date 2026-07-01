@@ -32,6 +32,14 @@ Use this skill when a command is likely to run for minutes or hours, including m
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
 - Read stdout/stderr first; read metadata only when command context is unclear.
 
+## Path Rules
+
+- Prefer workspace-local paths under `.lmas/` for all LMAS run data, helper scripts, and artifacts.
+- Use `.lmas/runs` as the default `--runs-dir`.
+- Use `.lmas/artifacts/<task-name-or-timestamp>` as the default `--artifacts-dir` for task outputs.
+- If a helper script is needed to avoid complex shell quoting, write it under `.lmas/tmp/`, not `/tmp`.
+- Use `/tmp` only when the current workspace is not writable or the user explicitly requests a temporary system path.
+
 ## Adapter Notes
 
 The Codex prototype adapter uses:
