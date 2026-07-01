@@ -2,11 +2,21 @@
 set -u
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+MOCK_BIN=$(mktemp -d "${TMPDIR:-/tmp}/lmas-detected-bin.XXXXXX")
+trap 'rm -rf "$MOCK_BIN"' EXIT
+
+for command in opencode codex claude; do
+  cat > "$MOCK_BIN/$command" <<'SH'
+#!/usr/bin/env sh
+printf 'mock\n'
+SH
+  chmod +x "$MOCK_BIN/$command"
+done
 
 OPENCODE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --dry-run --yes)
 CODEX_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --dry-run --yes)
 CLAUDE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --dry-run --yes)
-DETECTED_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
+DETECTED_OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
 
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'plugin: let-my-agent-sleep' || { printf 'opencode dry-run missing plugin config\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
