@@ -15,10 +15,10 @@ Use this skill when a command is likely to run for minutes or hours, including m
 2. Start the real long job with:
 
 ```bash
-codex/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh start --adapter codex -- <command...>
+~/.agents/skills/let-my-agent-sleep/scripts/lmas.sh start --adapter codex -- <command...>
 ```
 
-3. If `LMAS_CODEX_SESSION_ID` is known, set it before starting the job so the watcher can run `codex exec resume`.
+3. Use `--adapter codex` for real long jobs. Use `--adapter noop` only for local smoke tests or when the user explicitly asks for manual fallback.
 4. After `LMAS_HANDOFF v1` is printed, stop the current loop. Do not poll the logs or wait for completion.
 5. When `LMAS_COMPLETION_EVENT v1` appears later in the session, run `lmas.sh status <run_id>` if you need a concise summary, then inspect stdout/stderr/artifacts and continue the original task.
 
@@ -26,7 +26,9 @@ codex/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh start --adapt
 
 - Do not run long jobs directly when the Let My Agent Sleep wrapper is available.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
-- If the Codex adapter cannot resume automatically, tell the user where `resume_prompt.txt` is.
+- After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
+- If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
+- If the Codex adapter cannot resume automatically, tell the user where `resume_prompt.txt` and `adapter.log` are.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
 - Read stdout/stderr first; read metadata only when command context is unclear.
 

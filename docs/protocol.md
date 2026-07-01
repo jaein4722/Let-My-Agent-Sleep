@@ -70,10 +70,14 @@ bin/lmas.sh status <run_id>
 It reports:
 
 - `run_id`
-- `status`
+- `status: RUNNING | LOST | SUCCEEDED | FAILED | CANCELLED | TIMEOUT`
 - `exit_code` when complete
 - `run_dir`
 - `stdout`
 - `stderr`
 - `metadata`
+- `watcher_log`
+- `adapter_log`
 - `resume_prompt` when available
+
+`LOST` means the handoff exists, no completion event was written, and the watcher process is no longer alive. Treat it as a failed handoff/run state and inspect `watcher_log` plus `stderr` before deciding whether to relaunch.

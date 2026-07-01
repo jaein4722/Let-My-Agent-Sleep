@@ -20,11 +20,30 @@ STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$RU
 STATUS_BY_DIR=$(cd "$ROOT" && ./bin/lmas.sh status "$RUN_DIR")
 STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js status "$RUN_ID")
 LIST_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh list)
+LOST_RUN_ID="lmas_lost_test"
+LOST_RUN_DIR="$RUNS_DIR/$LOST_RUN_ID"
+mkdir -p "$LOST_RUN_DIR"
+cat > "$LOST_RUN_DIR/handoff.txt" <<EOF
+LMAS_HANDOFF v1
+run_id: $LOST_RUN_ID
+status: STARTED
+cwd: $ROOT
+command: 'sleep' '999'
+pid_or_job_id: 999999999
+stdout: $LOST_RUN_DIR/stdout.log
+stderr: $LOST_RUN_DIR/stderr.log
+metadata: $LOST_RUN_DIR/metadata.txt
+artifacts_dir: $LOST_RUN_DIR
+started_at: 2026-07-01T00:00:00Z
+resume_instruction: Wait for completion event or inspect $LOST_RUN_DIR/resume_prompt.txt after the job exits.
+EOF
+LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$LOST_RUN_ID")
 
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_DIR" | grep -q "^run_id: $RUN_ID$" || { printf 'status by dir reported wrong run id\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_CLI" | grep -q '^LMAS_STATUS v1$' || { printf 'package cli status did not emit status event\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include completed run\n' >&2; exit 1; }
+printf '%s\n' "$LOST_STATUS" | grep -q '^status: LOST$' || { printf 'lost run did not report LOST\n' >&2; exit 1; }
 
 printf 'ok status/list: %s\n' "$RUN_ID"

@@ -387,8 +387,18 @@ read_field() {
   fi
 }
 
+process_exists() {
+  local pid
+  pid=$1
+  [ -n "$pid" ] || return 1
+  case "$pid" in
+    *[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
 status_command() {
-  local runs_dir run_ref run_dir event_file status exit_code run_id
+  local runs_dir run_ref run_dir event_file status exit_code run_id pid_or_job_id
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
 
   while [ "$#" -gt 0 ]; do
@@ -418,7 +428,12 @@ status_command() {
     exit_code=$(read_field "$event_file" exit_code)
   else
     event_file="$run_dir/handoff.txt"
-    status=RUNNING
+    pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
+    if process_exists "$pid_or_job_id"; then
+      status=RUNNING
+    else
+      status=LOST
+    fi
     exit_code=
   fi
 
@@ -434,6 +449,8 @@ status_command() {
     printf 'stdout: %s\n' "$run_dir/stdout.log"
     printf 'stderr: %s\n' "$run_dir/stderr.log"
     printf 'metadata: %s\n' "$run_dir/metadata.txt"
+    printf 'watcher_log: %s\n' "$run_dir/watcher.log"
+    printf 'adapter_log: %s\n' "$run_dir/adapter.log"
     if [ -f "$run_dir/resume_prompt.txt" ]; then
       printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
     fi
@@ -472,7 +489,12 @@ list_command() {
       exit_code=$(read_field "$event_file" exit_code)
     else
       event_file="$run_dir/handoff.txt"
-      status=RUNNING
+      pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
+      if process_exists "$pid_or_job_id"; then
+        status=RUNNING
+      else
+        status=LOST
+      fi
       exit_code=
     fi
     run_id=$(read_field "$event_file" run_id)

@@ -46,3 +46,7 @@ lmas.sh status <run_id>
 ```
 
 Use it for quick inspection before reading stdout/stderr.
+
+Status can be `RUNNING`, `LOST`, `SUCCEEDED`, `FAILED`, `CANCELLED`, or `TIMEOUT`.
+
+`LOST` means the handoff exists, no completion event was written, and the watcher process is no longer alive. Inspect `watcher_log` and `stderr` before deciding whether to relaunch.

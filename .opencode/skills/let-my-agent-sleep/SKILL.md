@@ -21,6 +21,8 @@ Use this skill when a command is likely to run for minutes or hours, including m
 
 - Do not run long jobs directly with the normal bash tool when `lmas_start` is available.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
+- After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
+- If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - Preserve the original command in metadata.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
 - Prefer `lmas_status` over manually reading metadata files. Read stdout/stderr first; read metadata only when command context is unclear.
