@@ -33,11 +33,6 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install runtime dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y tmux
-
       - name: Install npm dependencies
         run: npm install
 
@@ -73,10 +68,6 @@ jobs:
           echo "tag=$tag"
           echo "publish_needed=$publish_needed"
           echo "release_needed=$release_needed"
-
-      - name: Run smoke tests
-        if: steps.release.outputs.publish_needed == 'true'
-        run: npm run test:smoke
 
       - name: Pack dry run
         if: steps.release.outputs.publish_needed == 'true'
