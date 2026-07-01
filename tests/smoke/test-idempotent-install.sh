@@ -85,8 +85,18 @@ if [ -f "$TMP_HOME/.config/opencode/opencode.json" ]; then
   exit 1
 fi
 
-if ! grep -q '"let-my-agent-sleep"' "$TMP_JSONC_HOME/.config/opencode/opencode.jsonc"; then
+if ! grep -q '"let-my-agent-sleep@latest"' "$TMP_JSONC_HOME/.config/opencode/opencode.jsonc"; then
   printf 'opencode jsonc config missing plugin entry\n' >&2
+  exit 1
+fi
+
+if ! grep -q '"let-my-agent-sleep@latest"' "$TMP_HOME/.config/opencode/opencode.jsonc"; then
+  printf 'fresh opencode config missing @latest plugin entry\n' >&2
+  exit 1
+fi
+
+if grep -q '"let-my-agent-sleep"' "$TMP_HOME/.config/opencode/opencode.jsonc"; then
+  printf 'fresh opencode config should not keep bare plugin entry\n' >&2
   exit 1
 fi
 

@@ -10,6 +10,7 @@ import { homedir } from "node:os"
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
 const packageName = packageJson.name
+const openCodePluginSpec = `${packageName}@latest`
 
 const paths = {
   openCodeSkill: join(packageRoot, "skills", "let-my-agent-sleep", "SKILL.md"),
@@ -489,16 +490,18 @@ function installOpenCode(options) {
     throw new Error(`${configPath} has unsupported "plugin" shape; expected string or array`)
   }
 
-  if (!config.plugin.includes(packageName)) {
-    config.plugin.push(packageName)
-  }
+  config.plugin = config.plugin.filter((plugin) => {
+    if (typeof plugin !== "string") return true
+    return plugin !== packageName && !plugin.startsWith(`${packageName}@`)
+  })
+  config.plugin.push(openCodePluginSpec)
 
   writeText(configPath, `${JSON.stringify(config, null, 2)}\n`, options)
   copyFileAsset(paths.openCodeSkill, skillTarget, options)
   refreshOpenCodePluginCache(options)
 
   console.log("OpenCode install configured.")
-  console.log(`  plugin: ${packageName}`)
+  console.log(`  plugin: ${openCodePluginSpec}`)
   console.log(`  skill: ${skillTarget}`)
   console.log(`  plugin cache: ${join(resolveOpenCodeCacheDir(), "packages", packageName)}`)
   console.log(`  root plugin cache: ${resolveOpenCodeCacheDir()}`)
