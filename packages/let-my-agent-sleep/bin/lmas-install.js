@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -178,6 +178,10 @@ function logWrite(options, action, target) {
   console.log(`${prefix} ${action}: ${target}`)
 }
 
+function logSkip(action, target) {
+  console.log(`[skip] ${action}: ${target}`)
+}
+
 function backupIfNeeded(target, options) {
   if (!existsSync(target) || options.force || options.dryRun) return
   const backup = `${target}.bak.${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")}`
@@ -185,7 +189,50 @@ function backupIfNeeded(target, options) {
   console.log(`[backup] ${target} -> ${backup}`)
 }
 
+function sameFileContent(source, target) {
+  if (!existsSync(source) || !existsSync(target)) return false
+  const sourceStat = statSync(source)
+  const targetStat = statSync(target)
+  if (!sourceStat.isFile() || !targetStat.isFile()) return false
+  return readFileSync(source).equals(readFileSync(target))
+}
+
+function sameTreeContent(source, target) {
+  if (!existsSync(source) || !existsSync(target)) return false
+
+  const sourceStat = statSync(source)
+  const targetStat = statSync(target)
+
+  if (sourceStat.isFile() || targetStat.isFile()) {
+    return sameFileContent(source, target)
+  }
+
+  if (!sourceStat.isDirectory() || !targetStat.isDirectory()) {
+    return false
+  }
+
+  const sourceEntries = readdirSync(source, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+  const targetEntries = readdirSync(target, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+
+  if (sourceEntries.length !== targetEntries.length) return false
+
+  for (let index = 0; index < sourceEntries.length; index += 1) {
+    const sourceEntry = sourceEntries[index]
+    const targetEntry = targetEntries[index]
+    if (sourceEntry.name !== targetEntry.name) return false
+    if (sourceEntry.isDirectory() !== targetEntry.isDirectory()) return false
+    if (sourceEntry.isFile() !== targetEntry.isFile()) return false
+    if (!sameTreeContent(join(source, sourceEntry.name), join(target, targetEntry.name))) return false
+  }
+
+  return true
+}
+
 function writeText(target, content, options) {
+  if (existsSync(target) && statSync(target).isFile() && readFileSync(target, "utf8") === content) {
+    logSkip("write", target)
+    return
+  }
   logWrite(options, "write", target)
   if (options.dryRun) return
   mkdirSync(dirname(target), { recursive: true })
@@ -194,6 +241,10 @@ function writeText(target, content, options) {
 }
 
 function copyFileAsset(source, target, options) {
+  if (sameFileContent(source, target)) {
+    logSkip("copy", `${source} -> ${target}`)
+    return
+  }
   logWrite(options, "copy", `${source} -> ${target}`)
   if (options.dryRun) return
   mkdirSync(dirname(target), { recursive: true })
@@ -202,6 +253,10 @@ function copyFileAsset(source, target, options) {
 }
 
 function copyDirAsset(source, target, options) {
+  if (sameTreeContent(source, target)) {
+    logSkip("copy-dir", `${source} -> ${target}`)
+    return
+  }
   logWrite(options, "copy-dir", `${source} -> ${target}`)
   if (options.dryRun) return
   if (existsSync(target)) {

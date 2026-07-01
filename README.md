@@ -95,6 +95,7 @@ tests/smoke/test-success-completion.sh
 tests/smoke/test-failed-completion.sh
 tests/smoke/test-status-list.sh
 tests/smoke/test-installer-dry-run.sh
+tests/smoke/test-idempotent-install.sh
 tests/smoke/test-opencode-adapter.sh
 tests/smoke/test-codex-adapter.sh
 ```
