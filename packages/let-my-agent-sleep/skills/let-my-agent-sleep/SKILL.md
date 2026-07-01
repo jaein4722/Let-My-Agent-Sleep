@@ -29,10 +29,9 @@ Use this skill when a command is likely to run for minutes or hours, including m
 
 ## Path Rules
 
-- Prefer workspace-local paths under `.lmas/` for all LMAS run data, helper scripts, and artifacts.
+- Prefer workspace-local paths under `.lmas/` for all LMAS run data and artifacts.
 - Use `.lmas/runs` as the default run directory.
-- Use `.lmas/artifacts/<task-name-or-timestamp>` as the default artifact directory for task outputs.
-- If a helper script is needed to avoid complex shell quoting, write it under `.lmas/tmp/`, not `/tmp`.
+- Use `.lmas/artifacts/<task-name-or-timestamp>` as the default artifact directory for task outputs and reproducible helper scripts.
 - Use `/tmp` only when the current workspace is not writable or the user explicitly requests a temporary system path.
 
 ## OpenCode Setup

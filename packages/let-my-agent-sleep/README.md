@@ -60,6 +60,12 @@ Runs are stored under:
 .lmas/runs/<run_id>/
 ```
 
+Task artifacts and reproducible helper scripts should live under:
+
+```text
+.lmas/artifacts/<task-or-timestamp>/
+```
+
 Use:
 
 ```bash

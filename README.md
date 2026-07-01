@@ -20,6 +20,15 @@ bin/lmas.sh status <run_id>
 bin/lmas.sh list
 ```
 
+## Path Policy
+
+LMAS keeps run state workspace-local by default.
+
+- Run metadata and logs: `.lmas/runs/<run_id>/`
+- Task artifacts and reproducible helper scripts: `.lmas/artifacts/<task-or-timestamp>/`
+
+Use `/tmp` only when the workspace is not writable or a system temporary path is explicitly requested.
+
 ## OpenCode Prototype
 
 OpenCode is the primary target.
