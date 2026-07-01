@@ -21,6 +21,7 @@ DETECTED_OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" node packages/let-my-agen
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'plugin: let-my-agent-sleep' || { printf 'opencode dry-run missing plugin config\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/skills/let-my-agent-sleep/SKILL.md' || { printf 'opencode dry-run missing skill target\n' >&2; exit 1; }
+printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.cache/opencode/packages/let-my-agent-sleep/package.json' || { printf 'opencode dry-run missing plugin cache target\n' >&2; exit 1; }
 printf '%s\n' "$CODEX_OUTPUT" | grep -q '.agents/skills/let-my-agent-sleep' || { printf 'codex dry-run missing skill target\n' >&2; exit 1; }
 printf '%s\n' "$CODEX_OUTPUT" | grep -q 'plugin: not installed' || { printf 'codex dry-run should avoid plugin install\n' >&2; exit 1; }
 printf '%s\n' "$CLAUDE_OUTPUT" | grep -q '.claude/skills/let-my-agent-sleep' || { printf 'claude dry-run missing skill target\n' >&2; exit 1; }

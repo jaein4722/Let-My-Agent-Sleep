@@ -297,6 +297,13 @@ function copyDirAsset(source, target, options) {
   cpSync(source, target, { recursive: true })
 }
 
+function removePath(target, options) {
+  if (!existsSync(target)) return
+  logWrite(options, "remove", target)
+  if (options.dryRun) return
+  rmSync(target, { recursive: true, force: true })
+}
+
 function readJsonIfExists(target, fallback) {
   if (!existsSync(target)) return fallback
   return JSON.parse(readFileSync(target, "utf8"))
@@ -404,6 +411,40 @@ function resolveOpenCodeConfigPath(configDir) {
   return jsoncPath
 }
 
+function resolveOpenCodeCacheDir() {
+  if (process.env.OPENCODE_CACHE_DIR) return process.env.OPENCODE_CACHE_DIR
+  const cacheHome = process.env.XDG_CACHE_HOME || join(homedir(), ".cache")
+  return join(cacheHome, "opencode")
+}
+
+function refreshOpenCodePluginCache(options) {
+  const cacheDir = resolveOpenCodeCacheDir()
+  const packagesDir = join(cacheDir, "packages")
+  const targets = new Set([join(packagesDir, packageName)])
+
+  if (existsSync(packagesDir)) {
+    for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      if (entry.name === packageName || entry.name.startsWith(`${packageName}@`)) {
+        targets.add(join(packagesDir, entry.name))
+      }
+    }
+  }
+
+  const cachePackageJson = {
+    dependencies: {
+      [packageName]: packageJson.version,
+    },
+  }
+
+  for (const target of targets) {
+    writeText(join(target, "package.json"), `${JSON.stringify(cachePackageJson, null, 2)}\n`, options)
+    removePath(join(target, "package-lock.json"), options)
+    removePath(join(target, "bun.lock"), options)
+    removePath(join(target, "node_modules", packageName), options)
+  }
+}
+
 function installOpenCode(options) {
   const configDir = process.env.OPENCODE_CONFIG_DIR || join(homedir(), ".config", "opencode")
   const configPath = resolveOpenCodeConfigPath(configDir)
@@ -424,10 +465,12 @@ function installOpenCode(options) {
 
   writeText(configPath, `${JSON.stringify(config, null, 2)}\n`, options)
   copyFileAsset(paths.openCodeSkill, skillTarget, options)
+  refreshOpenCodePluginCache(options)
 
   console.log("OpenCode install configured.")
   console.log(`  plugin: ${packageName}`)
   console.log(`  skill: ${skillTarget}`)
+  console.log(`  plugin cache: ${join(resolveOpenCodeCacheDir(), "packages", packageName)}`)
 }
 
 function removeMarketplaceEntry(marketplace, entryName) {
