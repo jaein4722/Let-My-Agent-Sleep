@@ -20,8 +20,6 @@ Options:
   --runs-dir <path>                Run directory root. Default: .lmas/runs
   --cwd <path>                     Working directory for the command. Default: current directory
   --artifacts-dir <path>           Artifact directory to report in events. Default: run directory
-  --launcher <auto|nohup|tmux|launchctl>
-                                      Watcher launcher. Default: auto
   --metadata <key=value>           Metadata line to append. May be repeated
   -h, --help                       Show help
 
@@ -31,7 +29,6 @@ Environment:
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
   LMAS_CODEX_SESSION_ID      Required for codex adapter
-  LMAS_LAUNCHER              auto, nohup, tmux, or launchctl. Default: auto
 EOF
 }
 
@@ -40,12 +37,18 @@ die() {
   exit 2
 }
 
-now_utc() {
-  date -u '+%Y-%m-%dT%H:%M:%SZ'
+timezone_offset() {
+  local offset
+  offset=$(date '+%z')
+  printf '%s:%s\n' "${offset%??}" "${offset#???}"
 }
 
-compact_now_utc() {
-  date -u '+%Y%m%dT%H%M%SZ'
+now_system() {
+  printf '%s%s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$(timezone_offset)"
+}
+
+compact_now_system() {
+  date '+%Y%m%dT%H%M%S%z'
 }
 
 shell_quote() {
@@ -53,15 +56,6 @@ shell_quote() {
   value=$1
   escaped=$(printf '%s' "$value" | sed "s/'/'\\\\''/g")
   printf "'%s'" "$escaped"
-}
-
-xml_escape() {
-  sed \
-    -e 's/&/\&amp;/g' \
-    -e 's/</\&lt;/g' \
-    -e 's/>/\&gt;/g' \
-    -e 's/"/\&quot;/g' \
-    -e "s/'/\&apos;/g"
 }
 
 quote_command() {
@@ -249,53 +243,8 @@ run_adapter() {
   esac
 }
 
-select_launcher() {
-  local requested adapter
-  requested=$1
-  adapter=$2
-
-  case "$requested" in
-    auto)
-      if [ "$adapter" = "codex" ]; then
-        if [ "$(uname -s 2>/dev/null)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
-          printf 'launchctl\n'
-        elif command -v tmux >/dev/null 2>&1; then
-          printf 'tmux\n'
-        else
-          printf 'nohup\n'
-        fi
-      else
-        printf 'nohup\n'
-      fi
-      ;;
-    nohup|tmux|launchctl)
-      printf '%s\n' "$requested"
-      ;;
-    *)
-      die "unknown launcher: $requested"
-      ;;
-  esac
-}
-
-launch_watcher_nohup() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir
-  run_dir=$1
-  run_id=$2
-  adapter=$3
-  cwd=$4
-  command_text=$5
-  stdout_path=$6
-  stderr_path=$7
-  metadata_path=$8
-  artifacts_dir=$9
-  shift 9
-
-  nohup "$SCRIPT_PATH" __watch "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" -- "$@" > "$run_dir/watcher.log" 2>&1 < /dev/null &
-  printf '%s\n' "$!"
-}
-
 launch_watcher_tmux() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir session command_line log_path
+  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir session command_line log_path tmux_socket
   run_dir=$1
   run_id=$2
   adapter=$3
@@ -308,62 +257,14 @@ launch_watcher_tmux() {
   shift 9
 
   command -v tmux >/dev/null 2>&1 || die "tmux launcher requested but tmux is not available"
-  session="lmas_${run_id}"
+  session="$run_id"
+  mkdir -p "$cwd/.lmas/tmux" || die "failed to create tmux socket directory: $cwd/.lmas/tmux"
+  tmux_socket=".lmas/tmux/${run_id}.sock"
+  printf '%s\n' "$tmux_socket" > "$run_dir/tmux_socket.txt"
   command_line=$(quote_command "$SCRIPT_PATH" __watch "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" -- "$@")
   log_path=$(shell_quote "$run_dir/watcher.log")
-  tmux new-session -d -s "$session" "exec $command_line > $log_path 2>&1" || die "failed to start tmux watcher session: $session"
+  ( cd "$cwd" && tmux -S "$tmux_socket" new-session -d -s "$session" "exec $command_line > $log_path 2>&1" ) || die "failed to start tmux watcher session: $session"
   printf 'tmux:%s\n' "$session"
-}
-
-launch_watcher_launchctl() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir label plist command_line log_path uid target cleanup_target escaped_program
-  run_dir=$1
-  run_id=$2
-  adapter=$3
-  cwd=$4
-  command_text=$5
-  stdout_path=$6
-  stderr_path=$7
-  metadata_path=$8
-  artifacts_dir=$9
-  shift 9
-
-  command -v launchctl >/dev/null 2>&1 || die "launchctl launcher requested but launchctl is not available"
-  uid=$(id -u)
-  target="gui/$uid"
-  label="com.let-my-agent-sleep.$run_id"
-  plist="$run_dir/watcher.plist"
-  command_line=$(quote_command "$SCRIPT_PATH" __watch "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" -- "$@")
-  log_path=$(shell_quote "$run_dir/watcher.log")
-  cleanup_target=$(shell_quote "$target/$label")
-  escaped_program=$(printf '%s > %s 2>&1; launchctl bootout %s >/dev/null 2>&1 || true' "$command_line" "$log_path" "$cleanup_target" | xml_escape)
-
-  cat > "$plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>$label</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/sh</string>
-    <string>-lc</string>
-    <string>$escaped_program</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <false/>
-  <key>WorkingDirectory</key>
-  <string>$(printf '%s' "$cwd" | xml_escape)</string>
-</dict>
-</plist>
-EOF
-
-  launchctl bootout "$target/$label" >/dev/null 2>&1 || true
-  launchctl bootstrap "$target" "$plist" || die "failed to start launchctl watcher: $label"
-  printf 'launchctl:%s\n' "$label"
 }
 
 watch_command() {
@@ -393,19 +294,18 @@ watch_command() {
     status=FAILED
   fi
 
-  finished_at=$(now_utc)
+  finished_at=$(now_system)
   write_completion_event "$run_dir" "$run_id" "$status" "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
   run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir launcher requested_launcher run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id
+  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
-  requested_launcher=${LMAS_LAUNCHER:-auto}
   cwd=$(pwd)
   artifacts_dir=
 
@@ -433,7 +333,10 @@ start_command() {
         ;;
       --launcher)
         [ "$#" -ge 2 ] || die "--launcher requires a value"
-        requested_launcher=$2
+        case "$2" in
+          auto|tmux) ;;
+          *) die "only tmux launcher is supported" ;;
+        esac
         shift 2
         ;;
       --metadata)
@@ -458,7 +361,7 @@ start_command() {
   [ "$#" -gt 0 ] || die "missing command after --"
   [ -d "$cwd" ] || die "cwd does not exist: $cwd"
 
-  run_id="lmas_$(compact_now_utc)_$$_${RANDOM:-0}"
+  run_id="lmas_$(compact_now_system)_$$_${RANDOM:-0}"
   run_dir="$runs_dir/$run_id"
   mkdir -p "$run_dir" || die "failed to create run directory: $run_dir"
 
@@ -467,8 +370,7 @@ start_command() {
   fi
 
   command_text=$(quote_command "$@")
-  started_at=$(now_utc)
-  launcher=$(select_launcher "$requested_launcher" "$adapter")
+  started_at=$(now_system)
   metadata_path="$run_dir/metadata.txt"
   stdout_path="$run_dir/stdout.log"
   stderr_path="$run_dir/stderr.log"
@@ -477,7 +379,7 @@ start_command() {
   {
     printf 'run_id=%s\n' "$run_id"
     printf 'adapter=%s\n' "$adapter"
-    printf 'launcher=%s\n' "$launcher"
+    printf 'launcher=tmux\n'
     printf 'cwd=%s\n' "$cwd"
     printf 'command=%s\n' "$command_text"
     printf 'started_at=%s\n' "$started_at"
@@ -490,20 +392,7 @@ start_command() {
   } > "$metadata_path"
   printf '%s\n' "$command_text" > "$run_dir/command.txt"
 
-  case "$launcher" in
-    nohup)
-      watcher_id=$(launch_watcher_nohup "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start nohup watcher"
-      ;;
-    tmux)
-      watcher_id=$(launch_watcher_tmux "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start tmux watcher"
-      ;;
-    launchctl)
-      watcher_id=$(launch_watcher_launchctl "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start launchctl watcher"
-      ;;
-    *)
-      die "unsupported launcher: $launcher"
-      ;;
-  esac
+  watcher_id=$(launch_watcher_tmux "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start tmux watcher"
 
   write_handoff "$run_dir" "$run_id" STARTED "$cwd" "$command_text" "$watcher_id" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$resume_instruction" "$started_at"
   cat "$run_dir/handoff.txt"
@@ -537,20 +426,22 @@ read_field() {
 }
 
 watcher_alive() {
-  local id session label target
+  local id run_dir session tmux_socket cwd_for_socket
   id=$1
+  run_dir=${2:-}
   [ -n "$id" ] || return 1
   case "$id" in
-    launchctl:*)
-      label=${id#launchctl:}
-      command -v launchctl >/dev/null 2>&1 || return 1
-      target="gui/$(id -u)/$label"
-      launchctl print "$target" 2>/dev/null | grep -q 'state = running'
-      ;;
     tmux:*)
       session=${id#tmux:}
       command -v tmux >/dev/null 2>&1 || return 1
-      tmux has-session -t "$session" >/dev/null 2>&1
+      if [ -n "$run_dir" ] && [ -f "$run_dir/tmux_socket.txt" ]; then
+        tmux_socket=$(sed -n '1p' "$run_dir/tmux_socket.txt")
+      else
+        tmux_socket=".lmas/tmux/${session}.sock"
+      fi
+      cwd_for_socket=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null)
+      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
+      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" has-session -t "$session" >/dev/null 2>&1 )
       ;;
     *[!0-9]*)
       return 1
@@ -593,7 +484,7 @@ status_command() {
   else
     event_file="$run_dir/handoff.txt"
     pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
-    if watcher_alive "$pid_or_job_id"; then
+    if watcher_alive "$pid_or_job_id" "$run_dir"; then
       status=RUNNING
     else
       status=LOST
@@ -654,7 +545,7 @@ list_command() {
     else
       event_file="$run_dir/handoff.txt"
       pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
-      if watcher_alive "$pid_or_job_id"; then
+      if watcher_alive "$pid_or_job_id" "$run_dir"; then
         status=RUNNING
       else
         status=LOST

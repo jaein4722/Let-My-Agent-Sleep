@@ -56,25 +56,6 @@ started_at: 2026-07-01T00:00:00Z
 resume_instruction: Wait for completion event or inspect $TMUX_LOST_RUN_DIR/resume_prompt.txt after the job exits.
 EOF
 TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$TMUX_LOST_RUN_ID")
-LAUNCHCTL_LOST_RUN_ID="lmas_launchctl_lost_test"
-LAUNCHCTL_LOST_RUN_DIR="$RUNS_DIR/$LAUNCHCTL_LOST_RUN_ID"
-mkdir -p "$LAUNCHCTL_LOST_RUN_DIR"
-cat > "$LAUNCHCTL_LOST_RUN_DIR/handoff.txt" <<EOF
-LMAS_HANDOFF v1
-run_id: $LAUNCHCTL_LOST_RUN_ID
-status: STARTED
-cwd: $ROOT
-command: 'sleep' '999'
-pid_or_job_id: launchctl:com.let-my-agent-sleep.missing
-stdout: $LAUNCHCTL_LOST_RUN_DIR/stdout.log
-stderr: $LAUNCHCTL_LOST_RUN_DIR/stderr.log
-metadata: $LAUNCHCTL_LOST_RUN_DIR/metadata.txt
-artifacts_dir: $LAUNCHCTL_LOST_RUN_DIR
-started_at: 2026-07-01T00:00:00Z
-resume_instruction: Wait for completion event or inspect $LAUNCHCTL_LOST_RUN_DIR/resume_prompt.txt after the job exits.
-EOF
-LAUNCHCTL_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$LAUNCHCTL_LOST_RUN_ID")
-
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_DIR" | grep -q "^run_id: $RUN_ID$" || { printf 'status by dir reported wrong run id\n' >&2; exit 1; }
@@ -82,6 +63,5 @@ printf '%s\n' "$STATUS_BY_CLI" | grep -q '^LMAS_STATUS v1$' || { printf 'package
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LOST_STATUS" | grep -q '^status: LOST$' || { printf 'lost run did not report LOST\n' >&2; exit 1; }
 printf '%s\n' "$TMUX_LOST_STATUS" | grep -q '^status: LOST$' || { printf 'missing tmux session did not report LOST\n' >&2; exit 1; }
-printf '%s\n' "$LAUNCHCTL_LOST_STATUS" | grep -q '^status: LOST$' || { printf 'missing launchctl job did not report LOST\n' >&2; exit 1; }
 
 printf 'ok status/list: %s\n' "$RUN_ID"

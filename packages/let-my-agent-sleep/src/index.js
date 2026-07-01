@@ -93,7 +93,7 @@ function createStatusTool() {
     description:
       "Inspect an LMAS run without manually reading run artifact files. Returns LMAS_STATUS v1 for a run id or run directory.",
     args: {
-      run_id: tool.schema.string().describe("LMAS run id, for example lmas_20260701T044510Z_61653_17555, or a run directory path."),
+      run_id: tool.schema.string().describe("LMAS run id, for example lmas_20260701T134510+0900_61653_17555, or a run directory path."),
       runs_dir: tool.schema.string().optional().describe("Run directory root. Defaults to LMAS_RUNS_DIR or .lmas/runs."),
       cwd: tool.schema.string().optional().describe("Working directory. Defaults to the current session directory."),
     },

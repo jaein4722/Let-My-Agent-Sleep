@@ -6,6 +6,8 @@ It lets an agent start training, evaluation, preprocessing, or batch work withou
 
 ## Quick Start
 
+Prerequisite: `tmux` must be installed and available on `PATH`.
+
 ```bash
 chmod +x bin/lmas.sh examples/fake_train.sh tests/smoke/*.sh codex/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh
 bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success
@@ -88,9 +90,7 @@ The installer detects OpenCode and Codex, lists installed agents first, and can 
 
 Codex support is secondary and uses the packaged skill under `codex/let-my-agent-sleep`.
 
-For Codex, `--launcher auto` uses `launchctl` on macOS and `tmux` when available elsewhere. This is required because a plain `nohup` watcher can be killed with Codex's sandboxed tool process.
-
-On local macOS, `launchctl` gets the watcher outside the Codex sandbox, but macOS privacy controls can still block protected workspace paths such as `Documents`, `Desktop`, or `Downloads`. If `watcher.log` contains `Operation not permitted`, move the test to an accessible path such as `/private/tmp`, use a remote/Linux workspace, or grant the relevant host app access before retrying.
+Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` is a required runtime dependency for Codex and OpenCode handoff behavior.
 
 The adapter resumes with:
 
