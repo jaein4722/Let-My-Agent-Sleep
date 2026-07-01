@@ -20,6 +20,20 @@ JSONC
 JSONC_OUTPUT=$(cd "$ROOT" && HOME="$TMP_JSONC_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 
 mkdir -p "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/node_modules/let-my-agent-sleep"
+mkdir -p "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/let-my-agent-sleep"
+mkdir -p "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/.bin"
+cat > "$TMP_STALE_CACHE_HOME/.cache/opencode/package.json" <<'JSON'
+{
+  "dependencies": {
+    "opencode-other-plugin": "1.0.0",
+    "let-my-agent-sleep": "0.1.5"
+  }
+}
+JSON
+printf 'stale bun lock\n' > "$TMP_STALE_CACHE_HOME/.cache/opencode/bun.lock"
+printf '{"version":"0.1.5"}\n' > "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/let-my-agent-sleep/package.json"
+ln -s ../let-my-agent-sleep/bin/lmas-install.js "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/.bin/lmas"
+ln -s ../let-my-agent-sleep/bin/lmas-install.js "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/.bin/let-my-agent-sleep"
 cat > "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/package.json" <<'JSON'
 {
   "dependencies": {
@@ -29,7 +43,7 @@ cat > "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/package
 JSON
 printf 'stale lock\n' > "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/package-lock.json"
 printf '{"version":"0.1.0"}\n' > "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/node_modules/let-my-agent-sleep/package.json"
-STALE_CACHE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_STALE_CACHE_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
+STALE_CACHE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_STALE_CACHE_HOME" OPENCODE_CACHE_DIR="$TMP_STALE_CACHE_HOME/.cache/opencode" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 
 mkdir -p "$TMP_HOME/.agents/plugins/plugins/let-my-agent-sleep/skills/let-my-agent-sleep"
 mkdir -p "$TMP_HOME/.agents/skills/let-my-agent-sleep.bak.20260701T000000Z"
@@ -81,8 +95,30 @@ if ! grep -q "\"let-my-agent-sleep\": \"$PACKAGE_VERSION\"" "$TMP_STALE_CACHE_HO
   exit 1
 fi
 
+ROOT_CACHE_VERSION=$(node -p "require(process.argv[1]).dependencies['let-my-agent-sleep']" "$TMP_STALE_CACHE_HOME/.cache/opencode/package.json")
+
+if [ "$ROOT_CACHE_VERSION" != "$PACKAGE_VERSION" ]; then
+  printf 'opencode root plugin cache dependency was not updated to package version\n' >&2
+  exit 1
+fi
+
 if [ -e "$TMP_STALE_CACHE_HOME/.cache/opencode/packages/let-my-agent-sleep/package-lock.json" ]; then
   printf 'stale opencode plugin package-lock still exists\n' >&2
+  exit 1
+fi
+
+if [ -e "$TMP_STALE_CACHE_HOME/.cache/opencode/bun.lock" ]; then
+  printf 'stale opencode root bun.lock still exists\n' >&2
+  exit 1
+fi
+
+if [ -e "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/let-my-agent-sleep" ]; then
+  printf 'stale opencode root node_modules package still exists\n' >&2
+  exit 1
+fi
+
+if [ -e "$TMP_STALE_CACHE_HOME/.cache/opencode/node_modules/.bin/lmas" ]; then
+  printf 'stale opencode root lmas bin link still exists\n' >&2
   exit 1
 fi
 

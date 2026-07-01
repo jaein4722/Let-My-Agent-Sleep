@@ -417,10 +417,33 @@ function resolveOpenCodeCacheDir() {
   return join(cacheHome, "opencode")
 }
 
+function updateOpenCodeRootCachePackage(rootPackagePath, options) {
+  const dependencyPattern = new RegExp(`("${packageName}"\\s*:\\s*)"[^"]+"`)
+
+  if (existsSync(rootPackagePath)) {
+    const content = readFileSync(rootPackagePath, "utf8")
+    if (dependencyPattern.test(content)) {
+      writeText(rootPackagePath, content.replace(dependencyPattern, `$1"${packageJson.version}"`), options)
+      return
+    }
+
+    const rootPackageJson = JSON.parse(content)
+    if (!rootPackageJson.dependencies || typeof rootPackageJson.dependencies !== "object" || Array.isArray(rootPackageJson.dependencies)) {
+      rootPackageJson.dependencies = {}
+    }
+    rootPackageJson.dependencies[packageName] = packageJson.version
+    writeText(rootPackagePath, `${JSON.stringify(rootPackageJson, null, 2)}\n`, options)
+    return
+  }
+
+  writeText(rootPackagePath, `${JSON.stringify({ dependencies: { [packageName]: packageJson.version } }, null, 2)}\n`, options)
+}
+
 function refreshOpenCodePluginCache(options) {
   const cacheDir = resolveOpenCodeCacheDir()
   const packagesDir = join(cacheDir, "packages")
   const targets = new Set([join(packagesDir, packageName)])
+  const rootPackagePath = join(cacheDir, "package.json")
 
   if (existsSync(packagesDir)) {
     for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
@@ -430,6 +453,13 @@ function refreshOpenCodePluginCache(options) {
       }
     }
   }
+
+  updateOpenCodeRootCachePackage(rootPackagePath, options)
+  removePath(join(cacheDir, "bun.lock"), options)
+  removePath(join(cacheDir, "package-lock.json"), options)
+  removePath(join(cacheDir, "node_modules", packageName), options)
+  removePath(join(cacheDir, "node_modules", ".bin", "lmas"), options)
+  removePath(join(cacheDir, "node_modules", ".bin", packageName), options)
 
   const cachePackageJson = {
     dependencies: {
@@ -471,6 +501,7 @@ function installOpenCode(options) {
   console.log(`  plugin: ${packageName}`)
   console.log(`  skill: ${skillTarget}`)
   console.log(`  plugin cache: ${join(resolveOpenCodeCacheDir(), "packages", packageName)}`)
+  console.log(`  root plugin cache: ${resolveOpenCodeCacheDir()}`)
 }
 
 function removeMarketplaceEntry(marketplace, entryName) {
