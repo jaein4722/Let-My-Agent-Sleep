@@ -50,7 +50,7 @@ The plugin provides:
 
 ## Codex
 
-The installer copies a Codex-compatible skill and local plugin assets into the user's agent/plugin directories and updates the personal marketplace file.
+The installer copies a Codex-compatible standalone skill into the user's agent skill directory. It does not install a Codex plugin entry, so Codex indexes only one `let-my-agent-sleep` skill.
 
 ## Runtime Artifacts
 

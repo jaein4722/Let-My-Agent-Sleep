@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
-import { dirname, join, relative } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 
@@ -189,6 +189,28 @@ function backupIfNeeded(target, options) {
   console.log(`[backup] ${target} -> ${backup}`)
 }
 
+function timestamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")
+}
+
+function moveAside(target, backupRoot, options) {
+  if (!existsSync(target)) return
+  const backup = join(backupRoot, `${basename(target)}.${timestamp()}`)
+  const prefix = options.dryRun ? "[dry-run]" : "[write]"
+  console.log(`${prefix} move-aside: ${target} -> ${backup}`)
+  if (options.dryRun) return
+  mkdirSync(backupRoot, { recursive: true })
+  renameSync(target, backup)
+}
+
+function moveMatchingSiblingBackups(parent, prefix, backupRoot, options) {
+  if (!existsSync(parent)) return
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    if (!entry.name.startsWith(`${prefix}.bak.`)) continue
+    moveAside(join(parent, entry.name), backupRoot, options)
+  }
+}
+
 function sameFileContent(source, target) {
   if (!existsSync(source) || !existsSync(target)) return false
   const sourceStat = statSync(source)
@@ -303,18 +325,9 @@ function installOpenCode(options) {
   console.log(`  skill: ${skillTarget}`)
 }
 
-function upsertMarketplaceEntry(marketplace, entry) {
-  if (!marketplace.name) marketplace.name = "personal"
-  if (!marketplace.interface) marketplace.interface = { displayName: "Personal" }
-  if (!Array.isArray(marketplace.plugins)) marketplace.plugins = []
-
-  const index = marketplace.plugins.findIndex((plugin) => plugin.name === entry.name)
-  if (index >= 0) {
-    marketplace.plugins[index] = entry
-  } else {
-    marketplace.plugins.push(entry)
-  }
-
+function removeMarketplaceEntry(marketplace, entryName) {
+  if (!Array.isArray(marketplace.plugins)) return marketplace
+  marketplace.plugins = marketplace.plugins.filter((plugin) => plugin.name !== entryName)
   return marketplace
 }
 
@@ -323,35 +336,27 @@ function installCodex(options) {
   const codexSkillTarget = join(agentsRoot, "skills", "let-my-agent-sleep")
   const marketplaceDir = join(agentsRoot, "plugins")
   const marketplacePath = join(marketplaceDir, "marketplace.json")
-  const codexPluginTarget = join(marketplaceDir, "plugins", "let-my-agent-sleep")
-  const sourcePath = `./${relative(marketplaceDir, codexPluginTarget).split("\\").join("/")}`
+  const legacyCodexPluginTarget = join(marketplaceDir, "plugins", "let-my-agent-sleep")
+  const backupRoot = join(agentsRoot, "lmas-backups")
 
   copyDirAsset(join(paths.codexPlugin, "skills", "let-my-agent-sleep"), codexSkillTarget, options)
-  copyDirAsset(paths.codexPlugin, codexPluginTarget, options)
+  moveAside(legacyCodexPluginTarget, join(backupRoot, "plugins"), options)
+  moveMatchingSiblingBackups(join(agentsRoot, "skills"), "let-my-agent-sleep", join(backupRoot, "skills"), options)
+  moveMatchingSiblingBackups(join(marketplaceDir, "plugins"), "let-my-agent-sleep", join(backupRoot, "plugins"), options)
 
-  const marketplace = upsertMarketplaceEntry(readJsonIfExists(marketplacePath, {
-    name: "personal",
-    interface: { displayName: "Personal" },
-    plugins: [],
-  }), {
-    name: "let-my-agent-sleep",
-    source: {
-      source: "local",
-      path: sourcePath,
-    },
-    policy: {
-      installation: "AVAILABLE",
-      authentication: "ON_INSTALL",
-    },
-    category: "Productivity",
-  })
-
-  writeText(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`, options)
+  if (existsSync(marketplacePath)) {
+    const marketplace = readJsonIfExists(marketplacePath, {})
+    const original = JSON.stringify(marketplace)
+    removeMarketplaceEntry(marketplace, "let-my-agent-sleep")
+    if (JSON.stringify(marketplace) !== original) {
+      writeText(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`, { ...options, force: true })
+    }
+  }
 
   console.log("Codex install configured.")
   console.log(`  skill: ${codexSkillTarget}`)
-  console.log(`  plugin: ${codexPluginTarget}`)
-  console.log(`  marketplace: ${marketplacePath}`)
+  console.log("  plugin: not installed; Codex uses the standalone skill to avoid duplicate indexing.")
+  console.log(`  backups: ${backupRoot}`)
 }
 
 async function main() {
