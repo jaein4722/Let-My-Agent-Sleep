@@ -88,6 +88,10 @@ The installer detects OpenCode and Codex, lists installed agents first, and can 
 
 Codex support is secondary and uses the packaged skill under `codex/let-my-agent-sleep`.
 
+For Codex, `--launcher auto` uses `launchctl` on macOS and `tmux` when available elsewhere. This is required because a plain `nohup` watcher can be killed with Codex's sandboxed tool process.
+
+On local macOS, `launchctl` gets the watcher outside the Codex sandbox, but macOS privacy controls can still block protected workspace paths such as `Documents`, `Desktop`, or `Downloads`. If `watcher.log` contains `Operation not permitted`, move the test to an accessible path such as `/private/tmp`, use a remote/Linux workspace, or grant the relevant host app access before retrying.
+
 The adapter resumes with:
 
 ```bash

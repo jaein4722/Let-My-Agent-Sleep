@@ -52,6 +52,8 @@ The plugin provides:
 
 The installer copies a Codex-compatible standalone skill into the user's agent skill directory. It does not install a Codex plugin entry, so Codex indexes only one `let-my-agent-sleep` skill.
 
+For Codex, `--launcher auto` uses `launchctl` on macOS and `tmux` when available elsewhere so the watcher can survive the sandboxed tool process. On local macOS, protected workspace paths such as `Documents`, `Desktop`, or `Downloads` may still be blocked by host privacy controls; `Operation not permitted` in `watcher.log` means a TCC/host permission issue, not a failed training command.
+
 ## Runtime Artifacts
 
 Runs are stored under:
