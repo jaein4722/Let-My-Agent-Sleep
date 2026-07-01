@@ -4,6 +4,7 @@ set -u
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 for candidate in \
+  "$SCRIPT_DIR/../bin/lmas.sh" \
   "$SCRIPT_DIR/../../../bin/lmas.sh" \
   "$SCRIPT_DIR/../../../../../bin/lmas.sh" \
   "$PWD/bin/lmas.sh"
