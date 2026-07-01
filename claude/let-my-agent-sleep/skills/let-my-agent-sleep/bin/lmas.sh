@@ -206,11 +206,10 @@ run_codex_adapter() {
   local run_dir prompt_file session_id
   run_dir=$1
   prompt_file=$2
-  session_id=$(awk -F= '$1 == "codex_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
-  [ -n "$session_id" ] || session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
+  session_id=${LMAS_CODEX_SESSION_ID:-}
 
   if [ -z "$session_id" ]; then
-    printf 'codex adapter skipped: codex_session_id, LMAS_CODEX_SESSION_ID, and CODEX_THREAD_ID are empty\n' > "$run_dir/adapter.log"
+    printf 'codex adapter skipped: LMAS_CODEX_SESSION_ID is empty\n' > "$run_dir/adapter.log"
     return 0
   fi
 
@@ -343,7 +342,7 @@ watch_command() {
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
+  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
@@ -413,10 +412,6 @@ start_command() {
 
   command_text=$(quote_command "$@")
   started_at=$(now_system)
-  codex_session_id=
-  if [ "$adapter" = "codex" ]; then
-    codex_session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
-  fi
   metadata_path="$run_dir/metadata.txt"
   stdout_path="$run_dir/stdout.log"
   stderr_path="$run_dir/stderr.log"
@@ -430,9 +425,6 @@ start_command() {
     printf 'command=%s\n' "$command_text"
     printf 'started_at=%s\n' "$started_at"
     printf 'artifacts_dir=%s\n' "$artifacts_dir"
-    if [ -n "$codex_session_id" ]; then
-      printf 'codex_session_id=%s\n' "$codex_session_id"
-    fi
     set +u
     for item in "${metadata[@]}"; do
       printf '%s\n' "$item"

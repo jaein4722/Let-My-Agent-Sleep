@@ -56,4 +56,15 @@ if find "$TMP_HOME/.config/opencode" "$TMP_HOME/.agents/skills" "$TMP_HOME/.agen
   exit 1
 fi
 
+if [ ! -f "$TMP_HOME/.claude/skills/let-my-agent-sleep/SKILL.md" ]; then
+  printf 'claude skill was not installed\n' >&2
+  exit 1
+fi
+
+CLAUDE_SCRIPT_OUTPUT=$(cd / && HOME="$TMP_HOME" "$TMP_HOME/.claude/skills/let-my-agent-sleep/scripts/lmas.sh" -h 2>&1)
+printf '%s\n' "$CLAUDE_SCRIPT_OUTPUT" | grep -q '^Usage:' || {
+  printf 'installed claude skill script could not find bin/lmas.sh outside the repo\n' >&2
+  exit 1
+}
+
 printf 'ok idempotent install\n'

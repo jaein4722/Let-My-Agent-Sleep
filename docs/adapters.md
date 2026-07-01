@@ -57,16 +57,42 @@ Then inspect `stdout.log` and `stderr.log`. `metadata.txt` is intended as second
 
 Secondary prototype adapter.
 
-Required:
+Preferred:
 
 ```bash
 export LMAS_CODEX_SESSION_ID=<session-id>
 ```
 
+If `LMAS_CODEX_SESSION_ID` is empty, the adapter uses `CODEX_THREAD_ID` when Codex exposes it. The resolved id is written to `metadata.txt` at job start, so parallel Codex threads resume the thread that launched each LMAS run.
+
 On completion, the watcher runs:
 
 ```bash
-codex exec resume "$LMAS_CODEX_SESSION_ID" - < resume_prompt.txt
+codex exec resume "$codex_session_id" - < resume_prompt.txt
 ```
 
 If the session id or `codex` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
+
+## `claude`
+
+Secondary prototype adapter.
+
+Preferred:
+
+```bash
+export LMAS_CLAUDE_SESSION_ID=<session-id>
+```
+
+On completion, the watcher runs:
+
+```bash
+claude --resume "$LMAS_CLAUDE_SESSION_ID" -p "$(cat resume_prompt.txt)"
+```
+
+If `LMAS_CLAUDE_SESSION_ID` is empty, set `LMAS_CLAUDE_CONTINUE=1` to let the adapter fall back to:
+
+```bash
+claude --continue -p "$(cat resume_prompt.txt)"
+```
+
+which resumes the most recently used Claude session in the job's `cwd`. If neither is set, or the `claude` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.

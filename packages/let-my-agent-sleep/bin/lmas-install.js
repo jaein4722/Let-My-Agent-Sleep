@@ -14,11 +14,12 @@ const packageName = packageJson.name
 const paths = {
   openCodeSkill: join(packageRoot, "skills", "let-my-agent-sleep", "SKILL.md"),
   codexPlugin: join(packageRoot, "codex-plugin", "let-my-agent-sleep"),
+  claudeSkill: join(packageRoot, "claude", "let-my-agent-sleep", "skills", "let-my-agent-sleep"),
 }
 
 function usage() {
   console.log(`Usage:
-  lmas install [--agent opencode|codex|all|detected] [--yes] [--dry-run] [--force]
+  lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas list [--runs-dir <path>]
@@ -99,6 +100,7 @@ function detectAgents() {
   return [
     { id: "opencode", label: "OpenCode", detected: commandExists("opencode") },
     { id: "codex", label: "Codex", detected: commandExists("codex") },
+    { id: "claude", label: "Claude Code", detected: commandExists("claude") },
   ]
 }
 
@@ -110,13 +112,14 @@ function expandAgents(agentValues, detectedAgents) {
     if (value === "all") {
       expanded.add("opencode")
       expanded.add("codex")
+      expanded.add("claude")
       continue
     }
     if (value === "detected") {
       for (const agent of detected) expanded.add(agent)
       continue
     }
-    if (value === "opencode" || value === "codex") {
+    if (value === "opencode" || value === "codex" || value === "claude") {
       expanded.add(value)
       continue
     }
@@ -154,7 +157,7 @@ async function chooseAgents(options, detectedAgents) {
     })
   }
 
-  choices.push({ id: "all", label: "All supported agents", hint: "OpenCode, Codex" })
+  choices.push({ id: "all", label: "All supported agents", hint: "OpenCode, Codex, Claude Code" })
 
   console.log("Select Let My Agent Sleep install target:")
   choices.forEach((choice, index) => {
@@ -359,6 +362,19 @@ function installCodex(options) {
   console.log(`  backups: ${backupRoot}`)
 }
 
+function installClaude(options) {
+  const claudeRoot = join(homedir(), ".claude")
+  const claudeSkillTarget = join(claudeRoot, "skills", "let-my-agent-sleep")
+  const backupRoot = join(claudeRoot, "lmas-backups")
+
+  copyDirAsset(paths.claudeSkill, claudeSkillTarget, options)
+  moveMatchingSiblingBackups(join(claudeRoot, "skills"), "let-my-agent-sleep", join(backupRoot, "skills"), options)
+
+  console.log("Claude Code install configured.")
+  console.log(`  skill: ${claudeSkillTarget}`)
+  console.log(`  backups: ${backupRoot}`)
+}
+
 async function main() {
   const argv = process.argv.slice(2)
   const command = argv[0]
@@ -383,6 +399,7 @@ async function main() {
   for (const agent of selectedAgents) {
     if (agent === "opencode") installOpenCode(options)
     if (agent === "codex") installCodex(options)
+    if (agent === "claude") installClaude(options)
   }
 
   console.log("Let My Agent Sleep install complete.")
@@ -391,6 +408,9 @@ async function main() {
   }
   if (selectedAgents.includes("codex")) {
     console.log("Restart Codex so it reloads skills/plugins.")
+  }
+  if (selectedAgents.includes("claude")) {
+    console.log("Restart Claude Code so it reloads skills.")
   }
 }
 

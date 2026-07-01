@@ -16,7 +16,8 @@ Usage:
   lmas.sh list [--runs-dir <path>]
 
 Options:
-  --adapter <noop|opencode|codex>  Completion adapter to run. Default: noop
+  --adapter <noop|opencode|codex|claude>
+                                      Completion adapter to run. Default: noop
   --runs-dir <path>                Run directory root. Default: .lmas/runs
   --cwd <path>                     Working directory for the command. Default: current directory
   --artifacts-dir <path>           Artifact directory to report in events. Default: run directory
@@ -29,6 +30,8 @@ Environment:
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
   LMAS_CODEX_SESSION_ID      Required for codex adapter
+  LMAS_CLAUDE_SESSION_ID     Preferred for claude adapter exact resume
+  LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
 EOF
 }
 
@@ -203,10 +206,11 @@ run_codex_adapter() {
   local run_dir prompt_file session_id
   run_dir=$1
   prompt_file=$2
-  session_id=${LMAS_CODEX_SESSION_ID:-}
+  session_id=$(awk -F= '$1 == "codex_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
+  [ -n "$session_id" ] || session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
 
   if [ -z "$session_id" ]; then
-    printf 'codex adapter skipped: LMAS_CODEX_SESSION_ID is empty\n' > "$run_dir/adapter.log"
+    printf 'codex adapter skipped: codex_session_id, LMAS_CODEX_SESSION_ID, and CODEX_THREAD_ID are empty\n' > "$run_dir/adapter.log"
     return 0
   fi
 
@@ -219,6 +223,41 @@ run_codex_adapter() {
     printf '\ncodex adapter failed for session %s\n' "$session_id" >> "$run_dir/adapter.log"
     return 0
   }
+}
+
+run_claude_adapter() {
+  local run_dir prompt_file session_id continue_mode prompt cwd
+  run_dir=$1
+  prompt_file=$2
+  session_id=${LMAS_CLAUDE_SESSION_ID:-}
+  continue_mode=${LMAS_CLAUDE_CONTINUE:-}
+
+  if ! command -v claude >/dev/null 2>&1; then
+    printf 'claude adapter skipped: claude command not found\n' > "$run_dir/adapter.log"
+    return 0
+  fi
+
+  prompt=$(cat "$prompt_file")
+  cwd=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null)
+  [ -n "$cwd" ] || cwd=$(pwd)
+
+  if [ -n "$session_id" ]; then
+    ( cd "$cwd" && claude --resume "$session_id" -p "$prompt" ) > "$run_dir/adapter.log" 2>&1 || {
+      printf '\nclaude adapter failed for session %s\n' "$session_id" >> "$run_dir/adapter.log"
+      return 0
+    }
+    return 0
+  fi
+
+  if [ "$continue_mode" = "1" ] || [ "$continue_mode" = "true" ]; then
+    ( cd "$cwd" && claude --continue -p "$prompt" ) > "$run_dir/adapter.log" 2>&1 || {
+      printf '\nclaude adapter failed while continuing the most recent session\n' >> "$run_dir/adapter.log"
+      return 0
+    }
+    return 0
+  fi
+
+  printf 'claude adapter skipped: LMAS_CLAUDE_SESSION_ID is empty; set LMAS_CLAUDE_CONTINUE=1 to continue the most recent Claude session in cwd\n' > "$run_dir/adapter.log"
 }
 
 run_adapter() {
@@ -236,6 +275,9 @@ run_adapter() {
       ;;
     codex)
       run_codex_adapter "$run_dir" "$prompt_file"
+      ;;
+    claude)
+      run_claude_adapter "$run_dir" "$prompt_file"
       ;;
     *)
       printf 'unknown adapter %s; resume prompt left at %s\n' "$adapter" "$prompt_file" > "$run_dir/adapter.log"
@@ -301,7 +343,7 @@ watch_command() {
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id
+  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
@@ -371,6 +413,10 @@ start_command() {
 
   command_text=$(quote_command "$@")
   started_at=$(now_system)
+  codex_session_id=
+  if [ "$adapter" = "codex" ]; then
+    codex_session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
+  fi
   metadata_path="$run_dir/metadata.txt"
   stdout_path="$run_dir/stdout.log"
   stderr_path="$run_dir/stderr.log"
@@ -384,6 +430,9 @@ start_command() {
     printf 'command=%s\n' "$command_text"
     printf 'started_at=%s\n' "$started_at"
     printf 'artifacts_dir=%s\n' "$artifacts_dir"
+    if [ -n "$codex_session_id" ]; then
+      printf 'codex_session_id=%s\n' "$codex_session_id"
+    fi
     set +u
     for item in "${metadata[@]}"; do
       printf '%s\n' "$item"

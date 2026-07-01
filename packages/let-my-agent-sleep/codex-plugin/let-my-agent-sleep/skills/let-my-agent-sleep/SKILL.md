@@ -44,10 +44,12 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 
 ## Adapter Notes
 
-The Codex prototype adapter uses:
+The Codex adapter captures the current thread id at job start. It uses `LMAS_CODEX_SESSION_ID` when explicitly set, otherwise it uses `CODEX_THREAD_ID` when Codex exposes it.
+
+On completion it runs:
 
 ```bash
-codex exec resume "$LMAS_CODEX_SESSION_ID" - < resume_prompt.txt
+codex exec resume "$codex_session_id" - < resume_prompt.txt
 ```
 
-If the session id is absent, the wrapper writes the prompt and skips automatic resume.
+If no session id is available, the wrapper writes the prompt and skips automatic resume.

@@ -25,6 +25,7 @@ To install for a specific agent:
 ```bash
 npx let-my-agent-sleep install --agent opencode
 npx let-my-agent-sleep install --agent codex
+npx let-my-agent-sleep install --agent claude
 npx let-my-agent-sleep install --agent detected --yes
 npx let-my-agent-sleep install --agent all --yes
 ```
@@ -59,6 +60,12 @@ If OpenCode is running on a non-default server URL, pass that URL when asking th
 Codex support is available through the installed Let My Agent Sleep skill.
 
 For automatic resume, the Codex session must be resumable from the environment where the job is running.
+
+## Claude Code
+
+Claude Code support is available through the installed Let My Agent Sleep skill.
+
+For exact automatic resume, set `LMAS_CLAUDE_SESSION_ID` before starting the job. Without it, Let My Agent Sleep leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
 ## Runtime Artifacts
 
