@@ -1,24 +1,26 @@
 # let-my-agent-sleep
 
-Let My Agent Sleep is an OpenCode plugin, installer, and handoff protocol for long-running agent jobs.
+Let My Agent Sleep lets AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes.
 
-Let My Agent Sleep lets an agent start training, evaluation, preprocessing, or batch work, stop after `LMAS_HANDOFF v1`, and resume the same session when `LMAS_COMPLETION_EVENT v1` is injected later.
+Use it for training, evaluation, preprocessing, benchmarks, migrations, or batch jobs that would otherwise make an agent poll logs or repeatedly continue.
+
+## Requirements
+
+`tmux` must be installed and available on `PATH`.
 
 ## Install
-
-Prerequisite: `tmux` must be installed and available on `PATH`.
 
 ```bash
 npx let-my-agent-sleep install
 ```
 
-After global install, the short alias is:
+The short CLI alias is:
 
 ```bash
 lmas install
 ```
 
-The installer detects local agents and lists installed agents first. It supports:
+To install for a specific agent:
 
 ```bash
 npx let-my-agent-sleep install --agent opencode
@@ -27,34 +29,36 @@ npx let-my-agent-sleep install --agent detected --yes
 npx let-my-agent-sleep install --agent all --yes
 ```
 
-Use `--dry-run` to preview file writes.
+Use `--dry-run` to preview changes before writing files.
+
+## Usage
+
+Restart your agent after installation, then ask it to use Let My Agent Sleep for long-running work.
+
+Example:
+
+```text
+Use the let-my-agent-sleep skill for this task. Start the training job with:
+python train.py --config configs/exp.yaml
+After LMAS_HANDOFF v1, stop and do not wait or poll.
+```
+
+The agent should start the job, report a `run_id`, and stop. When the job finishes, Let My Agent Sleep injects an `LMAS_COMPLETION_EVENT v1` message so the agent can inspect logs, summarize results, and continue.
 
 ## OpenCode
 
-The installer updates `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "plugin": ["let-my-agent-sleep"]
-}
-```
-
-It also installs the Let My Agent Sleep skill to:
-
-```text
-~/.config/opencode/skills/let-my-agent-sleep/SKILL.md
-```
-
-The plugin provides:
+OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin and skill, including:
 
 - `lmas_start`
 - `lmas_status`
 
+If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
+
 ## Codex
 
-The installer copies a Codex-compatible standalone skill into the user's agent skill directory. It does not install a Codex plugin entry, so Codex indexes only one `let-my-agent-sleep` skill.
+Codex support is available through the installed Let My Agent Sleep skill.
 
-Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` is a required runtime dependency for Codex and OpenCode handoff behavior.
+For automatic resume, the Codex session must be resumable from the environment where the job is running.
 
 ## Runtime Artifacts
 
@@ -64,13 +68,16 @@ Runs are stored under:
 .lmas/runs/<run_id>/
 ```
 
-Task artifacts and reproducible helper scripts should live under:
+Common files:
 
-```text
-.lmas/artifacts/<task-or-timestamp>/
-```
+- `handoff.txt`
+- `completion_event.txt`
+- `stdout.log`
+- `stderr.log`
+- `metadata.txt`
+- `resume_prompt.txt`
 
-Use:
+Check a run manually:
 
 ```bash
 lmas status <run_id>

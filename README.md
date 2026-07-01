@@ -1,138 +1,87 @@
 # Let My Agent Sleep
 
-Let My Agent Sleep is a lightweight handoff protocol for long-running agent jobs.
+Let My Agent Sleep lets AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes.
 
-It lets an agent start training, evaluation, preprocessing, or batch work without staying alive to poll. The agent prints `LMAS_HANDOFF v1`, exits the loop, and a watcher later writes or injects `LMAS_COMPLETION_EVENT v1`.
+Use it for training, evaluation, preprocessing, benchmarks, migrations, or batch jobs that would otherwise make an agent poll logs or repeatedly continue.
 
-## Quick Start
+## Requirements
 
-Prerequisite: `tmux` must be installed and available on `PATH`.
+`tmux` must be installed and available on `PATH`.
 
-```bash
-chmod +x bin/lmas.sh examples/fake_train.sh tests/smoke/*.sh codex/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh
-bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success
-```
-
-Run artifacts are written to `.lmas/runs/<run_id>/`.
-
-Inspect a run:
-
-```bash
-bin/lmas.sh status <run_id>
-bin/lmas.sh list
-```
-
-## Path Policy
-
-LMAS keeps run state workspace-local by default.
-
-- Run metadata and logs: `.lmas/runs/<run_id>/`
-- Task artifacts and reproducible helper scripts: `.lmas/artifacts/<task-or-timestamp>/`
-
-Use `/tmp` only when the workspace is not writable or a system temporary path is explicitly requested.
-
-## OpenCode Prototype
-
-OpenCode is the primary target.
-
-Project-local files:
-
-- `.opencode/tools/lmas_start.ts`
-- `.opencode/tools/lmas_status.ts`
-- `.opencode/skills/let-my-agent-sleep/SKILL.md`
-
-Start OpenCode from this repo and use the `let-my-agent-sleep` skill. For long jobs, the agent should call the `lmas_start` tool instead of the normal bash tool.
-
-Set the server URL if needed:
-
-```bash
-export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:4096
-```
-
-The custom tool sets `LMAS_OPENCODE_SESSION_ID` from the OpenCode tool context.
-
-For automatic completion injection, the session must belong to the same OpenCode server URL that Let My Agent Sleep calls. A reliable local test is:
-
-```bash
-opencode serve --hostname 127.0.0.1 --port 45137 --print-logs
-opencode run --attach http://127.0.0.1:45137 --dir "$PWD" --format json --agent build \
-  'Use the let-my-agent-sleep skill. Call lmas_start with command: ./examples/fake_train.sh sleep 60 and server_url: http://127.0.0.1:45137. Stop after LMAS_HANDOFF v1.'
-```
-
-After 60 seconds, `adapter.log` should be empty and `completion_event.txt` should exist. A `404` in `adapter.log` usually means the server URL does not own that session id.
-
-On completion, agents should inspect stdout/stderr first and use `lmas_status` for a concise run summary. `metadata.txt` is secondary context.
-
-## npm Package
-
-The distributable package lives in `packages/let-my-agent-sleep` and publishes as `let-my-agent-sleep`.
-
-```bash
-npm_config_cache=/private/tmp/lmas-npm-cache npm pack --workspace let-my-agent-sleep --dry-run
-node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes
-```
-
-When published, users can install with:
+## Install
 
 ```bash
 npx let-my-agent-sleep install
 ```
 
-The installed CLI alias is:
+The short CLI alias is:
 
 ```bash
 lmas install
 ```
 
-The installer detects OpenCode and Codex, lists installed agents first, and can configure either or both.
-
-## Automated Publishing
-
-Pushing a new `packages/let-my-agent-sleep/package.json` version to `master` runs `.github/workflows/publish.yml`.
-
-The workflow:
-
-- checks whether `let-my-agent-sleep@<version>` already exists on npm
-- runs smoke tests and `npm pack --dry-run` when the version is unpublished
-- publishes with npm Trusted Publishing/OIDC
-- creates a GitHub Release named `v<version>`
-
-Before relying on automation, configure npm trusted publishing for the package:
-
-- publisher: GitHub Actions
-- repository owner/name: `jaein4722/Let-My-Agent-Sleep`
-- workflow filename: `publish.yml`
-- allowed action: `npm publish`
-
-Then release by bumping `packages/let-my-agent-sleep/package.json`, committing, and pushing to `master`.
-
-## Codex Prototype
-
-Codex support is secondary and uses the packaged skill under `codex/let-my-agent-sleep`.
-
-Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` is a required runtime dependency for Codex and OpenCode handoff behavior.
-
-The adapter resumes with:
+To install for a specific agent:
 
 ```bash
-codex exec resume "$LMAS_CODEX_SESSION_ID" - < resume_prompt.txt
+npx let-my-agent-sleep install --agent opencode
+npx let-my-agent-sleep install --agent codex
+npx let-my-agent-sleep install --agent detected --yes
+npx let-my-agent-sleep install --agent all --yes
 ```
 
-If no session id is set, Let My Agent Sleep still writes `resume_prompt.txt`.
+Use `--dry-run` to preview changes before writing files.
 
-## Smoke Tests
+## Usage
+
+Restart your agent after installation, then ask it to use Let My Agent Sleep for long-running work.
+
+Example:
+
+```text
+Use the let-my-agent-sleep skill for this task. Start the training job with:
+python train.py --config configs/exp.yaml
+After LMAS_HANDOFF v1, stop and do not wait or poll.
+```
+
+The agent should start the job, report a `run_id`, and stop. When the job finishes, Let My Agent Sleep injects an `LMAS_COMPLETION_EVENT v1` message so the agent can inspect logs, summarize results, and continue.
+
+## OpenCode
+
+OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin and skill, including:
+
+- `lmas_start`
+- `lmas_status`
+
+If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
+
+## Codex
+
+Codex support is available through the installed Let My Agent Sleep skill.
+
+For automatic resume, the Codex session must be resumable from the environment where the job is running.
+
+## Runtime Artifacts
+
+Runs are stored under:
+
+```text
+.lmas/runs/<run_id>/
+```
+
+Common files:
+
+- `handoff.txt`
+- `completion_event.txt`
+- `stdout.log`
+- `stderr.log`
+- `metadata.txt`
+- `resume_prompt.txt`
+
+Check a run manually:
 
 ```bash
-tests/smoke/test-basic-handoff.sh
-tests/smoke/test-success-completion.sh
-tests/smoke/test-failed-completion.sh
-tests/smoke/test-status-list.sh
-tests/smoke/test-installer-dry-run.sh
-tests/smoke/test-idempotent-install.sh
-tests/smoke/test-opencode-adapter.sh
-tests/smoke/test-codex-adapter.sh
+lmas status <run_id>
+lmas list
 ```
 
-## Protocol
-
-See `docs/protocol.md` and `docs/adapters.md`.
+Do not place secrets in command-line arguments or metadata. Keep `.lmas/` ignored by git.
