@@ -6,6 +6,8 @@ allowed-tools: Bash Read
 
 # Let My Agent Sleep
 
+Claude Code support is experimental. Automatic resume is not guaranteed across every Claude Code frontend, desktop session list, or remote SSH setup. If automatic resume does not appear in the expected session, use `resume_prompt.txt` as the fallback source of truth.
+
 Treat long-running jobs as handoff tasks, not completion tasks.
 
 Use this skill when a command is likely to run for minutes or hours, including model training, evaluation, dataset preprocessing, benchmark suites, large migrations, or batch inference.

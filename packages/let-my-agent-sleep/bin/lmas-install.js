@@ -302,11 +302,113 @@ function readJsonIfExists(target, fallback) {
   return JSON.parse(readFileSync(target, "utf8"))
 }
 
+function stripJsonc(input) {
+  let output = ""
+  let inString = false
+  let quote = ""
+  let escaped = false
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+    const next = input[index + 1]
+
+    if (inString) {
+      output += char
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === quote) {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      inString = true
+      quote = char
+      output += char
+      continue
+    }
+
+    if (char === "/" && next === "/") {
+      while (index < input.length && input[index] !== "\n") index += 1
+      output += "\n"
+      continue
+    }
+
+    if (char === "/" && next === "*") {
+      index += 2
+      while (index < input.length && !(input[index] === "*" && input[index + 1] === "/")) index += 1
+      index += 1
+      continue
+    }
+
+    output += char
+  }
+
+  return stripTrailingJsoncCommas(output)
+}
+
+function stripTrailingJsoncCommas(input) {
+  let output = ""
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index]
+
+    if (inString) {
+      output += char
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      output += char
+      continue
+    }
+
+    if (char === ",") {
+      let lookahead = index + 1
+      while (/\s/.test(input[lookahead] || "")) lookahead += 1
+      if (input[lookahead] === "}" || input[lookahead] === "]") continue
+    }
+
+    output += char
+  }
+
+  return output
+}
+
+function readJsoncIfExists(target, fallback) {
+  if (!existsSync(target)) return fallback
+  return JSON.parse(stripJsonc(readFileSync(target, "utf8")))
+}
+
+function resolveOpenCodeConfigPath(configDir) {
+  if (process.env.OPENCODE_CONFIG_FILE) return process.env.OPENCODE_CONFIG_FILE
+
+  const jsoncPath = join(configDir, "opencode.jsonc")
+  const jsonPath = join(configDir, "opencode.json")
+
+  if (existsSync(jsoncPath)) return jsoncPath
+  if (existsSync(jsonPath)) return jsonPath
+  return jsoncPath
+}
+
 function installOpenCode(options) {
   const configDir = process.env.OPENCODE_CONFIG_DIR || join(homedir(), ".config", "opencode")
-  const configPath = join(configDir, "opencode.json")
+  const configPath = resolveOpenCodeConfigPath(configDir)
   const skillTarget = join(configDir, "skills", "let-my-agent-sleep", "SKILL.md")
-  const config = readJsonIfExists(configPath, {})
+  const config = readJsoncIfExists(configPath, {})
 
   if (config.plugin === undefined) {
     config.plugin = []
@@ -370,7 +472,7 @@ function installClaude(options) {
   copyDirAsset(paths.claudeSkill, claudeSkillTarget, options)
   moveMatchingSiblingBackups(join(claudeRoot, "skills"), "let-my-agent-sleep", join(backupRoot, "skills"), options)
 
-  console.log("Claude Code install configured.")
+  console.log("Claude Code install configured. (experimental; automatic resume is not guaranteed)")
   console.log(`  skill: ${claudeSkillTarget}`)
   console.log(`  backups: ${backupRoot}`)
 }
