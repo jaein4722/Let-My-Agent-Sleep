@@ -1,0 +1,37 @@
+{
+  "name": "let-my-agent-sleep",
+  "version": "0.1.0",
+  "description": "Let My Agent Sleep: OpenCode plugin and installer for handoff workflows for long-running agent jobs.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "bin": {
+    "let-my-agent-sleep": "./bin/lmas-install.js",
+    "lmas": "./bin/lmas-install.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "skills",
+    "codex-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "opencode",
+    "codex",
+    "agent",
+    "plugin",
+    "long-running-jobs",
+    "training"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.2.27"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
