@@ -20,6 +20,8 @@ Use this skill when a command is likely to run for minutes or hours, including m
 ## Required Behavior
 
 - Do not run long jobs directly with the normal bash tool when `lmas_start` is available.
+- Do not call `skill_mcp` for Let My Agent Sleep. This is an OpenCode plugin tool, not an MCP server.
+- If `lmas_start` is not available in the tool list, the OpenCode plugin is not loaded in the current session. Tell the user to restart OpenCode after running `lmas install --agent opencode`; do not invent `.opencode/tools` paths or start a normal shell fallback unless the user explicitly asks for manual fallback.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
 - After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
@@ -36,12 +38,11 @@ Use this skill when a command is likely to run for minutes or hours, including m
 
 ## OpenCode Setup
 
-The project-local tools live at:
+`lmas_start` and `lmas_status` are provided by the installed OpenCode plugin. They are not project-local files and should not be looked up under `.opencode/tools`.
 
-- `.opencode/tools/lmas_start.ts`
-- `.opencode/tools/lmas_status.ts`
+The installer updates the OpenCode config, usually `~/.config/opencode/opencode.jsonc`, and installs this skill under `~/.config/opencode/skills/let-my-agent-sleep/SKILL.md`. OpenCode must be restarted after install so it reloads plugin tools.
 
-OpenCode must know the server URL used for completion injection:
+OpenCode must know the server URL used for completion injection. The plugin usually receives it from the running OpenCode server. When needed, set:
 
 ```bash
 export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:4096
