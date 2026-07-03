@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMPDIR_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/lmas-handoff.XXXXXX")
 RUNS_DIR="$TMPDIR_ROOT/runs"
 
-OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh sleep 1)
+OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh sleep 1)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 

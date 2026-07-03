@@ -15,7 +15,7 @@ printf '%s\n' "$@"
 SH
 chmod +x "$MOCK_BIN/claude"
 
-OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_RUNS_DIR="$RUNS_DIR" LMAS_CLAUDE_SESSION_ID="claude-session-123" ./bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_RUNS_DIR="$RUNS_DIR" LMAS_CLAUDE_SESSION_ID="claude-session-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 

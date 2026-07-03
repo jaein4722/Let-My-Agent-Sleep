@@ -52,8 +52,11 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 
 - `lmas_start`
 - `lmas_status`
+- `lmas_cancel`
 
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
+
+Use `lmas_cancel` for explicit user-requested cancellation. It records a `CANCELLED` completion event when the LMAS watcher is still alive. If a job was killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST` instead.
 
 ## Codex
 

@@ -128,6 +128,58 @@ function createStatusTool() {
   })
 }
 
+function createCancelTool(defaultServerUrl) {
+  return tool({
+    description:
+      "Cancel a running Let My Agent Sleep job. If the watcher is still alive, writes a CANCELLED completion event and injects the cancellation completion prompt into this OpenCode session.",
+    args: {
+      run_id: tool.schema.string().describe("LMAS run id, for example lmas_20260701T134510+0900_61653_17555, or a run directory path."),
+      runs_dir: tool.schema.string().optional().describe("Run directory root. Defaults to LMAS_RUNS_DIR or .lmas/runs."),
+      cwd: tool.schema.string().optional().describe("Working directory. Defaults to the current session directory."),
+      reason: tool.schema.string().optional().describe("Cancellation reason to persist in metadata."),
+      server_url: tool.schema.string().optional().describe("OpenCode server URL. Defaults to this plugin's current OpenCode server URL."),
+    },
+    async execute(args, context) {
+      const cwd = args.cwd || context.directory || context.worktree || process.cwd()
+      const script = findLmasScript(cwd, context)
+      const serverUrl = args.server_url || process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
+      const env = {
+        ...process.env,
+        LMAS_OPENCODE_SESSION_ID: context.sessionID,
+        LMAS_OPENCODE_SERVER_URL: serverUrl,
+      }
+      const command = ["bash", script, "cancel"]
+
+      if (args.runs_dir) {
+        command.push("--runs-dir", args.runs_dir)
+      }
+
+      if (args.reason) {
+        command.push("--reason", args.reason)
+      }
+
+      command.push(args.run_id)
+
+      const proc = Bun.spawn(command, {
+        cwd,
+        env,
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const stdout = await new Response(proc.stdout).text()
+      const stderr = await new Response(proc.stderr).text()
+      const code = await proc.exited
+
+      if (code !== 0) {
+        throw new Error(`lmas_cancel failed with exit code ${code}\n${stderr}`)
+      }
+
+      return stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
+    },
+  })
+}
+
 export const LetMyAgentSleepPlugin = async ({ serverUrl }) => {
   const defaultServerUrl = serverUrl?.toString?.().replace(/\/$/, "") || "http://127.0.0.1:4096"
 
@@ -135,6 +187,7 @@ export const LetMyAgentSleepPlugin = async ({ serverUrl }) => {
     tool: {
       lmas_start: createStartTool(defaultServerUrl),
       lmas_status: createStatusTool(),
+      lmas_cancel: createCancelTool(defaultServerUrl),
     },
   }
 }

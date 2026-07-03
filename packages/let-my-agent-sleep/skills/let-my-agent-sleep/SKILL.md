@@ -24,6 +24,7 @@ Use this skill when a command is likely to run for minutes or hours, including m
 - If `lmas_start` is not available in the tool list, the OpenCode plugin is not loaded in the current session. Tell the user to restart OpenCode after running `lmas install --agent opencode`; do not invent `.opencode/tools` paths or start a normal shell fallback unless the user explicitly asks for manual fallback.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
 - After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
+- If the user explicitly asks to cancel, stop, or terminate an LMAS run, call `lmas_cancel`. Do not kill tmux sessions or job processes directly.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - Preserve the original command in metadata.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
@@ -38,7 +39,7 @@ Use this skill when a command is likely to run for minutes or hours, including m
 
 ## OpenCode Setup
 
-`lmas_start` and `lmas_status` are provided by the installed OpenCode plugin. They are not project-local files and should not be looked up under `.opencode/tools`.
+`lmas_start`, `lmas_status`, and `lmas_cancel` are provided by the installed OpenCode plugin. They are not project-local files and should not be looked up under `.opencode/tools`.
 
 The installer updates the OpenCode config, usually `~/.config/opencode/opencode.jsonc`, and installs this skill under `~/.config/opencode/skills/let-my-agent-sleep/SKILL.md`. OpenCode must be restarted after install so it reloads plugin tools.
 

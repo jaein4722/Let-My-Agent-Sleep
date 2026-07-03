@@ -16,7 +16,7 @@ cat > "$MOCK_CODEX_STDIN"
 SH
 chmod +x "$MOCK_BIN/codex"
 
-OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_RUNS_DIR="$RUNS_DIR" LMAS_CODEX_SESSION_ID="codex-session-123" ./bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_RUNS_DIR="$RUNS_DIR" LMAS_CODEX_SESSION_ID="codex-session-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
@@ -35,7 +35,7 @@ grep -q '^status: SUCCEEDED$' "$RUN_DIR/completion_event.txt" || { printf 'expec
 grep -q '^codex_session_id=codex-session-123$' "$RUN_DIR/metadata.txt" || { printf 'missing explicit codex session id metadata\n' >&2; exit 1; }
 
 rm -f "$MOCK_CODEX_ARGS" "$MOCK_CODEX_STDIN"
-OUTPUT_AUTO=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_RUNS_DIR="$RUNS_DIR" CODEX_THREAD_ID="codex-thread-auto-456" ./bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
+OUTPUT_AUTO=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_RUNS_DIR="$RUNS_DIR" CODEX_THREAD_ID="codex-thread-auto-456" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
 RUN_ID_AUTO=$(printf '%s\n' "$OUTPUT_AUTO" | awk '/^run_id:/ { print $2 }')
 RUN_DIR_AUTO="$RUNS_DIR/$RUN_ID_AUTO"
 

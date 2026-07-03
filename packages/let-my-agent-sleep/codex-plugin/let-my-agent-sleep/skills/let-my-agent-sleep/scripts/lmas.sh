@@ -7,7 +7,7 @@ for candidate in \
   "$SCRIPT_DIR/../bin/lmas.sh" \
   "$SCRIPT_DIR/../../../bin/lmas.sh" \
   "$SCRIPT_DIR/../../../../../bin/lmas.sh" \
-  "$PWD/bin/lmas.sh"
+  "$PWD/packages/let-my-agent-sleep/bin/lmas.sh"
 do
   if [ -x "$candidate" ]; then
     exec "$candidate" "$@"

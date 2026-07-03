@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMPDIR_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/lmas-status.XXXXXX")
 RUNS_DIR="$TMPDIR_ROOT/runs"
 
-OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
@@ -16,10 +16,10 @@ done
 
 [ -f "$RUN_DIR/completion_event.txt" ] || { printf 'missing completion_event.txt\n' >&2; exit 1; }
 
-STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$RUN_ID")
-STATUS_BY_DIR=$(cd "$ROOT" && ./bin/lmas.sh status "$RUN_DIR")
+STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_ID")
+STATUS_BY_DIR=$(cd "$ROOT" && ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_DIR")
 STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js status "$RUN_ID")
-LIST_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh list)
+LIST_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh list)
 LOST_RUN_ID="lmas_lost_test"
 LOST_RUN_DIR="$RUNS_DIR/$LOST_RUN_ID"
 mkdir -p "$LOST_RUN_DIR"
@@ -37,7 +37,7 @@ artifacts_dir: $LOST_RUN_DIR
 started_at: 2026-07-01T00:00:00Z
 resume_instruction: Wait for completion event or inspect $LOST_RUN_DIR/resume_prompt.txt after the job exits.
 EOF
-LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$LOST_RUN_ID")
+LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$LOST_RUN_ID")
 TMUX_LOST_RUN_ID="lmas_tmux_lost_test"
 TMUX_LOST_RUN_DIR="$RUNS_DIR/$TMUX_LOST_RUN_ID"
 mkdir -p "$TMUX_LOST_RUN_DIR"
@@ -55,7 +55,7 @@ artifacts_dir: $TMUX_LOST_RUN_DIR
 started_at: 2026-07-01T00:00:00Z
 resume_instruction: Wait for completion event or inspect $TMUX_LOST_RUN_DIR/resume_prompt.txt after the job exits.
 EOF
-TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./bin/lmas.sh status "$TMUX_LOST_RUN_ID")
+TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$TMUX_LOST_RUN_ID")
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_DIR" | grep -q "^run_id: $RUN_ID$" || { printf 'status by dir reported wrong run id\n' >&2; exit 1; }

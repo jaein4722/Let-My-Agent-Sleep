@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "pack": "npm pack --workspace let-my-agent-sleep --dry-run",
-    "test:smoke": "tests/smoke/test-basic-handoff.sh && tests/smoke/test-success-completion.sh && tests/smoke/test-failed-completion.sh && tests/smoke/test-status-list.sh && tests/smoke/test-codex-adapter.sh && tests/smoke/test-claude-adapter.sh && tests/smoke/test-installer-dry-run.sh && tests/smoke/test-idempotent-install.sh"
+    "pack": "npm_config_cache=${TMPDIR:-/tmp}/lmas-npm-cache npm pack --workspace let-my-agent-sleep --dry-run",
+    "test:smoke": "tests/smoke/test-basic-handoff.sh && tests/smoke/test-success-completion.sh && tests/smoke/test-failed-completion.sh && tests/smoke/test-status-list.sh && tests/smoke/test-cancel.sh && tests/smoke/test-opencode-adapter.sh && tests/smoke/test-codex-adapter.sh && tests/smoke/test-claude-adapter.sh && tests/smoke/test-installer-dry-run.sh && tests/smoke/test-idempotent-install.sh"
   }
 }

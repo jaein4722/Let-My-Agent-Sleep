@@ -64,7 +64,7 @@ Default layout:
 `LMAS_STATUS v1` is a local inspection event emitted by:
 
 ```bash
-bin/lmas.sh status <run_id>
+packages/let-my-agent-sleep/bin/lmas.sh status <run_id>
 ```
 
 It reports:

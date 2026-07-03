@@ -7,7 +7,7 @@ Adapters run after a watched command exits. They never change the command exit c
 Writes `adapter.log` and leaves `resume_prompt.txt` for manual use.
 
 ```bash
-bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success
+packages/let-my-agent-sleep/bin/lmas.sh start --adapter noop -- ./examples/fake_train.sh success
 ```
 
 ## `opencode`
@@ -33,7 +33,7 @@ On completion, the watcher posts `resume_prompt.txt` to:
 POST /session/:session_id/prompt_async
 ```
 
-The OpenCode custom tool `.opencode/tools/lmas_start.ts` sets the session id from tool context.
+The OpenCode npm plugin provides `lmas_start`, `lmas_status`, and `lmas_cancel`. `lmas_start` sets the session id from the OpenCode tool context.
 
 The server URL must be the same OpenCode server that owns the session id. When testing with a non-default port, attach the run to that server and pass the same URL to `lmas_start`:
 
@@ -48,7 +48,7 @@ An empty `adapter.log` means `curl -fsS` received a successful 2xx response. A 4
 After completion, prefer checking quick state with:
 
 ```bash
-bin/lmas.sh status <run_id>
+packages/let-my-agent-sleep/bin/lmas.sh status <run_id>
 ```
 
 Then inspect `stdout.log` and `stderr.log`. `metadata.txt` is intended as secondary context, not the first file to read.
@@ -96,3 +96,13 @@ claude --continue -p "$(cat resume_prompt.txt)"
 ```
 
 which resumes the most recently used Claude session in the job's `cwd`. If neither is set, or the `claude` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
+
+### Verified live-session behavior
+
+Tested directly against real Claude Code sessions (both a bare CLI/tmux session and the actual Desktop app), targeting an explicit, correct session ID with a matching `cwd`:
+
+- The append to the session transcript always succeeds — `claude --resume` reliably attaches the completion turn to the session file with the correct parent, whether the target session is dormant or currently open.
+- An already-open, idle interactive session does **not** refresh live. The person watching that window sees nothing new until they restart/reopen it — this matches the `codex` adapter's documented behavior.
+- If the user sends the originating session another message before it is restarted, the live process (unaware of the injected turn, since it never re-reads the file) appends its own next turn from the same stale parent, creating a branch in the transcript tree.
+- This branching does not lose data and does not require picking a winner: reopening/restarting the session merges all branches by timestamp and displays them in correct chronological order. Restart is therefore a reliable recovery path even after a branch occurs.
+- There is currently no known way to make the completion appear in an already-open, un-restarted session in real time. Real-time delivery into a live session (without requiring restart) is an open enhancement, not yet solved.

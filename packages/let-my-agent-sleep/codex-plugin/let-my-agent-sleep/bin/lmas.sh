@@ -13,6 +13,7 @@ usage() {
 Usage:
   lmas.sh start [options] -- <command...>
   lmas.sh status [--runs-dir <path>] <run_id|run_dir>
+  lmas.sh cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
   lmas.sh list [--runs-dir <path>]
 
 Options:
@@ -474,6 +475,15 @@ read_field() {
   fi
 }
 
+read_metadata_field() {
+  local file field
+  file=$1
+  field=$2
+  if [ -f "$file" ]; then
+    awk -F= -v key="$field" '$1 == key { print substr($0, length(key) + 2); exit }' "$file"
+  fi
+}
+
 watcher_alive() {
   local id run_dir session tmux_socket cwd_for_socket
   id=$1
@@ -499,6 +509,151 @@ watcher_alive() {
       kill -0 "$id" >/dev/null 2>&1
       ;;
   esac
+}
+
+stop_watcher() {
+  local id run_dir session tmux_socket cwd_for_socket
+  id=$1
+  run_dir=$2
+  [ -n "$id" ] || return 1
+
+  case "$id" in
+    tmux:*)
+      session=${id#tmux:}
+      command -v tmux >/dev/null 2>&1 || return 1
+      if [ -f "$run_dir/tmux_socket.txt" ]; then
+        tmux_socket=$(sed -n '1p' "$run_dir/tmux_socket.txt")
+      else
+        tmux_socket=".lmas/tmux/${session}.sock"
+      fi
+      cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd)
+      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
+      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" kill-session -t "$session" >/dev/null 2>&1 )
+      ;;
+    *[!0-9]*)
+      return 1
+      ;;
+    *)
+      kill -TERM "$id" >/dev/null 2>&1
+      ;;
+  esac
+}
+
+cancel_command() {
+  local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id
+  local adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at exit_code was_alive
+
+  runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
+  reason="user requested cancellation"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --runs-dir)
+        [ "$#" -ge 2 ] || die "--runs-dir requires a value"
+        runs_dir=$2
+        shift 2
+        ;;
+      --reason)
+        [ "$#" -ge 2 ] || die "--reason requires a value"
+        reason=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  [ "$#" -eq 1 ] || die "cancel requires exactly one run_id or run_dir"
+  run_ref=$1
+  run_dir=$(resolve_run_dir "$runs_dir" "$run_ref") || die "run not found: $run_ref"
+
+  if [ -f "$run_dir/completion_event.txt" ]; then
+    event_file="$run_dir/completion_event.txt"
+    run_id=$(read_field "$event_file" run_id)
+    existing_status=$(read_field "$event_file" status)
+    {
+      printf 'LMAS_CANCEL v1\n'
+      printf 'run_id: %s\n' "$run_id"
+      printf 'status: ALREADY_COMPLETED\n'
+      printf 'existing_status: %s\n' "$existing_status"
+      printf 'run_dir: %s\n' "$run_dir"
+    }
+    return 0
+  fi
+
+  event_file="$run_dir/handoff.txt"
+  [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
+
+  run_id=$(read_field "$event_file" run_id)
+  pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
+  was_alive=0
+  if watcher_alive "$pid_or_job_id" "$run_dir"; then
+    was_alive=1
+  fi
+
+  if [ "$was_alive" -eq 0 ]; then
+    {
+      printf 'LMAS_CANCEL v1\n'
+      printf 'run_id: %s\n' "$run_id"
+      printf 'status: LOST\n'
+      printf 'run_dir: %s\n' "$run_dir"
+      printf 'message: watcher is not alive; no CANCELLED completion event was written\n'
+    }
+    return 0
+  fi
+
+  stop_watcher "$pid_or_job_id" "$run_dir" || die "failed to stop watcher for run: $run_id"
+
+  if [ -f "$run_dir/completion_event.txt" ]; then
+    event_file="$run_dir/completion_event.txt"
+    existing_status=$(read_field "$event_file" status)
+    {
+      printf 'LMAS_CANCEL v1\n'
+      printf 'run_id: %s\n' "$run_id"
+      printf 'status: ALREADY_COMPLETED\n'
+      printf 'existing_status: %s\n' "$existing_status"
+      printf 'run_dir: %s\n' "$run_dir"
+    }
+    return 0
+  fi
+
+  adapter=$(read_metadata_field "$run_dir/metadata.txt" adapter)
+  [ -n "$adapter" ] || adapter=noop
+  cwd=$(read_metadata_field "$run_dir/metadata.txt" cwd)
+  [ -n "$cwd" ] || cwd=$(pwd)
+  command_text=$(read_metadata_field "$run_dir/metadata.txt" command)
+  [ -n "$command_text" ] || command_text=$(read_field "$event_file" command)
+  artifacts_dir=$(read_metadata_field "$run_dir/metadata.txt" artifacts_dir)
+  [ -n "$artifacts_dir" ] || artifacts_dir=$(read_field "$event_file" artifacts_dir)
+  stdout_path="$run_dir/stdout.log"
+  stderr_path="$run_dir/stderr.log"
+  metadata_path="$run_dir/metadata.txt"
+  exit_code=130
+  finished_at=$(now_system)
+
+  printf '%s\n' "$exit_code" > "$run_dir/exit_code"
+  {
+    printf 'cancelled_at=%s\n' "$finished_at"
+    printf 'cancel_reason=%s\n' "$reason"
+  } >> "$run_dir/metadata.txt"
+  write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
+  write_resume_prompt "$run_dir"
+  run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
+
+  {
+    printf 'LMAS_CANCEL v1\n'
+    printf 'run_id: %s\n' "$run_id"
+    printf 'status: CANCELLED\n'
+    printf 'exit_code: %s\n' "$exit_code"
+    printf 'run_dir: %s\n' "$run_dir"
+    printf 'completion_event: %s\n' "$run_dir/completion_event.txt"
+    printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
+  }
 }
 
 status_command() {
@@ -636,6 +791,10 @@ main() {
     status)
       shift
       status_command "$@"
+      ;;
+    cancel)
+      shift
+      cancel_command "$@"
       ;;
     list)
       shift

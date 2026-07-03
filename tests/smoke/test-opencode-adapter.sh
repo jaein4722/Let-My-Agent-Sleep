@@ -44,7 +44,7 @@ done
 [ -f "$PORT_FILE" ] || { printf 'fake server did not start\n' >&2; exit 1; }
 PORT=$(cat "$PORT_FILE")
 
-OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_OPENCODE_SESSION_ID="session-123" LMAS_OPENCODE_SERVER_URL="http://127.0.0.1:$PORT" ./bin/lmas.sh start --adapter opencode -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_OPENCODE_SESSION_ID="session-123" LMAS_OPENCODE_SERVER_URL="http://127.0.0.1:$PORT" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter opencode -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
