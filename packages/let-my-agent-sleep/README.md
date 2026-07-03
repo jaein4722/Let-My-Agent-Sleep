@@ -1,28 +1,106 @@
-# let-my-agent-sleep
+<div align="center">
+  <img src="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.svg" alt="Let My Agent Sleep - stop AI agents polling long-running jobs" width="780" />
 
-Let My Agent Sleep lets AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes.
+  <h1>let-my-agent-sleep</h1>
 
-Use it for training, evaluation, preprocessing, benchmarks, migrations, or batch jobs that would otherwise make an agent poll logs or repeatedly continue.
+  <p><strong>Start long jobs. Stop the loop. Resume the same agent session when they finish.</strong></p>
 
-[Website](https://jaein4722.github.io/Let-My-Agent-Sleep/) · [Docs](https://jaein4722.github.io/Let-My-Agent-Sleep/docs/) · [npm](https://www.npmjs.com/package/let-my-agent-sleep)
+  <p>
+    <a href="https://www.npmjs.com/package/let-my-agent-sleep"><img alt="npm version" src="https://img.shields.io/npm/v/let-my-agent-sleep.svg"></a>
+    <a href="https://www.npmjs.com/package/let-my-agent-sleep"><img alt="npm downloads" src="https://img.shields.io/npm/dw/let-my-agent-sleep.svg"></a>
+    <a href="https://github.com/jaein4722/Let-My-Agent-Sleep"><img alt="GitHub stars" src="https://img.shields.io/github/stars/jaein4722/Let-My-Agent-Sleep.svg?style=flat"></a>
+    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
+  </p>
 
-## Requirements
+  <p>
+    <a href="https://jaein4722.github.io/Let-My-Agent-Sleep/"><strong>Website</strong></a>
+    ·
+    <a href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/"><strong>Docs</strong></a>
+    ·
+    <a href="https://www.npmjs.com/package/let-my-agent-sleep"><strong>npm</strong></a>
+  </p>
+</div>
 
-`tmux` must be installed and available on `PATH`.
+---
 
-## Install
+AI agents should not spend hours polling a training log.
+
+Let My Agent Sleep, or LMAS, lets OpenCode, Codex, and Claude Code start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, hand them off, stop waiting, and resume the same session when the job finishes.
+
+```text
+start job -> LMAS_HANDOFF v1 -> agent stops
+job exits -> LMAS_COMPLETION_EVENT v1 -> same session resumes
+```
+
+## Contents
+
+- [Why](#why)
+- [Quick Start](#quick-start)
+- [Agent Support](#agent-support)
+- [OpenCode](#opencode)
+- [Codex](#codex)
+- [Claude Code](#claude-code)
+- [CLI](#cli)
+- [Runtime Artifacts](#runtime-artifacts)
+- [Why Not nohup?](#why-not-nohup)
+- [Cost Model](#cost-model)
+- [FAQ](#faq)
+
+## Why
+
+Without LMAS, a long-running job often turns into an expensive agent loop:
+
+| Without LMAS | With LMAS |
+| --- | --- |
+| Agent starts a job and keeps checking logs. | Agent starts a job and receives a handoff. |
+| Context fills with repeated `tail`, `ps`, and status output. | The session goes quiet while the job runs. |
+| Loop runners keep forcing `continue`. | Completion wakes the same session once. |
+| Cost grows with wall-clock wait time. | Cost is handoff plus completion handling. |
+
+LMAS does not make useful agent work free. It removes the waiting portion: polling turns, repeated context reloads, and artificial continue loops.
+
+## Quick Start
+
+Requirements:
+
+- `tmux` installed and available on `PATH`
+- Node.js with `npx` or a global npm install
+
+Install:
 
 ```bash
 npx let-my-agent-sleep install
 ```
 
-The short CLI alias is:
+Or install globally and use the short alias:
 
 ```bash
+npm install -g let-my-agent-sleep
 lmas install
 ```
 
-To install for a specific agent:
+Restart your agent after installation.
+
+Then ask the agent to use LMAS for long-running work:
+
+```text
+Use the let-my-agent-sleep skill for this task.
+Start the training job with:
+python train.py --config configs/exp.yaml
+After LMAS_HANDOFF v1, stop and do not wait or poll.
+```
+
+The agent should start the job, report a `run_id`, and stop. When the job finishes, LMAS injects an `LMAS_COMPLETION_EVENT v1` message so the agent can inspect logs, summarize results, and continue.
+
+## Agent Support
+
+| Agent | Status | Resume path |
+| --- | --- | --- |
+| OpenCode | Primary | Plugin tools and native completion prompt injection |
+| Codex | Supported | Same-session resume from the job environment |
+| Claude Code | Experimental | Resume when possible, manual fallback prompt when needed |
+
+Install for a specific agent:
 
 ```bash
 npx let-my-agent-sleep install --agent opencode
@@ -34,20 +112,6 @@ npx let-my-agent-sleep install --agent all --yes
 
 Use `--dry-run` to preview changes before writing files.
 
-## Usage
-
-Restart your agent after installation, then ask it to use Let My Agent Sleep for long-running work.
-
-Example:
-
-```text
-Use the let-my-agent-sleep skill for this task. Start the training job with:
-python train.py --config configs/exp.yaml
-After LMAS_HANDOFF v1, stop and do not wait or poll.
-```
-
-The agent should start the job, report a `run_id`, and stop. When the job finishes, Let My Agent Sleep injects an `LMAS_COMPLETION_EVENT v1` message so the agent can inspect logs, summarize results, and continue.
-
 ## OpenCode
 
 OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin and skill, including:
@@ -57,8 +121,6 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 - `lmas_cancel`
 
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
-
-Use `lmas_cancel` for explicit user-requested cancellation. It records a `CANCELLED` completion event when the LMAS watcher is still alive. If a job was killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST` instead.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
@@ -74,15 +136,20 @@ Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
 Claude Code support is experimental. It is available through the installed Let My Agent Sleep skill, but automatic resume behavior is not guaranteed across every Claude Code frontend or remote session setup.
 
-For exact automatic resume, set `LMAS_CLAUDE_SESSION_ID` before starting the job. Without it, Let My Agent Sleep leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
+For exact automatic resume, set `LMAS_CLAUDE_SESSION_ID` before starting the job. Without it, LMAS leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
 Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html
 
-## Why Not nohup?
+## CLI
 
-`nohup` keeps a process alive. Let My Agent Sleep also gives the agent a clean handoff point, records run metadata, watches for process exit, and injects a completion event so the same session can continue.
+```bash
+lmas start -- python train.py --config configs/exp.yaml
+lmas status <run_id>
+lmas list
+lmas cancel <run_id>
+```
 
-More detail: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/why-not-nohup.html
+Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.
 
 ## Runtime Artifacts
 
@@ -101,11 +168,47 @@ Common files:
 - `metadata.txt`
 - `resume_prompt.txt`
 
-Check a run manually:
+Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata.
 
-```bash
-lmas status <run_id>
-lmas list
-```
+## Why Not nohup?
 
-Do not place secrets in command-line arguments or metadata. Keep `.lmas/` ignored by git.
+`nohup` keeps a process alive. LMAS also gives the agent a clean handoff point, records run metadata, watches for process exit, and injects a completion event so the same session can continue.
+
+More detail: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/why-not-nohup.html
+
+## Cost Model
+
+In one observed OpenCode loop, repeated status checks cost about `$2.72` over `10.2 minutes`. Projected over a 24-hour wait, that is about `$382` and `1.93B` tokens.
+
+LMAS does not make completion free. The start handoff and wake-up prompt still cost tokens. The saving is that the waiting interval no longer produces polling turns.
+
+Cost method: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/cost.html
+
+## FAQ
+
+### Does LMAS require changing my training code?
+
+No. LMAS wraps the command the agent was already going to run.
+
+### Does it require a daemon?
+
+No. LMAS uses `tmux` and plain files. There is no database, cloud scheduler, or project-specific callback.
+
+### What happens if a job fails?
+
+The completion event includes `status`, `exit_code`, `stdout`, `stderr`, `metadata`, and `artifacts_dir`. The agent can inspect the failure and decide the next step.
+
+### What happens if I cancel a run?
+
+Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the watcher is still alive, LMAS records a `CANCELLED` completion event. If a job is killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST`.
+
+## Links
+
+- Website: https://jaein4722.github.io/Let-My-Agent-Sleep/
+- Docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/
+- GitHub: https://github.com/jaein4722/Let-My-Agent-Sleep
+- npm: https://www.npmjs.com/package/let-my-agent-sleep
+
+## License
+
+MIT. See [LICENSE](LICENSE).
