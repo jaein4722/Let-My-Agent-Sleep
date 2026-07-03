@@ -18,8 +18,6 @@
     <a href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/"><strong>Docs</strong></a>
     ·
     <a href="https://www.npmjs.com/package/let-my-agent-sleep"><strong>npm</strong></a>
-    ·
-    <a href="docs/launch-copy.md"><strong>Launch copy</strong></a>
   </p>
 </div>
 
@@ -209,8 +207,6 @@ Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the 
 - Website: https://jaein4722.github.io/Let-My-Agent-Sleep/
 - Docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/
 - npm: https://www.npmjs.com/package/let-my-agent-sleep
-- Roadmap: [docs/roadmap.md](docs/roadmap.md)
-- Launch copy: [docs/launch-copy.md](docs/launch-copy.md)
 
 ## License
 
