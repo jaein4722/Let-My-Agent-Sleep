@@ -13,7 +13,7 @@
   <rect width="1200" height="630" fill="url(#bg)"/>
   <circle cx="1030" cy="110" r="150" fill="#4dd6e0" opacity="0.12"/>
   <circle cx="980" cy="520" r="190" fill="#58d68d" opacity="0.13"/>
-  <g filter="url(#glow)" opacity="0.95">
+  <g filter="url(#glow)" opacity="0.95" transform="translate(170 0)">
     <path d="M950 360A150 150 0 1 1 780 190 120 120 0 0 0 950 360Z" fill="#58d68d"/>
     <path d="M913 195h94L915 314h92L870 478l40-126h-92L913 195Z" fill="#4dd6e0"/>
   </g>
