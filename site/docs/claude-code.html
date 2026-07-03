@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Code Support in Let My Agent Sleep</title>
+  <meta name="description" content="Claude Code support in Let My Agent Sleep is experimental. Learn how LMAS handles Claude Code long-running jobs and where automatic resume may vary." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Claude Code</span>
+    <h1>Claude Code support is experimental.</h1>
+    <p class="lead">LMAS can start and watch long-running Claude Code jobs, but automatic same-session resume is not guaranteed across every Claude Code frontend, desktop, remote, or session-history setup.</p>
+    <h2>Install</h2>
+    <pre><code>npx let-my-agent-sleep install --agent claude</code></pre>
+    <h2>Recommended settings</h2>
+    <ul>
+      <li>Set <code>LMAS_CLAUDE_SESSION_ID</code> when you know the exact session to resume.</li>
+      <li>Use <code>LMAS_CLAUDE_CONTINUE=1</code> only when continuing the most recent Claude session in the working directory is acceptable.</li>
+      <li>If automatic resume is not safe, use the generated <code>resume_prompt.txt</code> as a manual fallback.</li>
+    </ul>
+    <div class="card">
+      <h2>Guarantee boundary</h2>
+      <p>OpenCode is the primary target. Codex is supported. Claude Code remains experimental until same-session resume behavior is verified across the relevant frontends.</p>
+    </div>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>

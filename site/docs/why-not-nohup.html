@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Why Not nohup? Let My Agent Sleep vs Plain Background Jobs</title>
+  <meta name="description" content="nohup keeps a process alive, but it does not hand off an AI agent session or wake it when the job finishes. LMAS adds handoff and completion events." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/why-not-nohup.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Comparison</span>
+    <h1>nohup keeps the job alive. LMAS keeps the agent loop sane.</h1>
+    <p class="lead">A background process is only half the problem. Long-running AI-agent work also needs a clear stopping point now and a reliable wake-up later.</p>
+    <div class="grid">
+      <div class="card"><h2>Plain nohup</h2><ul><li>Starts the process.</li><li>Leaves the agent to decide whether to poll.</li><li>Does not standardize stdout, stderr, metadata, or artifacts.</li><li>Does not inject a completion event into the session.</li></ul></div>
+      <div class="card"><h2>LMAS</h2><ul><li>Starts the process in tmux.</li><li>Returns <code>LMAS_HANDOFF v1</code> so the agent stops.</li><li>Records run metadata in plain files.</li><li>Injects <code>LMAS_COMPLETION_EVENT v1</code> when the job ends.</li></ul></div>
+    </div>
+    <h2>The principle</h2>
+    <p>Long-running jobs are handoff tasks, not completion tasks. The agent's current turn should safely start the job and hand it off. The completion turn should inspect logs, summarize results, and choose the next action.</p>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>

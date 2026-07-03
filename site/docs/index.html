@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Let My Agent Sleep Docs — AI Agent Long-Running Jobs</title>
+  <meta name="description" content="Documentation for using Let My Agent Sleep with OpenCode, Codex, and Claude Code to start long-running jobs, stop polling, and resume the same agent session." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="../">Home</a><a href="https://www.npmjs.com/package/let-my-agent-sleep">npm</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Docs</span>
+    <h1>Start long jobs. Stop polling. Resume the same session.</h1>
+    <p class="lead">Let My Agent Sleep is a small agent handoff layer for training, evaluation, preprocessing, benchmarks, migrations, and batch jobs that would otherwise make an AI agent poll logs or repeatedly continue.</p>
+    <pre><code>npx let-my-agent-sleep install</code></pre>
+    <div class="grid">
+      <a class="card" href="./opencode.html"><h2>OpenCode</h2><p>Primary adapter. Plugin tools, native completion injection, and practical usage.</p></a>
+      <a class="card" href="./codex.html"><h2>Codex</h2><p>Same-session resume through the Codex environment and tmux-backed watchers.</p></a>
+      <a class="card" href="./claude-code.html"><h2>Claude Code <span class="tag">Experimental</span></h2><p>Claude Code support, known caveats, and fallback behavior.</p></a>
+      <a class="card" href="./why-not-nohup.html"><h2>Why not nohup?</h2><p>The difference between keeping a process alive and waking the agent correctly.</p></a>
+      <a class="card" href="./cost.html"><h2>Cost method</h2><p>How LMAS removes polling cost while preserving handoff and completion prompts.</p></a>
+    </div>
+  </main>
+  <footer><div class="wrap">MIT licensed. Requires tmux.</div></footer>
+</body>
+</html>

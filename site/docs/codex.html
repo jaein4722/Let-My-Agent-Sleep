@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Codex Long-Running Jobs with Let My Agent Sleep</title>
+  <meta name="description" content="Use Let My Agent Sleep with Codex to start long-running jobs in tmux, stop waiting, and resume the same Codex session when the job finishes." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Codex</span>
+    <h1>Codex support uses same-session resume.</h1>
+    <p class="lead">LMAS starts the long-running job in tmux, records the handoff, waits outside the agent turn, and resumes the Codex thread when the process finishes.</p>
+    <h2>Install</h2>
+    <pre><code>npx let-my-agent-sleep install --agent codex</code></pre>
+    <p>Restart Codex after installation. The Codex session must be resumable from the machine where the job is running.</p>
+    <h2>What the agent should do</h2>
+    <ul>
+      <li>Use the installed <code>let-my-agent-sleep</code> skill for commands that would require waiting.</li>
+      <li>Start the command with LMAS and return only the handoff summary.</li>
+      <li>After <code>LMAS_HANDOFF v1</code>, end the turn instead of sleeping, polling, or repeatedly continuing.</li>
+    </ul>
+    <h2>Completion</h2>
+    <p>When the process exits, LMAS writes a completion event with the run id, status, exit code, command, stdout, stderr, metadata, artifacts directory, and finish time. Codex then resumes the same logical thread and can continue from the completed job state.</p>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>

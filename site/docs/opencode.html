@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenCode Long-Running Jobs with Let My Agent Sleep</title>
+  <meta name="description" content="Use Let My Agent Sleep with OpenCode to start long-running training or evaluation jobs, stop polling logs, and inject a completion event into the same session." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">OpenCode</span>
+    <h1>OpenCode is the primary LMAS target.</h1>
+    <p class="lead">OpenCode gets the cleanest experience: the installer registers the LMAS plugin and skill, and the watcher injects <code>LMAS_COMPLETION_EVENT v1</code> back into the running OpenCode session when the job exits.</p>
+    <h2>Install</h2>
+    <pre><code>npx let-my-agent-sleep install --agent opencode</code></pre>
+    <p>Restart OpenCode after installation so it reloads plugin tools and skills.</p>
+    <h2>Tools</h2>
+    <ul>
+      <li><code>lmas_start</code> starts a command through LMAS handoff semantics.</li>
+      <li><code>lmas_status</code> reads a run status without polling blindly.</li>
+      <li><code>lmas_cancel</code> cancels a user-selected run and records cancellation when the watcher is still alive.</li>
+    </ul>
+    <h2>Agent prompt</h2>
+    <pre><code>Use the let-my-agent-sleep skill for this task.
+Start this command with lmas_start:
+python train.py --config configs/exp.yaml
+After LMAS_HANDOFF v1, stop. Do not wait, poll, inspect status, or use bash as a fallback.</code></pre>
+    <div class="card">
+      <h2>Non-default server URL</h2>
+      <p>If OpenCode is running on a non-default server URL, include that URL in the request so the watcher knows where to inject the completion prompt.</p>
+    </div>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>

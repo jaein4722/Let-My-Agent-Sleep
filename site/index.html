@@ -3,18 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Let My Agent Sleep — long jobs, zero polling, same-session wake-up</title>
-  <meta name="description" content="AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes. No polling, no token burn — one handoff, one wake-up." />
+  <title>Let My Agent Sleep — Stop AI Agents Polling Long-Running Jobs</title>
+  <meta name="description" content="Let My Agent Sleep lets OpenCode, Codex, and Claude Code start long-running training, evaluation, and batch jobs, stop polling logs, and resume the same session when the job finishes." />
+  <meta name="keywords" content="AI agent long running jobs, OpenCode plugin, Codex skill, Claude Code skill, agent polling cost, resume agent session, background training job, LLM agent handoff, tmux agent workflow" />
   <meta name="theme-color" content="#0a0d1a" />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Let My Agent Sleep — long jobs, zero polling, same-session wake-up" />
-  <meta property="og:description" content="AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes. One handoff, one wake-up." />
+  <meta property="og:url" content="https://jaein4722.github.io/Let-My-Agent-Sleep/" />
+  <meta property="og:title" content="Let My Agent Sleep — Stop AI Agents Polling Long-Running Jobs" />
+  <meta property="og:description" content="Start long-running training or evaluation jobs, stop agent polling, and resume the same session when the job finishes. One handoff, one wake-up." />
+  <meta property="og:image" content="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.svg" />
   <meta property="og:site_name" content="Let My Agent Sleep" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Let My Agent Sleep" />
+  <meta name="twitter:title" content="Let My Agent Sleep — Stop Agent Polling" />
   <meta name="twitter:description" content="AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes." />
+  <meta name="twitter:image" content="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.svg" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Let My Agent Sleep",
+    "alternateName": "LMAS",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux",
+    "description": "Let My Agent Sleep lets AI agents start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, stop polling logs, and resume the same session when the job finishes.",
+    "url": "https://jaein4722.github.io/Let-My-Agent-Sleep/",
+    "downloadUrl": "https://www.npmjs.com/package/let-my-agent-sleep",
+    "codeRepository": "https://github.com/jaein4722/Let-My-Agent-Sleep",
+    "license": "https://github.com/jaein4722/Let-My-Agent-Sleep/blob/master/packages/let-my-agent-sleep/LICENSE",
+    "programmingLanguage": "JavaScript, Shell",
+    "runtimePlatform": "Node.js, tmux",
+    "keywords": "AI agents, long-running jobs, OpenCode, Codex, Claude Code, polling cost, same-session resume, LLM agent handoff",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -603,6 +633,22 @@
       font-size: 0.82rem;
       color: var(--text-faint);
     }
+    .faq-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 820px) { .faq-list { grid-template-columns: 1fr; } }
+    .faq-item h3 {
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      margin-bottom: 9px;
+    }
+    .faq-item p {
+      color: var(--text-dim);
+      font-size: 0.92rem;
+    }
     .footer-docs {
       display: block;
       margin-top: 18px;
@@ -800,6 +846,7 @@
       <nav class="nav-links">
         <a class="ext-hide" href="#real-loop">The loop</a>
         <a class="ext-hide" href="#adapters">Adapters</a>
+        <a class="ext-hide" href="./docs/">Docs</a>
         <a href="https://www.npmjs.com/package/let-my-agent-sleep" target="_blank" rel="noopener">npm</a>
         <a href="https://github.com/jaein4722/Let-My-Agent-Sleep" target="_blank" rel="noopener">GitHub</a>
       </nav>
@@ -813,7 +860,7 @@
       <h1>Let My Agent Sleep</h1>
       <p class="tagline">
         AI agents start long-running jobs, <span class="kw-cyan">stop waiting</span>, and resume the
-        <span class="kw-green">same session</span> when the job finishes. No polling. No token burn.
+        <span class="kw-green">same session</span> when the job finishes. No polling. No token burn from waiting.
       </p>
 
       <div class="code-pill">
@@ -883,10 +930,10 @@
             <span class="cost-after" id="cost-after">$0.18</span>
           </div>
         </div>
-        <div class="cost-sub"><span id="cost-ratio">×2,125 cheaper</span><span class="cost-badge observed" id="cost-badge">observed</span></div>
+        <div class="cost-sub"><span id="cost-ratio">×2,125 cheaper</span><span class="cost-badge observed" id="cost-badge">observed rate</span></div>
         <p class="cost-punch">LMAS doesn't make the wake-up free. It makes the waiting disappear.</p>
         <p class="cost-method">Measured polling rate ($2.72 / 10.2 min) projected over a 24-hour wait, vs the measured LMAS handoff + completion for a real run. The LMAS cost doesn't grow with wait time.</p>
-        <p class="cost-foot">Projected at list pricing, standard context tier, July 2026.</p>
+        <p class="cost-foot">Kimi uses an observed OpenCode polling rate; other rows use model list pricing, standard context tier, July 2026.</p>
       </div>
     </section>
 
@@ -1072,7 +1119,7 @@
           <div class="p-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8" opacity="0.9"/></svg>
           </div>
-          <h3>Zero token burn</h3>
+          <h3>Zero polling burn</h3>
           <p>No polling loop, no "continue" spam. The session sleeps until there's something worth waking for.</p>
         </div>
         <div class="card principle reveal">
@@ -1114,6 +1161,29 @@
         </div>
       </div>
     </section>
+
+    <!-- FAQ -->
+    <section class="wrap" id="faq">
+      <span class="eyebrow reveal">FAQ</span>
+      <div class="faq-list">
+        <div class="card faq-item reveal">
+          <h3>Why not just use nohup?</h3>
+          <p><code>nohup</code> keeps the process alive. LMAS also records a handoff, watches completion, and wakes the same agent session with the stdout, stderr, metadata, and artifact paths it needs to continue.</p>
+        </div>
+        <div class="card faq-item reveal">
+          <h3>Does LMAS make completion free?</h3>
+          <p>No. The wake-up prompt still costs tokens. LMAS removes the waiting portion: the log polling, repeated continues, and context reloads while the job is still running.</p>
+        </div>
+        <div class="card faq-item reveal">
+          <h3>Do I need to change my training code?</h3>
+          <p>No. The agent wraps your existing command with LMAS. Your script still runs as the same command, in the same working directory, with stdout and stderr captured.</p>
+        </div>
+        <div class="card faq-item reveal">
+          <h3>What does it require?</h3>
+          <p><code>tmux</code> must be installed. LMAS uses tmux and plain files instead of a daemon, database, cloud scheduler, or project-specific callback.</p>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- FOOTER -->
@@ -1132,9 +1202,11 @@
             <span id="copy-label-2">Copy</span>
           </button>
         </div>
-        <a class="footer-docs" href="https://github.com/jaein4722/Let-My-Agent-Sleep" target="_blank" rel="noopener">Read the docs on GitHub →</a>
+        <a class="footer-docs" href="./docs/">Read the docs →</a>
       </div>
       <div class="footer-links">
+        <a href="./docs/">Docs</a>
+        <span class="footer-sep">·</span>
         <a href="https://github.com/jaein4722/Let-My-Agent-Sleep" target="_blank" rel="noopener">GitHub</a>
         <span class="footer-sep">·</span>
         <a href="https://www.npmjs.com/package/let-my-agent-sleep" target="_blank" rel="noopener">npm</a>
@@ -1211,7 +1283,7 @@
           costBefore.textContent = d.before;
           costAfter.textContent = d.after;
           costRatio.textContent = d.ratio + " cheaper";
-          costBadge.textContent = d.observed ? "observed" : "list pricing";
+          costBadge.textContent = d.observed ? "observed rate" : "list pricing";
           costBadge.className = "cost-badge " + (d.observed ? "observed" : "projected");
         };
         pills.forEach(function (p) {

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LMAS Cost Method — Agent Polling Cost vs Handoff Cost</title>
+  <meta name="description" content="How Let My Agent Sleep estimates AI agent polling cost, token savings, and LMAS lifecycle cost for long-running jobs." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/cost.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Cost Method</span>
+    <h1>LMAS removes waiting cost, not wake-up cost.</h1>
+    <p class="lead">The completion prompt still costs tokens. The saving comes from eliminating the polling loop while the long-running job is still running.</p>
+    <h2>Observed baseline</h2>
+    <p>In one OpenCode loop, repeated status checks cost <code>$2.72</code> over <code>10.2 minutes</code>. Projected over a 24-hour wait, that is about <code>$382</code> and <code>1.93B</code> tokens.</p>
+    <h2>Observed LMAS lifecycle</h2>
+    <p>The measured LMAS lifecycle includes the start handoff and completion handling. It does not grow with wall-clock wait time. In the measured run, handoff plus completion cost about <code>$0.18</code> and <code>387K</code> tokens.</p>
+    <h2>What this means</h2>
+    <ul>
+      <li>If the job runs for one minute, the savings are small.</li>
+      <li>If the job runs overnight, the avoided polling dominates.</li>
+      <li>If the model is expensive or context is large, the avoided context reloads matter even more.</li>
+    </ul>
+    <div class="card">
+      <h2>Claim boundary</h2>
+      <p>LMAS should not be described as making agent work free. It makes the waiting portion disappear. The agent still pays for useful work: starting, receiving completion, reading logs, summarizing results, and choosing the next run.</p>
+    </div>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>
