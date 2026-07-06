@@ -18,6 +18,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 printf '%s\n' "$STATUS" | grep -q '^status: RUNNING$' || { printf 'run did not enter RUNNING state before cancel\n' >&2; exit 1; }
+printf '%s\n' "$STATUS" | grep -q '^agent_instruction: stop now;' || { printf 'running status did not include no-poll instruction\n' >&2; exit 1; }
 
 CANCEL_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh cancel --reason smoke-test "$RUN_ID")
 

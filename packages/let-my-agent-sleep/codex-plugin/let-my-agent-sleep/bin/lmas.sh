@@ -701,6 +701,10 @@ status_command() {
     printf 'LMAS_STATUS v1\n'
     printf 'run_id: %s\n' "$run_id"
     printf 'status: %s\n' "$status"
+    if [ "$status" = "RUNNING" ]; then
+      printf 'meaning: job is still running; this is not a completion event\n'
+      printf 'agent_instruction: stop now; do not poll, tail logs, inspect artifacts, or call lmas_status again until LMAS_COMPLETION_EVENT v1 arrives or the user explicitly asks for another status check\n'
+    fi
     if [ -n "$exit_code" ]; then
       printf 'exit_code: %s\n' "$exit_code"
     fi

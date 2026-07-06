@@ -6,6 +6,21 @@ compatibility: opencode
 
 # Let My Agent Sleep
 
+## HARD RULE: DO NOT POLL AFTER HANDOFF
+
+AFTER `LMAS_HANDOFF v1`, THE JOB IS HANDED OFF.
+
+UNTIL `LMAS_COMPLETION_EVENT v1` ARRIVES, OR THE USER EXPLICITLY ASKS FOR STATUS:
+
+DO NOT POLL.
+DO NOT CALL `lmas_status`.
+DO NOT TAIL LOGS.
+DO NOT READ STDOUT OR STDERR.
+DO NOT INSPECT ARTIFACTS.
+DO NOT CONTINUE THE LOOP JUST BECAUSE A TODO IS STILL OPEN.
+
+Stop the current turn after handoff.
+
 Treat long-running jobs as handoff tasks, not completion tasks.
 
 Use this skill when a command is likely to run for minutes or hours, including model training, evaluation, dataset preprocessing, benchmark suites, large migrations, or batch inference.
@@ -24,11 +39,12 @@ Use this skill when a command is likely to run for minutes or hours, including m
 - If `lmas_start` is not available in the tool list, the OpenCode plugin is not loaded in the current session. Tell the user to restart OpenCode after running `lmas install --agent opencode`; do not invent `.opencode/tools` paths or start a normal shell fallback unless the user explicitly asks for manual fallback.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
 - After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
+- If `lmas_status` reports `RUNNING`, STOP IMMEDIATELY. DO NOT POLL. DO NOT TAIL LOGS. DO NOT INSPECT ARTIFACTS. DO NOT CALL `lmas_status` AGAIN until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for another status check.
 - If the user explicitly asks to cancel, stop, or terminate an LMAS run, call `lmas_cancel`. Do not kill tmux sessions or job processes directly.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - Preserve the original command in metadata.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
-- Prefer `lmas_status` over manually reading metadata files. Read stdout/stderr first; read metadata only when command context is unclear.
+- After completion, prefer `lmas_status` over manually reading metadata files. Read stdout/stderr first; read metadata only when command context is unclear.
 
 ## Path Rules
 

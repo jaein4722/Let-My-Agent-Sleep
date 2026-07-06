@@ -80,4 +80,6 @@ It reports:
 - `adapter_log`
 - `resume_prompt` when available
 
+`RUNNING` is not a completion event. If an agent sees `RUNNING`, it should stop the current turn and wait for `LMAS_COMPLETION_EVENT v1` unless the user explicitly asks for another status check.
+
 `LOST` means the handoff exists, no completion event was written, and the watcher process is no longer alive. Treat it as a failed handoff/run state and inspect `watcher_log` plus `stderr` before deciding whether to relaunch.
