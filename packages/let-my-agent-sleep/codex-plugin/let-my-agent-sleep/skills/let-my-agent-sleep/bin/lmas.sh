@@ -88,6 +88,14 @@ shell_quote() {
   printf "'%s'" "$escaped"
 }
 
+display_shell_quote() {
+  local value escaped
+  value=$1
+  value=$(printf '%s' "$value" | tr '\r\n' '  ')
+  escaped=$(printf '%s' "$value" | sed "s/'/'\\\\''/g")
+  printf "'%s'" "$escaped"
+}
+
 quote_command() {
   local first=1 arg
   for arg in "$@"; do
@@ -95,6 +103,17 @@ quote_command() {
       printf ' '
     fi
     shell_quote "$arg"
+    first=0
+  done
+}
+
+display_quote_command() {
+  local first=1 arg
+  for arg in "$@"; do
+    if [ "$first" -eq 0 ]; then
+      printf ' '
+    fi
+    display_shell_quote "$arg"
     first=0
   done
 }
@@ -556,7 +575,7 @@ start_command() {
     artifacts_dir="$run_dir"
   fi
 
-  command_text=$(quote_command "$@")
+  command_text=$(display_quote_command "$@")
   started_at=$(now_system)
   started_epoch=$(now_epoch)
   codex_session_id=
@@ -585,7 +604,7 @@ start_command() {
     fi
     set +u
     for item in "${metadata[@]}"; do
-      printf '%s\n' "$item"
+      printf '%s\n' "$(safe_metadata_line "$item")"
     done
     set -u
   } > "$metadata_path"
@@ -639,6 +658,10 @@ read_metadata_field() {
 
 safe_tsv_field() {
   printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+safe_metadata_line() {
+  printf '%s' "$1" | tr '\r\n' '  '
 }
 
 short_tsv_field() {
