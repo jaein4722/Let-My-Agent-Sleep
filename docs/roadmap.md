@@ -18,14 +18,14 @@ Verified baseline: 17-hour and 12-hour real OpenCode training runs completed the
 
 Ordered roughly by value per effort.
 
-1. **Secondary completion notification.** Optional `--notify <url>` (webhook/ntfy) and an OS notification fallback when the adapter fails, alongside — never instead of — session injection. Low priority given the persistent-server assumption; treated as cheap insurance for the exact-moment-of-completion edge.
-2. **Release pitch.** Add a README demo GIF of an OpenCode session going quiet on handoff and waking on completion; add a comparison note against native background-task features, citing the 17h/12h live validation.
+1. **Release pitch.** Add a README demo GIF of an OpenCode session going quiet on handoff and waking on completion; add a comparison note against native background-task features, citing the 17h/12h live validation.
 
 ## Completed Hardening
 
 - **Cancel process-tree verification.** `lmas cancel` collects both child trees and process-group peers, stops the tmux watcher, escalates TERM to KILL for remaining pids, writes `cancel_killed_pids`, and records `cancel_surviving_pids` if any pid still survives. Smoke tests cover TERM-aware children, TERM-ignoring children, grandchildren, LOST cancellation, and completion/cancel races.
 - **Failure-mode hardening.** Smoke tests now cover adapter failure after completion event creation, preserving `resume_prompt.txt` for manual recovery, status exposure of that prompt path, missing watcher `LOST`, missing tmux session `LOST`, cancellation of already-lost runs, and completion/cancel races.
 - **Observability without polling.** `lmas list` reports elapsed seconds and a command summary. `lmas status` reports started time, elapsed seconds, command, and the last line of `progress.txt` when present. Smoke tests cover the progress contract while keeping the no-poll handoff rule intact.
+- **Secondary completion notification.** `--notify <url>` and `LMAS_NOTIFY_URL` post the generated resume prompt to a webhook/ntfy endpoint after the adapter attempt, without replacing session injection. Smoke tests cover notification delivery even when OpenCode adapter injection fails.
 
 ## Optional Ideas (not planned)
 

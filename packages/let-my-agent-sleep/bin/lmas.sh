@@ -23,10 +23,12 @@ Options:
   --cwd <path>                     Working directory for the command. Default: current directory
   --artifacts-dir <path>           Artifact directory to report in events. Default: run directory
   --metadata <key=value>           Metadata line to append. May be repeated
+  --notify <url>                   POST the completion resume prompt to this URL
   -h, --help                       Show help
 
 Environment:
   LMAS_RUNS_DIR
+  LMAS_NOTIFY_URL            Same as --notify
   LMAS_OPENCODE_SERVER_URL   Default: http://127.0.0.1:4096
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
   LMAS_OPENCODE_USERNAME     Optional basic-auth username. Default: OPENCODE_SERVER_USERNAME or opencode
@@ -309,6 +311,35 @@ run_adapter() {
   esac
 }
 
+run_notification() {
+  local run_dir prompt_file notify_url
+  run_dir=$1
+  prompt_file=$2
+  notify_url=${LMAS_NOTIFY_URL:-}
+
+  if [ -f "$run_dir/notify_url.txt" ]; then
+    notify_url=$(cat "$run_dir/notify_url.txt")
+  fi
+
+  if [ -z "$notify_url" ]; then
+    return 0
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    printf 'notify skipped: curl command not found\n' > "$run_dir/notify.log"
+    return 0
+  fi
+
+  curl -fsS -X POST "$notify_url" \
+    -H 'content-type: text/plain; charset=utf-8' \
+    --data-binary @"$prompt_file" > "$run_dir/notify.log" 2>&1 || {
+      printf '\nnotify failed\n' >> "$run_dir/notify.log"
+      return 0
+    }
+
+  printf '\nnotify sent\n' >> "$run_dir/notify.log"
+}
+
 list_child_pids() {
   local parent
   parent=$1
@@ -433,16 +464,18 @@ watch_command() {
   write_completion_event "$run_dir" "$run_id" "$status" "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
   run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
+  run_notification "$run_dir" "$run_dir/resume_prompt.txt"
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at started_epoch metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
+  local adapter runs_dir cwd artifacts_dir notify_url run_id run_dir command_text started_at started_epoch metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
   cwd=$(pwd)
   artifacts_dir=
+  notify_url=${LMAS_NOTIFY_URL:-}
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -477,6 +510,11 @@ start_command() {
       --metadata)
         [ "$#" -ge 2 ] || die "--metadata requires a value"
         metadata+=("$2")
+        shift 2
+        ;;
+      --notify)
+        [ "$#" -ge 2 ] || die "--notify requires a value"
+        notify_url=$2
         shift 2
         ;;
       --)
@@ -527,6 +565,9 @@ start_command() {
     printf 'started_at=%s\n' "$started_at"
     printf 'started_epoch=%s\n' "$started_epoch"
     printf 'artifacts_dir=%s\n' "$artifacts_dir"
+    if [ -n "$notify_url" ]; then
+      printf 'notify=enabled\n'
+    fi
     if [ -n "$codex_session_id" ]; then
       printf 'codex_session_id=%s\n' "$codex_session_id"
     fi
@@ -536,6 +577,10 @@ start_command() {
     done
     set -u
   } > "$metadata_path"
+  if [ -n "$notify_url" ]; then
+    printf '%s\n' "$notify_url" > "$run_dir/notify_url.txt"
+    chmod 600 "$run_dir/notify_url.txt" 2>/dev/null || true
+  fi
   printf '%s\n' "$command_text" > "$run_dir/command.txt"
 
   watcher_id=$(launch_watcher_tmux "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start tmux watcher"
@@ -855,6 +900,7 @@ cancel_command() {
   write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
   run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
+  run_notification "$run_dir" "$run_dir/resume_prompt.txt"
 
   {
     printf 'LMAS_CANCEL v1\n'
@@ -940,6 +986,9 @@ status_command() {
     printf 'metadata: %s\n' "$run_dir/metadata.txt"
     printf 'watcher_log: %s\n' "$run_dir/watcher.log"
     printf 'adapter_log: %s\n' "$run_dir/adapter.log"
+    if [ -f "$run_dir/notify.log" ]; then
+      printf 'notify_log: %s\n' "$run_dir/notify.log"
+    fi
     if [ -f "$run_dir/resume_prompt.txt" ]; then
       printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
     fi

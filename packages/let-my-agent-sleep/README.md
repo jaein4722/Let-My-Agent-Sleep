@@ -159,12 +159,15 @@ lmas start -- python train.py --config configs/exp.yaml
 lmas status <run_id>
 lmas list
 lmas cancel <run_id>
+lmas start --notify https://ntfy.sh/my-topic -- python train.py
 lmas doctor --agent opencode
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.
+
+`--notify <url>` posts the completion resume prompt to a secondary webhook or ntfy URL after the job exits. It does not replace session resume; it is only an extra notification path. If the URL contains a secret, prefer environment injection and do not put it in prompts or shared logs.
 
 ## Runtime Artifacts
 
@@ -182,6 +185,7 @@ Common files:
 - `stderr.log`
 - `metadata.txt`
 - `resume_prompt.txt`
+- `notify.log` (only when `--notify` or `LMAS_NOTIFY_URL` is set)
 - `progress.txt` (optional, written by your job)
 
 Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata.

@@ -13,6 +13,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added cancel process-group cleanup, KILL fallback, and `cancel_surviving_pids` metadata when cancellation cannot fully terminate a process.
 - Added smoke coverage proving adapter failures leave `resume_prompt.txt` available and keep the completed run status intact.
 - Added `elapsed_seconds`, command summaries, and optional `progress.txt` status reporting for explicit user-requested observability without polling.
+- Added secondary completion notification with `--notify <url>` and `LMAS_NOTIFY_URL`, including adapter-failure smoke coverage.
 
 ### Changed
 

@@ -397,6 +397,7 @@ function createStartTool(defaultServerUrl) {
       artifacts_dir: tool.schema.string().optional().describe("Artifact directory to report in LMAS events."),
       metadata: tool.schema.record(tool.schema.string(), tool.schema.string()).optional().describe("Additional metadata to persist with this run."),
       server_url: tool.schema.string().optional().describe("OpenCode server URL. Defaults to this plugin's current OpenCode server URL."),
+      notify_url: tool.schema.string().optional().describe("Optional URL that receives the completion resume prompt as a secondary notification."),
     },
     async execute(args, context) {
       const guard = getSessionOmoGuard(context.sessionID)
@@ -425,6 +426,10 @@ function createStartTool(defaultServerUrl) {
 
       if (args.artifacts_dir) {
         command.push("--artifacts-dir", args.artifacts_dir)
+      }
+
+      if (args.notify_url) {
+        command.push("--notify", args.notify_url)
       }
 
       if (args.metadata) {
