@@ -157,6 +157,7 @@ lmas start -- python train.py --config configs/exp.yaml
 lmas status <run_id>
 lmas list
 lmas cancel <run_id>
+lmas doctor --agent opencode
 ```
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.

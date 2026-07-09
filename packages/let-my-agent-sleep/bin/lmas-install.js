@@ -36,6 +36,7 @@ const paths = {
 function usage() {
   console.log(`Usage:
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
+  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
@@ -81,7 +82,7 @@ function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
-    if (arg === "install") continue
+    if (arg === "install" || arg === "doctor") continue
     if (arg === "--help" || arg === "-h") {
       usage()
       process.exit(0)
@@ -997,6 +998,155 @@ function installOpenCode(options) {
   console.log(`  plugin cache: ${resolveOpenCodeCacheDir()}`)
 }
 
+function doctorLine(state, message) {
+  console.log(`[${state}] ${message}`)
+}
+
+function doctorOk(message) {
+  doctorLine("ok", message)
+}
+
+function doctorWarn(message) {
+  doctorLine("warn", message)
+}
+
+function doctorFail(message) {
+  doctorLine("fail", message)
+  return false
+}
+
+function doctorOpenCode() {
+  let healthy = true
+  const configDir = resolveOpenCodeConfigDir()
+  const configPath = resolveOpenCodeConfigPath(configDir)
+  const omoConfigPath = resolveOmoConfigPath(configDir)
+  const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
+  const cacheDir = resolveOpenCodeCacheDir()
+  const rootPackagePath = join(cacheDir, "package.json")
+
+  console.log("OpenCode doctor:")
+  console.log(`  config: ${configPath}`)
+  console.log(`  omo config: ${omoConfigPath}`)
+  console.log(`  skill: ${skillTarget}`)
+  console.log(`  plugin cache: ${cacheDir}`)
+
+  if (!existsSync(configPath)) {
+    healthy = doctorFail("OpenCode config is missing; run: lmas install --agent opencode") && healthy
+  } else {
+    try {
+      const config = readJsoncIfExists(configPath, {})
+      const plugins = Array.isArray(config.plugin)
+        ? config.plugin
+        : typeof config.plugin === "string"
+          ? [config.plugin]
+          : []
+      const pluginSpecs = plugins.map(getPluginSpecName).filter(Boolean)
+      const lmasIndex = plugins.findIndex((plugin) => isPackagePluginSpec(plugin, packageName))
+
+      if (lmasIndex === -1) {
+        healthy = doctorFail(`OpenCode plugin list does not include ${openCodePluginSpec}`) && healthy
+      } else if (lmasIndex !== 0) {
+        healthy = doctorFail(`${packageName} is not first in the OpenCode plugin list; reinstall with: lmas install --agent opencode`) && healthy
+      } else {
+        doctorOk(`${packageName} is first in the OpenCode plugin list`)
+      }
+
+      const omoIndex = plugins.findIndex(isOmoPluginSpec)
+      if (omoIndex !== -1 && lmasIndex !== -1 && lmasIndex > omoIndex) {
+        healthy = doctorFail("Oh My OpenAgent loads before LMAS; LMAS continuation guards may be installed too late") && healthy
+      } else if (omoIndex !== -1 && lmasIndex !== -1) {
+        doctorOk("LMAS loads before Oh My OpenAgent")
+      } else if (pluginSpecs.length > 0) {
+        doctorWarn("Oh My OpenAgent plugin was not detected in the OpenCode plugin list")
+      }
+    } catch (error) {
+      healthy = doctorFail(`OpenCode config could not be parsed: ${error.message}`) && healthy
+    }
+  }
+
+  if (!existsSync(skillTarget)) {
+    healthy = doctorFail("OpenCode skill file is missing; run: lmas install --agent opencode") && healthy
+  } else {
+    doctorOk("OpenCode skill file is installed")
+  }
+
+  if (!existsSync(omoConfigPath)) {
+    healthy = doctorFail("Oh My OpenAgent config is missing; LMAS cannot confirm continuation hooks are disabled") && healthy
+  } else {
+    try {
+      const omoConfig = readJsoncIfExists(omoConfigPath, {})
+      const disabledHooks = Array.isArray(omoConfig.disabled_hooks) ? omoConfig.disabled_hooks : []
+      const missingHooks = omoContinuationHooks.filter((hookName) => !disabledHooks.includes(hookName))
+      if (missingHooks.length > 0) {
+        healthy = doctorFail(`OMO continuation hooks are still enabled: ${missingHooks.join(", ")}`) && healthy
+      } else {
+        doctorOk(`OMO continuation hooks are disabled: ${omoContinuationHooks.join(", ")}`)
+      }
+
+      const disabledSkills = Array.isArray(omoConfig.disabled_skills) ? omoConfig.disabled_skills : []
+      const missingSkills = openCodeHiddenCrossAgentSkills.filter((skillName) => !disabledSkills.includes(skillName))
+      if (missingSkills.length > 0) {
+        healthy = doctorFail(`legacy cross-agent LMAS skills are not hidden from OpenCode: ${missingSkills.join(", ")}`) && healthy
+      } else {
+        doctorOk(`legacy cross-agent LMAS skills are hidden: ${openCodeHiddenCrossAgentSkills.join(", ")}`)
+      }
+    } catch (error) {
+      healthy = doctorFail(`Oh My OpenAgent config could not be parsed: ${error.message}`) && healthy
+    }
+  }
+
+  if (!existsSync(rootPackagePath)) {
+    healthy = doctorFail("OpenCode plugin cache package.json is missing; run: lmas install --agent opencode") && healthy
+  } else {
+    try {
+      const cachePackage = readJsonIfExists(rootPackagePath, {})
+      const dependency = cachePackage.dependencies?.[packageName]
+      if (!dependency) {
+        healthy = doctorFail(`OpenCode plugin cache package.json does not depend on ${packageName}`) && healthy
+      } else {
+        doctorOk(`OpenCode plugin cache dependency is present: ${packageName}@${dependency}`)
+      }
+    } catch (error) {
+      healthy = doctorFail(`OpenCode plugin cache package.json could not be parsed: ${error.message}`) && healthy
+    }
+  }
+
+  return healthy
+}
+
+function doctorCodex() {
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex")
+  const codexSkillTarget = join(codexHome, "skills", openCodeSkillName, "SKILL.md")
+  console.log("Codex doctor:")
+  console.log(`  skill: ${codexSkillTarget}`)
+  if (!existsSync(codexSkillTarget)) {
+    return doctorFail("Codex skill file is missing; run: lmas install --agent codex")
+  }
+  doctorOk("Codex skill file is installed")
+  return true
+}
+
+function doctorClaude() {
+  const claudeRoot = join(homedir(), ".claude")
+  const claudeCommandTarget = join(claudeRoot, "commands", `${openCodeSkillName}.md`)
+  const claudeBinTarget = join(claudeRoot, "lmas", openCodeSkillName, "bin", "lmas.sh")
+  console.log("Claude Code doctor: experimental")
+  console.log(`  command: ${claudeCommandTarget}`)
+  console.log(`  binary: ${claudeBinTarget}`)
+  let healthy = true
+  if (!existsSync(claudeCommandTarget)) {
+    healthy = doctorFail("Claude Code command is missing; run: lmas install --agent claude") && healthy
+  } else {
+    doctorOk("Claude Code command is installed")
+  }
+  if (!existsSync(claudeBinTarget)) {
+    healthy = doctorFail("Claude Code LMAS binary asset is missing; run: lmas install --agent claude") && healthy
+  } else {
+    doctorOk("Claude Code LMAS binary asset is installed")
+  }
+  return healthy
+}
+
 function removeMarketplaceEntry(marketplace, entryName) {
   if (!Array.isArray(marketplace.plugins)) return marketplace
   marketplace.plugins = marketplace.plugins.filter((plugin) => plugin.name !== entryName)
@@ -1073,6 +1223,18 @@ async function main() {
 
   if (selectedAgents.length === 0) {
     throw new Error("no install targets selected")
+  }
+
+  if (command === "doctor") {
+    let healthy = true
+    for (const agent of selectedAgents) {
+      if (agent === "opencode") healthy = doctorOpenCode() && healthy
+      if (agent === "codex") healthy = doctorCodex() && healthy
+      if (agent === "claude") healthy = doctorClaude() && healthy
+    }
+    if (!healthy) process.exit(1)
+    console.log("Let My Agent Sleep doctor passed.")
+    return
   }
 
   console.log("Detected agents:")
