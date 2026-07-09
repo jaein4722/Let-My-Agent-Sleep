@@ -1383,6 +1383,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`lmas install failed: ${error.message}`)
+  const command = process.argv[2]
+  const commandLabel = command && !command.startsWith("-") ? command : "install"
+  console.error(`lmas ${commandLabel} failed: ${error.message}`)
   process.exit(1)
 })

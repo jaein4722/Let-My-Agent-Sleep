@@ -36,6 +36,8 @@ OMO_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin
 CODEX_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --dry-run --yes)
 CLAUDE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --dry-run --yes)
 DETECTED_OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
+DOCTOR_ERROR_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent bogus --yes 2>&1)
+DOCTOR_ERROR_STATUS=$?
 
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'plugin: let-my-agent-sleep@latest' || { printf 'opencode dry-run missing plugin config\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
@@ -62,5 +64,10 @@ printf '%s\n' "$DETECTED_OUTPUT" | grep -q 'lmas doctor --agent opencode' || { p
 printf '%s\n' "$DETECTED_OUTPUT" | grep -q 'lmas doctor --agent opencode --server-url http://127.0.0.1:4096' || { printf 'detected dry-run missing OpenCode live doctor instruction\n' >&2; exit 1; }
 printf '%s\n' "$DETECTED_OUTPUT" | grep -q 'Restart Codex so it reloads skills' || { printf 'detected dry-run missing Codex restart instruction\n' >&2; exit 1; }
 printf '%s\n' "$DETECTED_OUTPUT" | grep -q 'Restart Claude Code so it reloads commands' || { printf 'detected dry-run missing Claude Code restart instruction\n' >&2; exit 1; }
+if [ "$DOCTOR_ERROR_STATUS" -eq 0 ]; then
+  printf 'doctor with invalid agent should fail\n' >&2
+  exit 1
+fi
+printf '%s\n' "$DOCTOR_ERROR_OUTPUT" | grep -q 'lmas doctor failed:' || { printf 'doctor error should use command-specific prefix\n' >&2; exit 1; }
 
 printf 'ok installer dry-run\n'
