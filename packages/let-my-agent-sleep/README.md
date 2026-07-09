@@ -140,7 +140,7 @@ For OpenCode installs, LMAS writes an Oh My OpenAgent config entry that disables
 npx let-my-agent-sleep install --agent opencode
 ```
 
-The disabled hooks are `todo-continuation-enforcer`, `ralph-loop`, `ulw-loop`, `ultrawork`, `start-work-continuation`, `boulder-continuation`, and `atlas`.
+The disabled hooks are `todo-continuation-enforcer`, `ralph-loop`, `ulw-loop`, `ultrawork`, `start-work-continuation`, `boulder-continuation`, `unstable-agent-babysitter`, and `atlas`.
 This keeps those known continuation hooks disabled in the OpenCode environment so they cannot re-enter an active LMAS handoff loop.
 Use `--keep-omo-continuation` only if you explicitly want to keep those hooks enabled.
 

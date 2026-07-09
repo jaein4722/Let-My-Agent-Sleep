@@ -26,6 +26,7 @@ const omoContinuationHooks = [
   "ultrawork",
   "start-work-continuation",
   "boulder-continuation",
+  "unstable-agent-babysitter",
   "atlas",
 ]
 
