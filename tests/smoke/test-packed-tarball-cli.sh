@@ -27,10 +27,18 @@ PKG="$EXTRACT_DIR/package"
 [ -x "$PKG/bin/lmas.sh" ] || { printf 'packed tarball lmas.sh is not executable\n' >&2; exit 1; }
 [ -f "$PKG/src/index.js" ] || { printf 'packed tarball missing OpenCode plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
+[ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
 
 OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-ai/plugin']" "$PKG/package.json")
 [ "$OPENCODE_PLUGIN_DEP" = "1.2.27" ] || {
   printf 'packed tarball should pin @opencode-ai/plugin to 1.2.27, got %s\n' "$OPENCODE_PLUGIN_DEP" >&2
+  exit 1
+}
+
+PACKAGE_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/package.json")
+CODEX_PLUGIN_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json")
+[ "$CODEX_PLUGIN_VERSION" = "$PACKAGE_VERSION" ] || {
+  printf 'packed tarball Codex plugin manifest version %s does not match package version %s\n' "$CODEX_PLUGIN_VERSION" "$PACKAGE_VERSION" >&2
   exit 1
 }
 
