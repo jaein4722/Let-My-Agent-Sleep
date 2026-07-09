@@ -26,6 +26,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added bounded timeout handling for OpenCode live doctor checks.
 - Added `lmas_info` as an OpenCode plugin diagnostic tool so live doctor checks can detect stale plugin caches more reliably.
 - Added `--directory` for OpenCode live doctor checks so tool exposure can be verified against the actual workspace directory.
+- Added doctor coverage for legacy OpenCode package cache directories and stale root `node_modules` installs.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.
@@ -34,6 +35,7 @@ All notable changes to Let My Agent Sleep are documented here.
 
 - OpenCode installs now load `let-my-agent-sleep@latest` before continuation plugins and disable a broader set of known Oh My OpenAgent continuation hooks by default.
 - OpenCode installs now also disable OMO's `unstable-agent-babysitter` continuation hook by default while leaving `background-notification` available for no-reply notifications.
+- OpenCode runtime continuation guards now cover the same known OMO continuation command names that the installer disables.
 - The OpenCode runtime guard now no-ops reply-expecting prompt injection into a session with an active `LMAS_HANDOFF v1`, while still allowing `noReply` notifications and `LMAS_COMPLETION_EVENT v1`.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
