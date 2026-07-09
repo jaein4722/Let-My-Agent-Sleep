@@ -35,6 +35,7 @@ Use this skill when a command is likely to run for minutes or hours, including m
 ## Required Behavior
 
 - Do not run long jobs directly with the normal bash tool when `lmas_start` is available.
+- If you maintain a TODO list, scope the long-job TODO to "start with LMAS and record handoff". Mark it complete immediately after `LMAS_HANDOFF v1`; do not leave a TODO that means "wait for job completion".
 - Do not call `skill_mcp` for Let My Agent Sleep. This is an OpenCode plugin tool, not an MCP server.
 - If `lmas_start` is not available in the tool list, the OpenCode plugin is not loaded in the current session. Tell the user to restart OpenCode after running `lmas install --agent opencode`; do not invent `.opencode/tools` paths or start a normal shell fallback unless the user explicitly asks for manual fallback.
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.

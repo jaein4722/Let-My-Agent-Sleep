@@ -30,7 +30,7 @@ Use this skill when a command is likely to run for minutes or hours, including m
 2. Start the real long job with:
 
 ```bash
-~/.agents/skills/let-my-agent-sleep/scripts/lmas.sh start --adapter codex -- <command...>
+${CODEX_HOME:-~/.codex}/skills/let-my-agent-sleep/scripts/lmas.sh start --adapter codex -- <command...>
 ```
 
 3. Use `--adapter codex` for real long jobs. Use `--adapter noop` only for local smoke tests or when the user explicitly asks for manual fallback.
@@ -42,6 +42,7 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 ## Required Behavior
 
 - Do not run long jobs directly when the Let My Agent Sleep wrapper is available.
+- If you maintain a TODO list, scope the long-job TODO to "start with LMAS and record handoff". Mark it complete immediately after `LMAS_HANDOFF v1`; do not leave a TODO that means "wait for job completion".
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
 - Do not force or suggest non-`tmux` launchers in Codex.
 - After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check. A user asking whether enough time has passed, why there is no update, or whether the job finished counts as a status check request.
