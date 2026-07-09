@@ -16,6 +16,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added secondary completion notification with `--notify <url>` and `LMAS_NOTIFY_URL`, including adapter-failure smoke coverage.
 - Added a README handoff demo GIF and native-background-task comparison note.
 - Added bounded HTTP timeouts for OpenCode adapter and secondary notification completion paths.
+- Added bounded timeout handling for OpenCode live doctor checks.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 

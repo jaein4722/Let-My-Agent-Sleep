@@ -29,7 +29,9 @@ PKG="$EXTRACT_DIR/package"
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
 [ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
 [ -f "$PKG/CHANGELOG.md" ] || { printf 'packed tarball missing CHANGELOG.md\n' >&2; exit 1; }
-grep -q '^## 0.2.7 - Unreleased$' "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md missing 0.2.7 entry\n' >&2; exit 1; }
+PACKAGE_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/package.json")
+grep -Eq "^## $PACKAGE_VERSION - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md missing dated %s entry\n' "$PACKAGE_VERSION" >&2; exit 1; }
+! grep -q 'Unreleased' "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md still contains Unreleased\n' >&2; exit 1; }
 
 OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-ai/plugin']" "$PKG/package.json")
 [ "$OPENCODE_PLUGIN_DEP" = "1.2.27" ] || {
@@ -37,7 +39,6 @@ OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-
   exit 1
 }
 
-PACKAGE_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/package.json")
 CODEX_PLUGIN_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json")
 [ "$CODEX_PLUGIN_VERSION" = "$PACKAGE_VERSION" ] || {
   printf 'packed tarball Codex plugin manifest version %s does not match package version %s\n' "$CODEX_PLUGIN_VERSION" "$PACKAGE_VERSION" >&2

@@ -49,6 +49,14 @@ const server = http.createServer((request, response) => {
     return
   }
 
+  if (mode === "slow") {
+    setTimeout(() => {
+      response.writeHead(200, { "content-type": "application/json" })
+      response.end(JSON.stringify(["bash", "lmas_start", "lmas_status", "lmas_cancel"]))
+    }, 3000)
+    return
+  }
+
   const tools = mode === "ok"
     || mode === "auth-ok"
     ? ["bash", "lmas_start", "lmas_status", "lmas_cancel"]
@@ -143,6 +151,32 @@ fi
 grep -q 'OpenCode live server does not expose LMAS tools' "$LIVE_FAIL_OUTPUT" || {
   printf 'doctor live failure did not explain missing LMAS tools\n' >&2
   cat "$LIVE_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
+rm -f "$SERVER_DIR/port"
+
+node "$SERVER_DIR/server.mjs" slow > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+SLOW_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+
+SLOW_FAIL_OUTPUT="$SERVER_DIR/slow-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" LMAS_HTTP_MAX_TIME=1 node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$SLOW_SERVER_URL" --yes >"$SLOW_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when live OpenCode server times out\n' >&2
+  cat "$SLOW_FAIL_OUTPUT" >&2
+  exit 1
+fi
+
+grep -q 'live doctor timed out' "$SLOW_FAIL_OUTPUT" || {
+  printf 'doctor timeout failure did not explain timeout\n' >&2
+  cat "$SLOW_FAIL_OUTPUT" >&2
   exit 1
 }
 

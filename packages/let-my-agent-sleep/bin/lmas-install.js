@@ -58,6 +58,8 @@ Options:
                    Basic-auth username for OpenCode live doctor. Default: LMAS_OPENCODE_USERNAME, OPENCODE_SERVER_USERNAME, or opencode.
   --server-password <password>
                    Basic-auth password for OpenCode live doctor. Default: LMAS_OPENCODE_PASSWORD or OPENCODE_SERVER_PASSWORD.
+  LMAS_HTTP_MAX_TIME
+                   OpenCode live doctor request timeout in seconds. Default: 30.
   --help, -h        Show this help.
 `)
 }
@@ -1074,13 +1076,22 @@ function openCodeAuthHeaders(options) {
 async function doctorOpenCodeLiveTools(options) {
   const requiredTools = ["lmas_start", "lmas_status", "lmas_cancel"]
   const serverUrl = options.serverUrl
+  const timeoutSeconds = Number(process.env.LMAS_HTTP_MAX_TIME || 30)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds * 1000 : 30000)
   let response
   try {
     response = await fetch(liveToolIDsUrl(serverUrl), {
       headers: openCodeAuthHeaders(options),
+      signal: controller.signal,
     })
   } catch (error) {
+    if (error.name === "AbortError") {
+      return doctorFail(`OpenCode server live doctor timed out at ${serverUrl} after ${Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds : 30}s`)
+    }
     return doctorFail(`OpenCode server is unreachable at ${serverUrl}: ${error.message}`)
+  } finally {
+    clearTimeout(timeout)
   }
 
   if (response.status === 401) {
