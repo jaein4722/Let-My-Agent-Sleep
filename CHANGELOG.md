@@ -2,7 +2,7 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
-## 0.2.7 - Unreleased
+## 0.2.7 - 2026-07-09
 
 ### Added
 
@@ -16,6 +16,8 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added secondary completion notification with `--notify <url>` and `LMAS_NOTIFY_URL`, including adapter-failure smoke coverage.
 - Added a README handoff demo GIF and native-background-task comparison note.
 - Added bounded HTTP timeouts for OpenCode adapter and secondary notification completion paths.
+- Added run operations docs covering status, progress, notification, cancellation, and runtime files.
+- Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 
 ### Changed
 
@@ -23,7 +25,9 @@ All notable changes to Let My Agent Sleep are documented here.
 - The OpenCode runtime guard now no-ops reply-expecting prompt injection into a session with an active `LMAS_HANDOFF v1`, while still allowing `noReply` notifications and `LMAS_COMPLETION_EVENT v1`.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
+- Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.
 - The package now pins `@opencode-ai/plugin` to `1.2.27` for reproducible plugin behavior.
+- The npm package description and homepage now point users to the public landing page and supported-agent value proposition.
 
 ### Fixed
 
@@ -31,6 +35,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed Codex plugin manifest metadata so its version matches the npm package version.
 - Fixed package asset layout for Claude Code experimental command assets and Codex plugin skill wrappers.
 - Fixed license metadata alignment between the repository and npm package.
+- Fixed ignore coverage for generated runtime artifacts, npm pack tarballs, debug logs, and Python bytecode caches.
 
 ## 0.2.6 and earlier
 
