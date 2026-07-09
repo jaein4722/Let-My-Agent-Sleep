@@ -34,6 +34,17 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
+      - name: Check patch hygiene
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BEFORE_SHA" ] && ! printf '%s' "$BEFORE_SHA" | grep -q '^0\{40\}$'; then
+            git diff --check "$BEFORE_SHA..HEAD"
+          else
+            git diff-tree --check --no-commit-id --root -r HEAD
+          fi
+
       - name: Install npm dependencies
         run: npm ci
 
