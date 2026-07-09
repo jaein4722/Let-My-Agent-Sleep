@@ -73,6 +73,13 @@ EOF
 TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$TMUX_LOST_RUN_ID")
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^run_dir: $RUN_DIR$" || { printf 'status by id missing run_dir\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^stdout: $RUN_DIR/stdout.log$" || { printf 'status by id missing stdout path\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^stderr: $RUN_DIR/stderr.log$" || { printf 'status by id missing stderr path\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^metadata: $RUN_DIR/metadata.txt$" || { printf 'status by id missing metadata path\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^watcher_log: $RUN_DIR/watcher.log$" || { printf 'status by id missing watcher log path\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^adapter_log: $RUN_DIR/adapter.log$" || { printf 'status by id missing adapter log path\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^resume_prompt: $RUN_DIR/resume_prompt.txt$" || { printf 'status by id missing resume prompt path\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -Eq '^elapsed_seconds: [0-9]+$' || { printf 'status by id missing elapsed_seconds\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q "^command: './examples/fake_train.sh' 'success'$" || { printf 'status by id missing command\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^progress: step=12 loss=0.42$' || { printf 'status by id missing progress\n' >&2; exit 1; }
@@ -89,6 +96,12 @@ printf '%s\n' "$LIST_OUTPUT" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include package cli started run\n' >&2; exit 1; }
 printf '%s\n' "$LOST_STATUS" | grep -q '^status: LOST$' || { printf 'lost run did not report LOST\n' >&2; exit 1; }
+printf '%s\n' "$LOST_STATUS" | grep -q "^run_dir: $LOST_RUN_DIR$" || { printf 'lost status missing run_dir\n' >&2; exit 1; }
+printf '%s\n' "$LOST_STATUS" | grep -q "^watcher_log: $LOST_RUN_DIR/watcher.log$" || { printf 'lost status missing watcher log path\n' >&2; exit 1; }
+if printf '%s\n' "$LOST_STATUS" | grep -q '^resume_prompt: '; then
+  printf 'lost status should not report resume_prompt before completion\n' >&2
+  exit 1
+fi
 printf '%s\n' "$TMUX_LOST_STATUS" | grep -q '^status: LOST$' || { printf 'missing tmux session did not report LOST\n' >&2; exit 1; }
 
 printf 'ok status/list: %s\n' "$RUN_ID"
