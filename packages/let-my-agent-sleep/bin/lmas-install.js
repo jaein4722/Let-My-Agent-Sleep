@@ -862,6 +862,17 @@ function resolveOpenCodeCacheDir() {
   return join(cacheHome, "opencode")
 }
 
+function listLegacyOpenCodePackageCaches(cacheDir) {
+  const packagesDir = join(cacheDir, "packages")
+  if (!existsSync(packagesDir)) return []
+
+  return readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => name === packageName || name.startsWith(`${packageName}@`))
+    .map((name) => join(packagesDir, name))
+}
+
 function maybeDisableOmoContinuation(configDir, options, reason) {
   if (!reason) return
 
@@ -1157,6 +1168,7 @@ async function doctorOpenCode(options) {
   const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
   const cacheDir = resolveOpenCodeCacheDir()
   const rootPackagePath = join(cacheDir, "package.json")
+  const rootNodeModulePackagePath = join(cacheDir, "node_modules", packageName, "package.json")
 
   console.log("OpenCode doctor:")
   console.log(`  config: ${configPath}`)
@@ -1245,6 +1257,31 @@ async function doctorOpenCode(options) {
     } catch (error) {
       healthy = doctorFail(`OpenCode plugin cache package.json could not be parsed: ${error.message}`) && healthy
     }
+  }
+
+  const legacyPackageCaches = listLegacyOpenCodePackageCaches(cacheDir)
+  if (legacyPackageCaches.length > 0) {
+    healthy = doctorFail(`legacy OpenCode package cache directories are present: ${legacyPackageCaches.map((target) => basename(target)).join(", ")}; run: lmas install --agent opencode`) && healthy
+  } else {
+    doctorOk("legacy OpenCode package cache directories are absent")
+  }
+
+  if (existsSync(rootNodeModulePackagePath)) {
+    try {
+      const installedPackage = readJsonIfExists(rootNodeModulePackagePath, {})
+      const installedVersion = installedPackage.version
+      if (!installedVersion) {
+        healthy = doctorFail(`OpenCode root node_modules package has no version: ${rootNodeModulePackagePath}; run: lmas install --agent opencode`) && healthy
+      } else if (installedVersion !== packageJson.version) {
+        healthy = doctorFail(`OpenCode root node_modules package is stale: ${packageName}@${installedVersion}; expected ${packageJson.version}; run: lmas install --agent opencode`) && healthy
+      } else {
+        doctorOk(`OpenCode root node_modules package matches this LMAS version: ${packageName}@${installedVersion}`)
+      }
+    } catch (error) {
+      healthy = doctorFail(`OpenCode root node_modules package could not be parsed: ${error.message}`) && healthy
+    }
+  } else {
+    doctorWarn("OpenCode root node_modules package is absent; restart OpenCode after install so it resolves the plugin dependency")
   }
 
   if (options.serverUrl) {

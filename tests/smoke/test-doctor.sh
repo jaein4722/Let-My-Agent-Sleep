@@ -59,6 +59,50 @@ printf '%s\n' "$INSTALL_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' |
   exit 1
 }
 
+mkdir -p "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep" \
+  "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep@latest" \
+  "$TMP_HOME/.cache/opencode/node_modules/let-my-agent-sleep"
+cat > "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep/package.json" <<'JSON'
+{"name":"let-my-agent-sleep","version":"0.1.0"}
+JSON
+cat > "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep@latest/package.json" <<'JSON'
+{"name":"let-my-agent-sleep","version":"0.1.0"}
+JSON
+cat > "$TMP_HOME/.cache/opencode/node_modules/let-my-agent-sleep/package.json" <<'JSON'
+{"name":"let-my-agent-sleep","version":"0.1.0"}
+JSON
+
+LEGACY_CACHE_FAIL_OUTPUT="$SERVER_DIR/legacy-cache-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$LEGACY_CACHE_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when legacy OpenCode package caches remain\n' >&2
+  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
+  exit 1
+fi
+
+grep -q 'legacy OpenCode package cache directories are present' "$LEGACY_CACHE_FAIL_OUTPUT" || {
+  printf 'doctor legacy cache failure did not explain package cache directories\n' >&2
+  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+grep -q 'OpenCode root node_modules package is stale' "$LEGACY_CACHE_FAIL_OUTPUT" || {
+  printf 'doctor legacy cache failure did not explain stale root node_modules package\n' >&2
+  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+LEGACY_CACHE_REPAIR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
+printf '%s\n' "$LEGACY_CACHE_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' || {
+  printf 'opencode reinstall did not complete after legacy cache doctor test\n' >&2
+  exit 1
+}
+
+POST_LEGACY_REPAIR_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes)
+printf '%s\n' "$POST_LEGACY_REPAIR_DOCTOR_OUTPUT" | grep -q 'Let My Agent Sleep doctor passed' || {
+  printf 'doctor did not pass after legacy cache repair\n%s\n' "$POST_LEGACY_REPAIR_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
 CODEX_INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --yes)
 printf '%s\n' "$CODEX_INSTALL_OUTPUT" | grep -q 'Codex install configured' || {
   printf 'codex install did not complete before doctor test\n' >&2
