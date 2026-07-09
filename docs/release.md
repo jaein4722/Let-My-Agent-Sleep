@@ -49,7 +49,7 @@ The workflow:
 1. Reads the local package version.
 2. Checks whether `let-my-agent-sleep@<version>` already exists on npm.
 3. Checks whether GitHub release `v<version>` already exists.
-4. When publish or release creation is needed, verifies the local version is newer than npm latest and both changelogs contain a dated release heading.
+4. When npm publish is needed, verifies the local version is newer than npm latest. When publish or release creation is needed, verifies both changelogs contain a dated release heading.
 5. Runs site docs checks and smoke tests when npm publish or GitHub release creation is needed.
 6. Runs an npm pack dry run before publishing.
 7. Publishes to npm when the version is not already published.

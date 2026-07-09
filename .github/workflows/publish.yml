@@ -94,29 +94,27 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.release.outputs.version }}"
-          latest=$(npm view let-my-agent-sleep version)
 
-          node - "$version" "$latest" <<'JS'
-          const [localVersion, latestVersion] = process.argv.slice(2)
+          if [ "${{ steps.release.outputs.publish_needed }}" = "true" ]; then
+            latest=$(npm view let-my-agent-sleep version)
 
-          function parseVersion(version) {
-            const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version)
-            if (!match) {
-              throw new Error(`unsupported semver version: ${version}`)
-            }
-            return match.slice(1, 4).map(Number)
-          }
-
-          const local = parseVersion(localVersion)
-          const latest = parseVersion(latestVersion)
-          const comparison = local.findIndex((part, index) => part !== latest[index])
-          const isNewer = comparison !== -1 && local[comparison] > latest[comparison]
-
-          if (!isNewer) {
-            console.error(`release version ${localVersion} must be newer than npm latest ${latestVersion}`)
-            process.exit(1)
-          }
-          JS
+            node -e '
+              const [localVersion, latestVersion] = process.argv.slice(1)
+              const parseVersion = (version) => {
+                const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version)
+                if (!match) throw new Error(`unsupported semver version: ${version}`)
+                return match.slice(1, 4).map(Number)
+              }
+              const local = parseVersion(localVersion)
+              const latest = parseVersion(latestVersion)
+              const comparison = local.findIndex((part, index) => part !== latest[index])
+              const isNewer = comparison !== -1 && local[comparison] > latest[comparison]
+              if (!isNewer) {
+                console.error(`release version ${localVersion} must be newer than npm latest ${latestVersion}`)
+                process.exit(1)
+              }
+            ' "$version" "$latest"
+          fi
 
           for changelog in CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; do
             if ! grep -Fq "## ${version} - " "$changelog"; then
