@@ -73,6 +73,7 @@ assert(pkg.license === "MIT", "license drifted")
 assert(pkg.bin?.lmas === "bin/lmas-install.js", "lmas bin drifted")
 assert(pkg.bin?.["let-my-agent-sleep"] === "bin/lmas-install.js", "let-my-agent-sleep bin drifted")
 assert(pkg.engines?.node === ">=18", "node engine drifted")
+assert(pkg.dependencies?.["@opencode-ai/plugin"] === "1.2.27", "@opencode-ai/plugin dependency pin drifted")
 for (const keyword of ["opencode", "codex", "claude-code", "long-running-jobs", "llmops"]) {
   assert(pkg.keywords?.includes(keyword), `missing keyword: ${keyword}`)
 }
@@ -80,6 +81,14 @@ for (const file of ["src", "bin", "skills", "codex-plugin", "claude/let-my-agent
   assert(pkg.files?.includes(file), `missing package files entry: ${file}`)
 }
 assert(lock.packages?.["packages/let-my-agent-sleep"]?.version === pkg.version, "package-lock workspace version does not match package.json")
+assert(
+  lock.packages?.["packages/let-my-agent-sleep"]?.dependencies?.["@opencode-ai/plugin"] === pkg.dependencies?.["@opencode-ai/plugin"],
+  "package-lock workspace @opencode-ai/plugin dependency does not match package.json",
+)
+assert(
+  lock.packages?.["node_modules/@opencode-ai/plugin"]?.version === pkg.dependencies?.["@opencode-ai/plugin"],
+  "package-lock resolved @opencode-ai/plugin version does not match package.json",
+)
 assert(fs.readFileSync(rootLicensePath, "utf8") === fs.readFileSync(packageLicensePath, "utf8"), "package LICENSE differs from root LICENSE")
 assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
 assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
