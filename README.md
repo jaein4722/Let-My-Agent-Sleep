@@ -9,7 +9,7 @@
     <a href="https://www.npmjs.com/package/let-my-agent-sleep"><img alt="npm version" src="https://img.shields.io/npm/v/let-my-agent-sleep.svg"></a>
     <a href="https://www.npmjs.com/package/let-my-agent-sleep"><img alt="npm downloads" src="https://img.shields.io/npm/dw/let-my-agent-sleep.svg"></a>
     <a href="https://github.com/jaein4722/Let-My-Agent-Sleep"><img alt="GitHub stars" src="https://img.shields.io/github/stars/jaein4722/Let-My-Agent-Sleep.svg?style=flat"></a>
-    <a href="packages/let-my-agent-sleep/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
+    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
   </p>
 
   <p>
@@ -157,6 +157,9 @@ lmas start -- python train.py --config configs/exp.yaml
 lmas status <run_id>
 lmas list
 lmas cancel <run_id>
+lmas doctor --agent opencode
+lmas doctor --agent opencode --server-url http://127.0.0.1:4096
+LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.
@@ -216,8 +219,9 @@ Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the 
 
 - Website: https://jaein4722.github.io/Let-My-Agent-Sleep/
 - Docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/
+- GitHub: https://github.com/jaein4722/Let-My-Agent-Sleep
 - npm: https://www.npmjs.com/package/let-my-agent-sleep
 
 ## License
 
-MIT. See [packages/let-my-agent-sleep/LICENSE](packages/let-my-agent-sleep/LICENSE).
+MIT. See [LICENSE](LICENSE).
