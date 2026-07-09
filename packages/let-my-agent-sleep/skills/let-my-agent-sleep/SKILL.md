@@ -56,7 +56,7 @@ Use this skill when a command is likely to run for minutes or hours, including m
 
 ## OpenCode Setup
 
-`lmas_start`, `lmas_status`, and `lmas_cancel` are provided by the installed OpenCode plugin. They are not project-local files and should not be looked up under `.opencode/tools`.
+`lmas_start`, `lmas_status`, `lmas_cancel`, and diagnostic `lmas_info` are provided by the installed OpenCode plugin. They are not project-local files and should not be looked up under `.opencode/tools`.
 
 The installer updates the OpenCode config, usually `~/.config/opencode/opencode.jsonc`, and installs this skill under `~/.config/opencode/skills/let-my-agent-sleep/SKILL.md`. OpenCode must be restarted after install so it reloads plugin tools.
 

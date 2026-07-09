@@ -11,6 +11,8 @@ CLAUDE_ASSET_BIN="$PKG/claude/let-my-agent-sleep/assets/bin/lmas.sh"
 CODEX_WRAPPER="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh"
 CLAUDE_WRAPPER="$PKG/claude/let-my-agent-sleep/assets/scripts/lmas.sh"
 CLAUDE_COMMAND="$PKG/claude/let-my-agent-sleep/commands/let-my-agent-sleep.md"
+OPENCODE_SKILL="$PKG/skills/let-my-agent-sleep/SKILL.md"
+CODEX_SKILL="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/SKILL.md"
 CODEX_PLUGIN_MANIFEST="$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json"
 CODEX_PROTOCOL="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/references/protocol.md"
 ROOT_CHANGELOG="$ROOT/CHANGELOG.md"
@@ -24,6 +26,8 @@ GITIGNORE="$ROOT/.gitignore"
 [ -x "$CLAUDE_ASSET_BIN" ] || { printf 'claude asset lmas.sh is not executable\n' >&2; exit 1; }
 [ -x "$CODEX_WRAPPER" ] || { printf 'codex wrapper lmas.sh is not executable\n' >&2; exit 1; }
 [ -x "$CLAUDE_WRAPPER" ] || { printf 'claude wrapper lmas.sh is not executable\n' >&2; exit 1; }
+[ -f "$OPENCODE_SKILL" ] || { printf 'opencode skill was not packaged\n' >&2; exit 1; }
+[ -f "$CODEX_SKILL" ] || { printf 'codex skill was not packaged\n' >&2; exit 1; }
 [ -f "$CLAUDE_COMMAND" ] || { printf 'claude command was not packaged\n' >&2; exit 1; }
 [ -f "$CODEX_PLUGIN_MANIFEST" ] || { printf 'codex plugin manifest was not packaged\n' >&2; exit 1; }
 [ -f "$CODEX_PROTOCOL" ] || { printf 'codex protocol reference was not packaged\n' >&2; exit 1; }
@@ -39,6 +43,18 @@ grep -q 'Secondary Notification' "$CODEX_PROTOCOL" || { printf 'codex protocol r
 grep -q '^\.lmas/$' "$GITIGNORE" || { printf '.gitignore must exclude LMAS runtime runs\n' >&2; exit 1; }
 grep -q '^\*\.tgz$' "$GITIGNORE" || { printf '.gitignore must exclude npm pack tarballs\n' >&2; exit 1; }
 grep -q '^__pycache__/$' "$GITIGNORE" || { printf '.gitignore must exclude Python bytecode caches\n' >&2; exit 1; }
+
+for instruction in "$OPENCODE_SKILL" "$CODEX_SKILL" "$CLAUDE_COMMAND"; do
+  grep -q 'HARD RULE: DO NOT POLL AFTER HANDOFF' "$instruction" || { printf '%s missing hard no-poll heading\n' "$instruction" >&2; exit 1; }
+  grep -q 'DO NOT POLL' "$instruction" || { printf '%s missing explicit no-poll rule\n' "$instruction" >&2; exit 1; }
+  grep -q 'DO NOT TAIL LOGS' "$instruction" || { printf '%s missing no-tail rule\n' "$instruction" >&2; exit 1; }
+  grep -q 'DO NOT INSPECT ARTIFACTS' "$instruction" || { printf '%s missing no-artifact-inspection rule\n' "$instruction" >&2; exit 1; }
+  grep -q 'DO NOT CONTINUE THE LOOP JUST BECAUSE A TODO IS STILL OPEN' "$instruction" || { printf '%s missing no-TODO-continuation rule\n' "$instruction" >&2; exit 1; }
+  grep -q 'start with LMAS and record handoff' "$instruction" || { printf '%s missing TODO scoping instruction\n' "$instruction" >&2; exit 1; }
+  grep -q 'cancel' "$instruction" || { printf '%s missing cancel instruction\n' "$instruction" >&2; exit 1; }
+  grep -q 'LOST' "$instruction" || { printf '%s missing LOST recovery instruction\n' "$instruction" >&2; exit 1; }
+  grep -q 'resume_prompt.txt' "$instruction" || { printf '%s missing resume_prompt fallback instruction\n' "$instruction" >&2; exit 1; }
+done
 
 CODEX_WRAPPER_OUTPUT=$(cd / && "$CODEX_WRAPPER" -h 2>&1)
 printf '%s\n' "$CODEX_WRAPPER_OUTPUT" | grep -q '^Usage:' || {
