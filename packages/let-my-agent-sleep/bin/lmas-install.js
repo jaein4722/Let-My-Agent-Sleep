@@ -36,7 +36,7 @@ const paths = {
 function usage() {
   console.log(`Usage:
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
-  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes]
+  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
@@ -52,6 +52,8 @@ Options:
                    This is the default during OpenCode install.
   --keep-omo-continuation
                    Do not modify Oh My OpenAgent disabled_hooks during OpenCode install.
+  --server-url <url>
+                   During OpenCode doctor, also verify the live server exposes lmas tools.
   --help, -h        Show this help.
 `)
 }
@@ -78,6 +80,7 @@ function parseArgs(argv) {
     force: false,
     disableOmoContinuation: false,
     keepOmoContinuation: false,
+    serverUrl: "",
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -105,6 +108,17 @@ function parseArgs(argv) {
     }
     if (arg === "--keep-omo-continuation") {
       options.keepOmoContinuation = true
+      continue
+    }
+    if (arg === "--server-url") {
+      const value = argv[index + 1]
+      if (!value) throw new Error("--server-url requires a value")
+      options.serverUrl = value
+      index += 1
+      continue
+    }
+    if (arg.startsWith("--server-url=")) {
+      options.serverUrl = arg.slice("--server-url=".length)
       continue
     }
     if (arg === "--agent") {
@@ -1015,7 +1029,45 @@ function doctorFail(message) {
   return false
 }
 
-function doctorOpenCode() {
+function liveToolIDsUrl(serverUrl) {
+  const base = new URL(serverUrl)
+  return new URL("/experimental/tool/ids", base)
+}
+
+async function doctorOpenCodeLiveTools(serverUrl) {
+  const requiredTools = ["lmas_start", "lmas_status", "lmas_cancel"]
+  let response
+  try {
+    response = await fetch(liveToolIDsUrl(serverUrl))
+  } catch (error) {
+    return doctorFail(`OpenCode server is unreachable at ${serverUrl}: ${error.message}`)
+  }
+
+  if (!response.ok) {
+    return doctorFail(`OpenCode server tool id check failed at ${serverUrl}: HTTP ${response.status}`)
+  }
+
+  let toolIDs
+  try {
+    toolIDs = await response.json()
+  } catch (error) {
+    return doctorFail(`OpenCode server tool id response is not JSON: ${error.message}`)
+  }
+
+  if (!Array.isArray(toolIDs)) {
+    return doctorFail("OpenCode server tool id response has unexpected shape; expected an array")
+  }
+
+  const missingTools = requiredTools.filter((toolID) => !toolIDs.includes(toolID))
+  if (missingTools.length > 0) {
+    return doctorFail(`OpenCode live server does not expose LMAS tools: ${missingTools.join(", ")}`)
+  }
+
+  doctorOk(`OpenCode live server exposes LMAS tools: ${requiredTools.join(", ")}`)
+  return true
+}
+
+async function doctorOpenCode(options) {
   let healthy = true
   const configDir = resolveOpenCodeConfigDir()
   const configPath = resolveOpenCodeConfigPath(configDir)
@@ -1109,6 +1161,12 @@ function doctorOpenCode() {
     } catch (error) {
       healthy = doctorFail(`OpenCode plugin cache package.json could not be parsed: ${error.message}`) && healthy
     }
+  }
+
+  if (options.serverUrl) {
+    healthy = await doctorOpenCodeLiveTools(options.serverUrl) && healthy
+  } else {
+    doctorWarn("live OpenCode tool check skipped; pass --server-url http://127.0.0.1:4096 to verify loaded tools")
   }
 
   return healthy
@@ -1228,7 +1286,7 @@ async function main() {
   if (command === "doctor") {
     let healthy = true
     for (const agent of selectedAgents) {
-      if (agent === "opencode") healthy = doctorOpenCode() && healthy
+      if (agent === "opencode") healthy = await doctorOpenCode(options) && healthy
       if (agent === "codex") healthy = doctorCodex() && healthy
       if (agent === "claude") healthy = doctorClaude() && healthy
     }

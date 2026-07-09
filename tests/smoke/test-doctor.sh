@@ -3,7 +3,9 @@ set -u
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-doctor-home.XXXXXX")
-trap 'rm -rf "$TMP_HOME"' EXIT
+SERVER_DIR=$(mktemp -d "${TMPDIR:-/tmp}/lmas-doctor-server.XXXXXX")
+SERVER_PID=""
+trap '[ -z "$SERVER_PID" ] || kill "$SERVER_PID" >/dev/null 2>&1 || true; rm -rf "$TMP_HOME" "$SERVER_DIR"' EXIT
 
 INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'OpenCode install configured' || {
@@ -24,6 +26,78 @@ printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'OMO continuation hooks are disabled' |
   printf 'doctor did not verify OMO continuation hooks\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
+printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'live OpenCode tool check skipped' || {
+  printf 'doctor without server-url should explain live check skip\n%s\n' "$DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+cat > "$SERVER_DIR/server.mjs" <<'JS'
+import http from "node:http"
+
+const mode = process.argv[2]
+const server = http.createServer((request, response) => {
+  if (request.url !== "/experimental/tool/ids") {
+    response.writeHead(404, { "content-type": "application/json" })
+    response.end(JSON.stringify({ error: "not found" }))
+    return
+  }
+
+  const tools = mode === "ok"
+    ? ["bash", "lmas_start", "lmas_status", "lmas_cancel"]
+    : ["bash", "lmas_status"]
+  response.writeHead(200, { "content-type": "application/json" })
+  response.end(JSON.stringify(tools))
+})
+
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address()
+  console.log(address.port)
+})
+JS
+
+node "$SERVER_DIR/server.mjs" ok > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+
+LIVE_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$SERVER_URL" --yes)
+printf '%s\n' "$LIVE_DOCTOR_OUTPUT" | grep -q 'OpenCode live server exposes LMAS tools' || {
+  printf 'doctor did not verify live OpenCode tools\n%s\n' "$LIVE_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
+rm -f "$SERVER_DIR/port"
+
+node "$SERVER_DIR/server.mjs" missing > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+MISSING_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+
+LIVE_FAIL_OUTPUT="$SERVER_DIR/live-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$MISSING_SERVER_URL" --yes >"$LIVE_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when live OpenCode server lacks LMAS tools\n' >&2
+  cat "$LIVE_FAIL_OUTPUT" >&2
+  exit 1
+fi
+
+grep -q 'OpenCode live server does not expose LMAS tools' "$LIVE_FAIL_OUTPUT" || {
+  printf 'doctor live failure did not explain missing LMAS tools\n' >&2
+  cat "$LIVE_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
 
 node --input-type=module - "$TMP_HOME/.config/opencode/opencode.jsonc" <<'JS'
 import { readFileSync, writeFileSync } from "node:fs"
@@ -34,15 +108,16 @@ config.plugin = ["oh-my-openagent@latest", ...config.plugin.filter((item) => ite
 writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`)
 JS
 
-if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >/tmp/lmas-doctor-fail.out 2>&1; then
+ORDER_FAIL_OUTPUT="$SERVER_DIR/order-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$ORDER_FAIL_OUTPUT" 2>&1; then
   printf 'doctor should fail when Oh My OpenAgent loads before LMAS\n' >&2
-  cat /tmp/lmas-doctor-fail.out >&2
+  cat "$ORDER_FAIL_OUTPUT" >&2
   exit 1
 fi
 
-grep -q 'is not first in the OpenCode plugin list' /tmp/lmas-doctor-fail.out || {
+grep -q 'is not first in the OpenCode plugin list' "$ORDER_FAIL_OUTPUT" || {
   printf 'doctor failure did not explain plugin order problem\n' >&2
-  cat /tmp/lmas-doctor-fail.out >&2
+  cat "$ORDER_FAIL_OUTPUT" >&2
   exit 1
 }
 
