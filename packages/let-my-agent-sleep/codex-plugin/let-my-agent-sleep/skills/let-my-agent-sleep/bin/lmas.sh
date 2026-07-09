@@ -118,6 +118,13 @@ display_quote_command() {
   done
 }
 
+write_line_field() {
+  local key value
+  key=$1
+  value=$2
+  printf '%s: %s\n' "$key" "$(safe_metadata_line "$value")"
+}
+
 json_string_from_file() {
   local file
   file=$1
@@ -156,17 +163,17 @@ write_handoff() {
 
   {
     printf 'LMAS_HANDOFF v1\n'
-    printf 'run_id: %s\n' "$run_id"
-    printf 'status: %s\n' "$status"
-    printf 'cwd: %s\n' "$cwd"
-    printf 'command: %s\n' "$command_text"
-    printf 'pid_or_job_id: %s\n' "$pid_or_job_id"
-    printf 'stdout: %s\n' "$stdout_path"
-    printf 'stderr: %s\n' "$stderr_path"
-    printf 'metadata: %s\n' "$metadata_path"
-    printf 'artifacts_dir: %s\n' "$artifacts_dir"
-    printf 'started_at: %s\n' "$started_at"
-    printf 'resume_instruction: %s\n' "$resume_instruction"
+    write_line_field run_id "$run_id"
+    write_line_field status "$status"
+    write_line_field cwd "$cwd"
+    write_line_field command "$command_text"
+    write_line_field pid_or_job_id "$pid_or_job_id"
+    write_line_field stdout "$stdout_path"
+    write_line_field stderr "$stderr_path"
+    write_line_field metadata "$metadata_path"
+    write_line_field artifacts_dir "$artifacts_dir"
+    write_line_field started_at "$started_at"
+    write_line_field resume_instruction "$resume_instruction"
   } > "$run_dir/handoff.txt"
 }
 
@@ -186,31 +193,38 @@ write_completion_event() {
 
   {
     printf 'LMAS_COMPLETION_EVENT v1\n'
-    printf 'run_id: %s\n' "$run_id"
-    printf 'status: %s\n' "$status"
-    printf 'exit_code: %s\n' "$exit_code"
-    printf 'cwd: %s\n' "$cwd"
-    printf 'command: %s\n' "$command_text"
-    printf 'stdout: %s\n' "$stdout_path"
-    printf 'stderr: %s\n' "$stderr_path"
-    printf 'metadata: %s\n' "$metadata_path"
-    printf 'artifacts_dir: %s\n' "$artifacts_dir"
-    printf 'finished_at: %s\n' "$finished_at"
-  } > "$run_dir/completion_event.txt"
+    write_line_field run_id "$run_id"
+    write_line_field status "$status"
+    write_line_field exit_code "$exit_code"
+    write_line_field cwd "$cwd"
+    write_line_field command "$command_text"
+    write_line_field stdout "$stdout_path"
+    write_line_field stderr "$stderr_path"
+    write_line_field metadata "$metadata_path"
+    write_line_field artifacts_dir "$artifacts_dir"
+    write_line_field finished_at "$finished_at"
+  } > "$run_dir/.completion_event.txt"
 }
 
 write_resume_prompt() {
-  local run_dir
+  local run_dir event_file
   run_dir=$1
+  event_file="$run_dir/completion_event.txt"
+  if [ -f "$run_dir/.completion_event.txt" ]; then
+    event_file="$run_dir/.completion_event.txt"
+  fi
   {
     printf 'A previously handoffed Let My Agent Sleep job has finished.\n\n'
-    cat "$run_dir/completion_event.txt"
+    cat "$event_file"
     printf '\nNext steps:\n'
     printf '1. Inspect stdout and stderr first.\n'
     printf '2. Inspect metadata only if the command/result context is unclear.\n'
     printf '3. Summarize the result and metrics/checkpoints if present.\n'
     printf '4. Continue the original task from this completed job state.\n'
   } > "$run_dir/resume_prompt.txt"
+  if [ -f "$run_dir/.completion_event.txt" ]; then
+    mv "$run_dir/.completion_event.txt" "$run_dir/completion_event.txt"
+  fi
 }
 
 run_opencode_adapter() {
@@ -595,7 +609,7 @@ start_command() {
     printf 'command=%s\n' "$command_text"
     printf 'started_at=%s\n' "$started_at"
     printf 'started_epoch=%s\n' "$started_epoch"
-    printf 'artifacts_dir=%s\n' "$artifacts_dir"
+    printf 'artifacts_dir=%s\n' "$(safe_metadata_line "$artifacts_dir")"
     if [ -n "$notify_url" ]; then
       printf 'notify=enabled\n'
     fi
@@ -813,10 +827,10 @@ cancel_command() {
     existing_status=$(read_field "$event_file" status)
     {
       printf 'LMAS_CANCEL v1\n'
-      printf 'run_id: %s\n' "$run_id"
-      printf 'status: ALREADY_COMPLETED\n'
-      printf 'existing_status: %s\n' "$existing_status"
-      printf 'run_dir: %s\n' "$run_dir"
+      write_line_field run_id "$run_id"
+      write_line_field status ALREADY_COMPLETED
+      write_line_field existing_status "$existing_status"
+      write_line_field run_dir "$run_dir"
     }
     return 0
   fi
@@ -834,10 +848,10 @@ cancel_command() {
   if [ "$was_alive" -eq 0 ]; then
     {
       printf 'LMAS_CANCEL v1\n'
-      printf 'run_id: %s\n' "$run_id"
-      printf 'status: LOST\n'
-      printf 'run_dir: %s\n' "$run_dir"
-      printf 'message: watcher is not alive; no CANCELLED completion event was written\n'
+      write_line_field run_id "$run_id"
+      write_line_field status LOST
+      write_line_field run_dir "$run_dir"
+      write_line_field message "watcher is not alive; no CANCELLED completion event was written"
     }
     return 0
   fi
@@ -873,10 +887,10 @@ cancel_command() {
       existing_status=$(read_field "$event_file" status)
       {
         printf 'LMAS_CANCEL v1\n'
-        printf 'run_id: %s\n' "$run_id"
-        printf 'status: ALREADY_COMPLETED\n'
-        printf 'existing_status: %s\n' "$existing_status"
-        printf 'run_dir: %s\n' "$run_dir"
+        write_line_field run_id "$run_id"
+        write_line_field status ALREADY_COMPLETED
+        write_line_field existing_status "$existing_status"
+        write_line_field run_dir "$run_dir"
       }
       return 0
     fi
@@ -891,10 +905,10 @@ cancel_command() {
     existing_status=$(read_field "$event_file" status)
     {
       printf 'LMAS_CANCEL v1\n'
-      printf 'run_id: %s\n' "$run_id"
-      printf 'status: ALREADY_COMPLETED\n'
-      printf 'existing_status: %s\n' "$existing_status"
-      printf 'run_dir: %s\n' "$run_dir"
+      write_line_field run_id "$run_id"
+      write_line_field status ALREADY_COMPLETED
+      write_line_field existing_status "$existing_status"
+      write_line_field run_dir "$run_dir"
     }
     return 0
   fi
@@ -939,12 +953,12 @@ cancel_command() {
 
   {
     printf 'LMAS_CANCEL v1\n'
-    printf 'run_id: %s\n' "$run_id"
-    printf 'status: CANCELLED\n'
-    printf 'exit_code: %s\n' "$exit_code"
-    printf 'run_dir: %s\n' "$run_dir"
-    printf 'completion_event: %s\n' "$run_dir/completion_event.txt"
-    printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
+    write_line_field run_id "$run_id"
+    write_line_field status CANCELLED
+    write_line_field exit_code "$exit_code"
+    write_line_field run_dir "$run_dir"
+    write_line_field completion_event "$run_dir/completion_event.txt"
+    write_line_field resume_prompt "$run_dir/resume_prompt.txt"
   }
 }
 
@@ -998,40 +1012,40 @@ status_command() {
   progress_path="$run_dir/progress.txt"
   {
     printf 'LMAS_STATUS v1\n'
-    printf 'run_id: %s\n' "$run_id"
-    printf 'status: %s\n' "$status"
+    write_line_field run_id "$run_id"
+    write_line_field status "$status"
     if [ "$status" = "RUNNING" ]; then
       printf 'meaning: job is still running; this is not a completion event\n'
       printf 'agent_instruction: stop now; do not poll, tail logs, inspect artifacts, or call lmas_status again until LMAS_COMPLETION_EVENT v1 arrives or the user explicitly asks for another status check\n'
     fi
     if [ -n "$exit_code" ]; then
-      printf 'exit_code: %s\n' "$exit_code"
+      write_line_field exit_code "$exit_code"
     fi
     if [ -n "$started_at" ]; then
-      printf 'started_at: %s\n' "$started_at"
+      write_line_field started_at "$started_at"
     fi
     if [ -n "$elapsed" ]; then
-      printf 'elapsed_seconds: %s\n' "$elapsed"
+      write_line_field elapsed_seconds "$elapsed"
     fi
     if [ -n "$command_text" ]; then
-      printf 'command: %s\n' "$command_text"
+      write_line_field command "$command_text"
     fi
-    printf 'run_dir: %s\n' "$run_dir"
-    printf 'stdout: %s\n' "$run_dir/stdout.log"
-    printf 'stderr: %s\n' "$run_dir/stderr.log"
-    printf 'metadata: %s\n' "$run_dir/metadata.txt"
-    printf 'watcher_log: %s\n' "$run_dir/watcher.log"
-    printf 'adapter_log: %s\n' "$run_dir/adapter.log"
+    write_line_field run_dir "$run_dir"
+    write_line_field stdout "$run_dir/stdout.log"
+    write_line_field stderr "$run_dir/stderr.log"
+    write_line_field metadata "$run_dir/metadata.txt"
+    write_line_field watcher_log "$run_dir/watcher.log"
+    write_line_field adapter_log "$run_dir/adapter.log"
     if [ -f "$run_dir/notify.log" ]; then
-      printf 'notify_log: %s\n' "$run_dir/notify.log"
+      write_line_field notify_log "$run_dir/notify.log"
     fi
     if [ -f "$run_dir/resume_prompt.txt" ]; then
-      printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
+      write_line_field resume_prompt "$run_dir/resume_prompt.txt"
     fi
     if [ -f "$progress_path" ]; then
       progress_line=$(tail -n 1 "$progress_path" 2>/dev/null || true)
-      printf 'progress: %s\n' "$progress_line"
-      printf 'progress_path: %s\n' "$progress_path"
+      write_line_field progress "$progress_line"
+      write_line_field progress_path "$progress_path"
     fi
   }
 }
