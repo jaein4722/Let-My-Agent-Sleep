@@ -58,12 +58,13 @@ Successful cancellation reports:
 - `completion_event`
 - `resume_prompt`
 
-If the run already has `completion_event.txt`, cancel is a no-op and reports:
+If the run already has `completion_event.txt`, or the watched command has already exited and LMAS is finalizing the completion event, cancel is a no-op and reports:
 
 - `run_id`
 - `status: ALREADY_COMPLETED`
 - `existing_status`
 - `run_dir`
+- `message` when the completion event is still finalizing
 
 If the handoff exists but the watcher is already gone and no completion event exists, cancel reports:
 
@@ -84,7 +85,7 @@ lmas.sh status <run_id>
 
 Use it only when the user explicitly asks for status, or after completion.
 
-Status can be `RUNNING`, `LOST`, `SUCCEEDED`, `FAILED`, `CANCELLED`, or `TIMEOUT`.
+Status can be `RUNNING`, `FINALIZING`, `LOST`, `SUCCEEDED`, `FAILED`, `CANCELLED`, or `TIMEOUT`.
 
 It reports:
 
@@ -106,7 +107,7 @@ It reports:
 
 Jobs may append lightweight progress lines to `<run_dir>/progress.txt`, such as `step=1200 loss=0.43`. LMAS never reads this file during handoff waiting. It is surfaced only when the user explicitly asks for status.
 
-`RUNNING` is not a completion event. If status is `RUNNING`, stop the current agent turn and wait for `LMAS_COMPLETION_EVENT v1` unless the user explicitly asks for another status check.
+`RUNNING` and `FINALIZING` are not completion events. `FINALIZING` means the watched process has exited and LMAS is preparing `resume_prompt.txt` plus `completion_event.txt`. If status is either value, stop the current agent turn and wait for `LMAS_COMPLETION_EVENT v1` unless the user explicitly asks for another status check.
 
 ## Secondary Notification
 
@@ -116,4 +117,4 @@ The notification URL is stored in `notify_url.txt`, not in `metadata.txt`, becau
 
 HTTP adapter and notification calls are bounded by `LMAS_HTTP_CONNECT_TIMEOUT` and `LMAS_HTTP_MAX_TIME`, defaulting to 5 and 30 seconds. Timeout failures are recorded in `adapter.log` or `notify.log` and do not change the completed run status.
 
-`LOST` means the handoff exists, no completion event was written, and the watcher process is no longer alive. Inspect `watcher_log` and `stderr` before deciding whether to relaunch.
+`LOST` means the handoff exists, no completion event is being finalized, and the watcher process is no longer alive. Inspect `watcher_log` and `stderr` before deciding whether to relaunch.

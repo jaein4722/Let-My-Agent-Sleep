@@ -205,7 +205,7 @@ Common files:
 
 Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata.
 
-`lmas list` includes `elapsed_seconds` and a short command summary. `lmas status <run_id>` includes the command, elapsed time, and the last line of `progress.txt` when that file exists. This is for explicit user-requested status checks only; agents must still stop after `LMAS_HANDOFF v1` and must not poll.
+`lmas list` includes `elapsed_seconds` and a short command summary. `lmas status <run_id>` includes the command, elapsed time, and the last line of `progress.txt` when that file exists. `FINALIZING` means the process has exited and LMAS is preparing `resume_prompt.txt` plus `completion_event.txt`; it is still a stop-and-wait state, not permission to poll. Status checks are for explicit user requests only; agents must still stop after `LMAS_HANDOFF v1` and must not poll.
 
 ## Why Not nohup?
 
@@ -237,7 +237,7 @@ The completion event includes `status`, `exit_code`, `stdout`, `stderr`, `metada
 
 ### What happens if I cancel a run?
 
-Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the watcher is still alive, LMAS records a `CANCELLED` completion event. If a job is killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST`.
+Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the watcher is still alive, LMAS records a `CANCELLED` completion event. If the job has already exited and LMAS is finalizing completion, cancel reports `ALREADY_COMPLETED`. If a job is killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST`.
 
 ## Links
 

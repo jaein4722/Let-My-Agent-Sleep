@@ -55,6 +55,7 @@ for protocol in "$ROOT_PROTOCOL" "$CODEX_PROTOCOL"; do
   grep -q 'status: CANCELLED' "$protocol" || { printf '%s missing CANCELLED cancel status contract\n' "$protocol" >&2; exit 1; }
   grep -q 'status: ALREADY_COMPLETED' "$protocol" || { printf '%s missing ALREADY_COMPLETED cancel status contract\n' "$protocol" >&2; exit 1; }
   grep -q 'status: LOST' "$protocol" || { printf '%s missing LOST cancel status contract\n' "$protocol" >&2; exit 1; }
+  grep -q 'FINALIZING' "$protocol" || { printf '%s missing FINALIZING status contract\n' "$protocol" >&2; exit 1; }
   grep -q 'completion_event' "$protocol" || { printf '%s missing cancel completion_event field\n' "$protocol" >&2; exit 1; }
   grep -q 'resume_prompt' "$protocol" || { printf '%s missing cancel resume_prompt field\n' "$protocol" >&2; exit 1; }
   grep -q 'Secondary Notification' "$protocol" || { printf '%s missing secondary notification section\n' "$protocol" >&2; exit 1; }
@@ -72,6 +73,7 @@ for instruction in "$OPENCODE_SKILL" "$CODEX_SKILL" "$CLAUDE_COMMAND"; do
   grep -q 'start with LMAS and record handoff' "$instruction" || { printf '%s missing TODO scoping instruction\n' "$instruction" >&2; exit 1; }
   grep -q 'cancel' "$instruction" || { printf '%s missing cancel instruction\n' "$instruction" >&2; exit 1; }
   grep -q 'LOST' "$instruction" || { printf '%s missing LOST recovery instruction\n' "$instruction" >&2; exit 1; }
+  grep -q 'FINALIZING' "$instruction" || { printf '%s missing FINALIZING stop instruction\n' "$instruction" >&2; exit 1; }
   grep -q 'resume_prompt.txt' "$instruction" || { printf '%s missing resume_prompt fallback instruction\n' "$instruction" >&2; exit 1; }
 done
 

@@ -48,7 +48,7 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 - Do not treat an unfinished long job as a failure after `LMAS_HANDOFF v1`.
 - Do not force or suggest non-`tmux` launchers in Claude Code.
 - After `LMAS_HANDOFF v1`, do not check status, inspect artifacts, relaunch, or debug the job unless the user explicitly asks for a status check.
-- If `scripts/lmas.sh status` reports `RUNNING`, stop immediately. Do not call status again, tail logs, inspect artifacts, or continue the loop until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for another status check.
+- If `scripts/lmas.sh status` reports `RUNNING` or `FINALIZING`, stop immediately. Do not call status again, tail logs, inspect artifacts, or continue the loop until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for another status check.
 - If the user explicitly asks to cancel, stop, or terminate an LMAS run, use `scripts/lmas.sh cancel <run_id>`. Do not kill tmux sessions or job processes directly.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - If the Claude adapter cannot resume automatically, tell the user where `resume_prompt.txt` and `adapter.log` are.
