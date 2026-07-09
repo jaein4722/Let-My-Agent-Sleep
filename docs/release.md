@@ -16,6 +16,7 @@ This checks:
 - Current npm version from `npm view let-my-agent-sleep version`.
 - Local version is newer than the npm version.
 - `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` contain a dated release heading, not `Unreleased`.
+- `npm run test:syntax`.
 - `npm run test:site`.
 - `npm run test:smoke`.
 - `npm run pack`.
@@ -50,7 +51,7 @@ The workflow:
 2. Checks whether `let-my-agent-sleep@<version>` already exists on npm.
 3. Checks whether GitHub release `v<version>` already exists.
 4. When npm publish is needed, verifies the local version is newer than npm latest. When publish or release creation is needed, verifies both changelogs contain a dated release heading.
-5. Runs site docs checks and smoke tests when npm publish or GitHub release creation is needed.
+5. Runs syntax, site docs, and smoke tests when npm publish or GitHub release creation is needed.
 6. Runs an npm pack dry run before publishing.
 7. Publishes to npm when the version is not already published.
 8. Creates GitHub release `v<version>` when it does not already exist.

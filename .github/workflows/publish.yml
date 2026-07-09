@@ -133,6 +133,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tmux
 
+      - name: Check source syntax
+        if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
+        run: npm run test:syntax
+
       - name: Check site docs
         if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
         run: npm run test:site

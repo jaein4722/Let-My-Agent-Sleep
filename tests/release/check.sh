@@ -46,6 +46,7 @@ for changelog in CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; do
   fi
 done
 
+npm run test:syntax
 npm run test:site
 npm run test:smoke
 npm run pack

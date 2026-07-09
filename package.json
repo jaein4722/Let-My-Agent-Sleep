@@ -8,6 +8,7 @@
   "scripts": {
     "pack": "npm_config_cache=${TMPDIR:-/tmp}/lmas-npm-cache npm pack --workspace let-my-agent-sleep --dry-run",
     "release:check": "bash tests/release/check.sh",
+    "test:syntax": "bash -n packages/let-my-agent-sleep/bin/lmas.sh tests/release/check.sh tests/smoke/*.sh && node --check packages/let-my-agent-sleep/bin/lmas-install.js && node --check packages/let-my-agent-sleep/src/index.js && node --check packages/let-my-agent-sleep/src/omo-guard.js",
     "test:site": "tests/site/check-site.py",
     "test:smoke": "tests/smoke/run.sh"
   }

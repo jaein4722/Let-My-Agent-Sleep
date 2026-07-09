@@ -49,6 +49,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Check source syntax
+        run: npm run test:syntax
+
       - name: Check site docs
         run: npm run test:site
 

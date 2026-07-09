@@ -15,6 +15,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added smoke coverage proving adapter failures leave `resume_prompt.txt` available and keep the completed run status intact.
 - Added `elapsed_seconds`, command summaries, and optional `progress.txt` status reporting for explicit user-requested observability without polling.
 - Added secondary completion notification with `--notify <url>` and `LMAS_NOTIFY_URL`, including adapter-failure smoke coverage.
+- Added `npm run test:syntax` to release and CI gates for shell and JavaScript syntax checks.
 - Added a README handoff demo GIF and native-background-task comparison note.
 - Added bounded HTTP timeouts for OpenCode adapter and secondary notification completion paths.
 - Added bounded timeout handling for OpenCode live doctor checks.
