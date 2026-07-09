@@ -19,7 +19,7 @@ OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARG
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+for _ in $(seq 1 100); do
   [ -f "$MOCK_CLAUDE_ARGS" ] && break
   sleep 0.1
 done

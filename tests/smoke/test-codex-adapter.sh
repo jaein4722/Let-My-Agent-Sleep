@@ -20,7 +20,7 @@ OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS"
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+for _ in $(seq 1 100); do
   [ -f "$MOCK_CODEX_STDIN" ] && break
   sleep 0.1
 done
@@ -39,7 +39,7 @@ OUTPUT_AUTO=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_
 RUN_ID_AUTO=$(printf '%s\n' "$OUTPUT_AUTO" | awk '/^run_id:/ { print $2 }')
 RUN_DIR_AUTO="$RUNS_DIR/$RUN_ID_AUTO"
 
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+for _ in $(seq 1 100); do
   [ -f "$MOCK_CODEX_STDIN" ] && break
   sleep 0.1
 done

@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
@@ -11,18 +11,34 @@ const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
 const packageName = packageJson.name
 const openCodePluginSpec = `${packageName}@latest`
+const openCodeCacheDependencySpec = ">=0.0.0"
+const openCodeSkillName = "let-my-agent-sleep"
+const legacyCodexSkillName = "let-my-agent-sleep-codex"
+const legacyClaudeSkillName = "let-my-agent-sleep-claude"
+const openCodeHiddenCrossAgentSkills = [
+  legacyCodexSkillName,
+  legacyClaudeSkillName,
+]
+const omoContinuationHooks = [
+  "todo-continuation-enforcer",
+  "ralph-loop",
+  "atlas",
+]
 
 const paths = {
   openCodeSkill: join(packageRoot, "skills", "let-my-agent-sleep", "SKILL.md"),
   codexPlugin: join(packageRoot, "codex-plugin", "let-my-agent-sleep"),
-  claudeSkill: join(packageRoot, "claude", "let-my-agent-sleep", "skills", "let-my-agent-sleep"),
+  claudeCommand: join(packageRoot, "claude", "let-my-agent-sleep", "commands", "let-my-agent-sleep.md"),
+  claudeBin: join(packageRoot, "claude", "let-my-agent-sleep", "assets", "bin", "lmas.sh"),
+  claudeScript: join(packageRoot, "claude", "let-my-agent-sleep", "assets", "scripts", "lmas.sh"),
 }
 
 function usage() {
   console.log(`Usage:
-  lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force]
+  lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
+  lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
   lmas list [--runs-dir <path>]
 
 Options:
@@ -30,6 +46,11 @@ Options:
   --yes, -y         Use defaults without prompting.
   --dry-run         Print intended writes without changing files.
   --force           Overwrite existing Let My Agent Sleep-managed files without backup.
+  --disable-omo-continuation
+                   Add known OMO continuation hooks to oh-my-openagent disabled_hooks.
+                   This is the default during OpenCode install.
+  --keep-omo-continuation
+                   Do not modify Oh My OpenAgent disabled_hooks during OpenCode install.
   --help, -h        Show this help.
 `)
 }
@@ -54,6 +75,8 @@ function parseArgs(argv) {
     yes: false,
     dryRun: false,
     force: false,
+    disableOmoContinuation: false,
+    keepOmoContinuation: false,
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -75,6 +98,14 @@ function parseArgs(argv) {
       options.force = true
       continue
     }
+    if (arg === "--disable-omo-continuation") {
+      options.disableOmoContinuation = true
+      continue
+    }
+    if (arg === "--keep-omo-continuation") {
+      options.keepOmoContinuation = true
+      continue
+    }
     if (arg === "--agent") {
       const value = argv[index + 1]
       if (!value) throw new Error("--agent requires a value")
@@ -89,12 +120,18 @@ function parseArgs(argv) {
     throw new Error(`unknown argument: ${arg}`)
   }
 
+  if (options.disableOmoContinuation && options.keepOmoContinuation) {
+    throw new Error("--disable-omo-continuation and --keep-omo-continuation cannot be used together")
+  }
+
   return options
 }
 
 function commandExists(command) {
-  const result = spawnSync(command, ["--version"], { stdio: "ignore" })
-  return !result.error
+  const checker = process.platform === "win32" ? "where" : "command"
+  const args = process.platform === "win32" ? [command] : ["-v", command]
+  const result = spawnSync(checker, args, { stdio: "ignore", shell: process.platform !== "win32" })
+  return result.status === 0
 }
 
 function detectAgents() {
@@ -220,6 +257,7 @@ function sameFileContent(source, target) {
   const sourceStat = statSync(source)
   const targetStat = statSync(target)
   if (!sourceStat.isFile() || !targetStat.isFile()) return false
+  if ((sourceStat.mode & 0o777) !== (targetStat.mode & 0o777)) return false
   return readFileSync(source).equals(readFileSync(target))
 }
 
@@ -276,6 +314,7 @@ function copyFileAsset(source, target, options) {
   mkdirSync(dirname(target), { recursive: true })
   backupIfNeeded(target, options)
   copyFileSync(source, target)
+  chmodSync(target, statSync(source).mode & 0o777)
 }
 
 function copyDirAsset(source, target, options) {
@@ -401,6 +440,332 @@ function readJsoncIfExists(target, fallback) {
   return JSON.parse(stripJsonc(readFileSync(target, "utf8")))
 }
 
+function isJsoncPath(target) {
+  return target.endsWith(".jsonc")
+}
+
+function lineIndentBefore(content, index) {
+  const lineStart = content.lastIndexOf("\n", index - 1) + 1
+  const match = content.slice(lineStart, index).match(/^\s*/)
+  return match?.[0] || ""
+}
+
+function skipJsoncTrivia(content, index) {
+  let cursor = index
+  while (cursor < content.length) {
+    if (/\s/.test(content[cursor] || "")) {
+      cursor += 1
+      continue
+    }
+    if (content[cursor] === "/" && content[cursor + 1] === "/") {
+      cursor += 2
+      while (cursor < content.length && content[cursor] !== "\n") cursor += 1
+      continue
+    }
+    if (content[cursor] === "/" && content[cursor + 1] === "*") {
+      cursor += 2
+      while (cursor < content.length && !(content[cursor] === "*" && content[cursor + 1] === "/")) cursor += 1
+      cursor += 2
+      continue
+    }
+    break
+  }
+  return cursor
+}
+
+function readJsoncString(content, index) {
+  const quote = content[index]
+  if (quote !== '"' && quote !== "'") return undefined
+  let value = ""
+  let cursor = index + 1
+  let escaped = false
+
+  while (cursor < content.length) {
+    const char = content[cursor]
+    if (escaped) {
+      value += char
+      escaped = false
+    } else if (char === "\\") {
+      value += char
+      escaped = true
+    } else if (char === quote) {
+      return { value, end: cursor + 1 }
+    } else {
+      value += char
+    }
+    cursor += 1
+  }
+
+  return undefined
+}
+
+function findTopLevelObjectClose(content) {
+  let depth = 0
+  let inString = false
+  let quote = ""
+  let escaped = false
+  let lineComment = false
+  let blockComment = false
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index]
+    const next = content[index + 1]
+
+    if (lineComment) {
+      if (char === "\n") lineComment = false
+      continue
+    }
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false
+        index += 1
+      }
+      continue
+    }
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === quote) {
+        inString = false
+      }
+      continue
+    }
+    if (char === "/" && next === "/") {
+      lineComment = true
+      index += 1
+      continue
+    }
+    if (char === "/" && next === "*") {
+      blockComment = true
+      index += 1
+      continue
+    }
+    if (char === '"' || char === "'") {
+      inString = true
+      quote = char
+      continue
+    }
+    if (char === "{") {
+      depth += 1
+      continue
+    }
+    if (char === "}") {
+      depth -= 1
+      if (depth === 0) return index
+    }
+  }
+
+  return -1
+}
+
+function findTopLevelProperty(content, key) {
+  let depth = 0
+  let inString = false
+  let quote = ""
+  let escaped = false
+  let lineComment = false
+  let blockComment = false
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index]
+    const next = content[index + 1]
+
+    if (lineComment) {
+      if (char === "\n") lineComment = false
+      continue
+    }
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false
+        index += 1
+      }
+      continue
+    }
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === quote) {
+        inString = false
+      }
+      continue
+    }
+    if (char === "/" && next === "/") {
+      lineComment = true
+      index += 1
+      continue
+    }
+    if (char === "/" && next === "*") {
+      blockComment = true
+      index += 1
+      continue
+    }
+    if (char === "{") {
+      depth += 1
+      continue
+    }
+    if (char === "}") {
+      depth -= 1
+      continue
+    }
+    if (depth !== 1 || (char !== '"' && char !== "'")) continue
+
+    const property = readJsoncString(content, index)
+    if (!property || property.value !== key) continue
+
+    let cursor = skipJsoncTrivia(content, property.end)
+    if (content[cursor] !== ":") continue
+    cursor = skipJsoncTrivia(content, cursor + 1)
+
+    const valueStart = cursor
+    let valueDepth = 0
+    let valueString = false
+    let valueQuote = ""
+    let valueEscaped = false
+    let valueLineComment = false
+    let valueBlockComment = false
+
+    while (cursor < content.length) {
+      const valueChar = content[cursor]
+      const valueNext = content[cursor + 1]
+
+      if (valueLineComment) {
+        if (valueChar === "\n") valueLineComment = false
+        cursor += 1
+        continue
+      }
+      if (valueBlockComment) {
+        if (valueChar === "*" && valueNext === "/") {
+          valueBlockComment = false
+          cursor += 2
+          continue
+        }
+        cursor += 1
+        continue
+      }
+      if (valueString) {
+        if (valueEscaped) {
+          valueEscaped = false
+        } else if (valueChar === "\\") {
+          valueEscaped = true
+        } else if (valueChar === valueQuote) {
+          valueString = false
+        }
+        cursor += 1
+        continue
+      }
+      if (valueChar === "/" && valueNext === "/") {
+        valueLineComment = true
+        cursor += 2
+        continue
+      }
+      if (valueChar === "/" && valueNext === "*") {
+        valueBlockComment = true
+        cursor += 2
+        continue
+      }
+      if (valueChar === '"' || valueChar === "'") {
+        valueString = true
+        valueQuote = valueChar
+        cursor += 1
+        continue
+      }
+      if (valueChar === "{" || valueChar === "[") {
+        valueDepth += 1
+        cursor += 1
+        continue
+      }
+      if (valueChar === "}" || valueChar === "]") {
+        if (valueDepth === 0 && valueChar === "}") break
+        valueDepth -= 1
+        cursor += 1
+        continue
+      }
+      if (valueDepth === 0 && valueChar === ",") break
+      cursor += 1
+    }
+
+    let valueEnd = cursor
+    while (valueEnd > valueStart && /\s/.test(content[valueEnd - 1] || "")) valueEnd -= 1
+
+    return {
+      keyStart: index,
+      valueStart,
+      valueEnd,
+      indent: lineIndentBefore(content, index),
+    }
+  }
+
+  return undefined
+}
+
+function formatJsoncManagedValue(value, propertyIndent) {
+  const json = JSON.stringify(value, null, 2)
+  if (!json.includes("\n")) return json
+  return json
+    .split("\n")
+    .map((line, index) => index === 0 ? line : `${propertyIndent}${line}`)
+    .join("\n")
+}
+
+function formatStringArray(values, propertyIndent) {
+  const itemIndent = `${propertyIndent}  `
+  if (values.length === 0) return "[]"
+  return [
+    "[",
+    values.map((value) => `${itemIndent}${JSON.stringify(value)}`).join(",\n"),
+    `${propertyIndent}]`,
+  ].join("\n")
+}
+
+function writeJsonConfigWithStringArray(target, config, key, values, options) {
+  const jsonText = `${JSON.stringify(config, null, 2)}\n`
+  if (!isJsoncPath(target) || !existsSync(target)) {
+    writeText(target, jsonText, options)
+    return
+  }
+
+  const content = readFileSync(target, "utf8")
+  const property = findTopLevelProperty(content, key)
+
+  if (property) {
+    const replacement = Array.isArray(values) && values.every((value) => typeof value === "string")
+      ? formatStringArray(values, property.indent)
+      : formatJsoncManagedValue(values, property.indent)
+    writeText(target, `${content.slice(0, property.valueStart)}${replacement}${content.slice(property.valueEnd)}`, options)
+    return
+  }
+
+  const closeIndex = findTopLevelObjectClose(content)
+  if (closeIndex === -1) {
+    writeText(target, jsonText, options)
+    return
+  }
+
+  const closeIndent = lineIndentBefore(content, closeIndex)
+  const propertyIndent = `${closeIndent}  `
+  const beforeClose = content.slice(0, closeIndex).trimEnd()
+  const hasOtherProperties = Object.keys(config).some((propertyName) => propertyName !== key)
+  const needsComma = hasOtherProperties && !beforeClose.endsWith(",")
+  const prefix = needsComma ? "," : ""
+  const formattedValue = Array.isArray(values) && values.every((value) => typeof value === "string")
+    ? formatStringArray(values, propertyIndent)
+    : formatJsoncManagedValue(values, propertyIndent)
+  const insertion = `${prefix}\n${propertyIndent}${JSON.stringify(key)}: ${formattedValue}\n`
+  writeText(target, `${content.slice(0, closeIndex).trimEnd()}${insertion}${content.slice(closeIndex)}`, options)
+}
+
+function resolveOpenCodeConfigDir() {
+  const customConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim()
+  if (customConfigDir) return customConfigDir
+
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim()
+  return join(xdgConfigHome || join(homedir(), ".config"), "opencode")
+}
+
 function resolveOpenCodeConfigPath(configDir) {
   if (process.env.OPENCODE_CONFIG_FILE) return process.env.OPENCODE_CONFIG_FILE
 
@@ -412,10 +777,103 @@ function resolveOpenCodeConfigPath(configDir) {
   return jsoncPath
 }
 
+function resolveOmoConfigPath(configDir) {
+  const candidates = [
+    join(configDir, "oh-my-openagent.jsonc"),
+    join(configDir, "oh-my-openagent.json"),
+    join(configDir, "oh-my-opencode.jsonc"),
+    join(configDir, "oh-my-opencode.json"),
+  ]
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate
+  }
+
+  return join(configDir, "oh-my-openagent.json")
+}
+
 function resolveOpenCodeCacheDir() {
   if (process.env.OPENCODE_CACHE_DIR) return process.env.OPENCODE_CACHE_DIR
   const cacheHome = process.env.XDG_CACHE_HOME || join(homedir(), ".cache")
   return join(cacheHome, "opencode")
+}
+
+function maybeDisableOmoContinuation(configDir, options, reason) {
+  if (!reason) return
+
+  const omoConfigPath = resolveOmoConfigPath(configDir)
+  const omoConfig = readJsoncIfExists(omoConfigPath, {})
+
+  if (omoConfig.disabled_hooks === undefined) {
+    omoConfig.disabled_hooks = []
+  }
+  if (!Array.isArray(omoConfig.disabled_hooks)) {
+    throw new Error(`${omoConfigPath} has unsupported "disabled_hooks" shape; expected array`)
+  }
+  for (const hookName of omoContinuationHooks) {
+    if (!omoConfig.disabled_hooks.includes(hookName)) {
+      omoConfig.disabled_hooks.push(hookName)
+    }
+  }
+
+  writeJsonConfigWithStringArray(omoConfigPath, omoConfig, "disabled_hooks", omoConfig.disabled_hooks, options)
+  console.log("Oh My OpenAgent continuation configured.")
+  console.log(`  reason: ${reason}`)
+  console.log(`  disabled hooks: ${omoContinuationHooks.join(", ")}`)
+  console.log(`  config: ${omoConfigPath}`)
+}
+
+function maybeDisableOpenCodeShadowSkills(configDir, options, writeOptions = {}) {
+  const omoConfigPath = resolveOmoConfigPath(configDir)
+  const omoConfig = readJsoncIfExists(omoConfigPath, {})
+
+  if (omoConfig.disabled_skills === undefined) {
+    omoConfig.disabled_skills = []
+  }
+  if (!Array.isArray(omoConfig.disabled_skills)) {
+    throw new Error(`${omoConfigPath} has unsupported "disabled_skills" shape; expected array`)
+  }
+  for (const skillName of openCodeHiddenCrossAgentSkills) {
+    if (!omoConfig.disabled_skills.includes(skillName)) {
+      omoConfig.disabled_skills.push(skillName)
+    }
+  }
+
+  const finalOptions = writeOptions.skipBackup ? { ...options, force: true } : options
+  writeJsonConfigWithStringArray(omoConfigPath, omoConfig, "disabled_skills", omoConfig.disabled_skills, finalOptions)
+  console.log("OpenCode cross-agent skill shadowing configured.")
+  console.log(`  hidden skills: ${openCodeHiddenCrossAgentSkills.join(", ")}`)
+  console.log(`  config: ${omoConfigPath}`)
+}
+
+function moveLegacyCrossAgentOpenCodeSkillConflicts(options) {
+  const agentsRoot = join(homedir(), ".agents")
+  const claudeRoot = join(homedir(), ".claude")
+
+  moveAside(
+    join(agentsRoot, "skills", openCodeSkillName),
+    join(agentsRoot, "lmas-backups", "skills"),
+    options,
+  )
+  moveAside(
+    join(agentsRoot, "skills", legacyCodexSkillName),
+    join(agentsRoot, "lmas-backups", "skills"),
+    options,
+  )
+  moveAside(
+    join(claudeRoot, "skills", openCodeSkillName),
+    join(claudeRoot, "lmas-backups", "skills"),
+    options,
+  )
+  moveAside(
+    join(claudeRoot, "skills", legacyClaudeSkillName),
+    join(claudeRoot, "lmas-backups", "skills"),
+    options,
+  )
+  moveMatchingSiblingBackups(join(agentsRoot, "skills"), openCodeSkillName, join(agentsRoot, "lmas-backups", "skills"), options)
+  moveMatchingSiblingBackups(join(agentsRoot, "skills"), legacyCodexSkillName, join(agentsRoot, "lmas-backups", "skills"), options)
+  moveMatchingSiblingBackups(join(claudeRoot, "skills"), openCodeSkillName, join(claudeRoot, "lmas-backups", "skills"), options)
+  moveMatchingSiblingBackups(join(claudeRoot, "skills"), legacyClaudeSkillName, join(claudeRoot, "lmas-backups", "skills"), options)
 }
 
 function updateOpenCodeRootCachePackage(rootPackagePath, options) {
@@ -424,7 +882,7 @@ function updateOpenCodeRootCachePackage(rootPackagePath, options) {
   if (existsSync(rootPackagePath)) {
     const content = readFileSync(rootPackagePath, "utf8")
     if (dependencyPattern.test(content)) {
-      writeText(rootPackagePath, content.replace(dependencyPattern, `$1"${packageJson.version}"`), options)
+      writeText(rootPackagePath, content.replace(dependencyPattern, `$1"${openCodeCacheDependencySpec}"`), options)
       return
     }
 
@@ -432,25 +890,28 @@ function updateOpenCodeRootCachePackage(rootPackagePath, options) {
     if (!rootPackageJson.dependencies || typeof rootPackageJson.dependencies !== "object" || Array.isArray(rootPackageJson.dependencies)) {
       rootPackageJson.dependencies = {}
     }
-    rootPackageJson.dependencies[packageName] = packageJson.version
+    rootPackageJson.dependencies[packageName] = openCodeCacheDependencySpec
     writeText(rootPackagePath, `${JSON.stringify(rootPackageJson, null, 2)}\n`, options)
     return
   }
 
-  writeText(rootPackagePath, `${JSON.stringify({ dependencies: { [packageName]: packageJson.version } }, null, 2)}\n`, options)
+  writeText(rootPackagePath, `${JSON.stringify({ dependencies: { [packageName]: openCodeCacheDependencySpec } }, null, 2)}\n`, options)
 }
 
 function refreshOpenCodePluginCache(options) {
   const cacheDir = resolveOpenCodeCacheDir()
   const packagesDir = join(cacheDir, "packages")
-  const targets = new Set([join(packagesDir, packageName)])
   const rootPackagePath = join(cacheDir, "package.json")
+  const stalePackageCaches = new Set([
+    join(packagesDir, packageName),
+    join(packagesDir, openCodePluginSpec),
+  ])
 
   if (existsSync(packagesDir)) {
     for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
       if (entry.name === packageName || entry.name.startsWith(`${packageName}@`)) {
-        targets.add(join(packagesDir, entry.name))
+        stalePackageCaches.add(join(packagesDir, entry.name))
       }
     }
   }
@@ -462,24 +923,45 @@ function refreshOpenCodePluginCache(options) {
   removePath(join(cacheDir, "node_modules", ".bin", "lmas"), options)
   removePath(join(cacheDir, "node_modules", ".bin", packageName), options)
 
-  const cachePackageJson = {
-    dependencies: {
-      [packageName]: packageJson.version,
-    },
-  }
-
-  for (const target of targets) {
-    writeText(join(target, "package.json"), `${JSON.stringify(cachePackageJson, null, 2)}\n`, options)
-    removePath(join(target, "package-lock.json"), options)
-    removePath(join(target, "bun.lock"), options)
-    removePath(join(target, "node_modules", packageName), options)
+  for (const target of stalePackageCaches) {
+    removePath(target, options)
   }
 }
 
+function getPluginSpecName(plugin) {
+  if (typeof plugin === "string") return plugin
+  if (Array.isArray(plugin) && typeof plugin[0] === "string") return plugin[0]
+  return undefined
+}
+
+function isPackagePluginSpec(plugin, name) {
+  const spec = getPluginSpecName(plugin)
+  return spec === name || spec?.startsWith(`${name}@`) === true
+}
+
+function isOmoPluginSpec(plugin) {
+  const spec = getPluginSpecName(plugin)
+  return spec === "oh-my-openagent"
+    || spec?.startsWith("oh-my-openagent@") === true
+    || spec === "oh-my-opencode"
+    || spec?.startsWith("oh-my-opencode@") === true
+}
+
+function warnIfOmoContinuationStillEnabled(config, options) {
+  if (options.disableOmoContinuation) return
+  if (!options.keepOmoContinuation) return
+  if (!Array.isArray(config.plugin) || !config.plugin.some(isOmoPluginSpec)) return
+
+  console.log("[warn] Oh My OpenAgent plugin detected.")
+  console.log("[warn] OMO continuation hooks were left enabled because --keep-omo-continuation was used.")
+  console.log("[warn] To disable it, run:")
+  console.log("[warn]   lmas install --agent opencode")
+}
+
 function installOpenCode(options) {
-  const configDir = process.env.OPENCODE_CONFIG_DIR || join(homedir(), ".config", "opencode")
+  const configDir = resolveOpenCodeConfigDir()
   const configPath = resolveOpenCodeConfigPath(configDir)
-  const skillTarget = join(configDir, "skills", "let-my-agent-sleep", "SKILL.md")
+  const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
   const config = readJsoncIfExists(configPath, {})
 
   if (config.plugin === undefined) {
@@ -490,21 +972,29 @@ function installOpenCode(options) {
     throw new Error(`${configPath} has unsupported "plugin" shape; expected string or array`)
   }
 
-  config.plugin = config.plugin.filter((plugin) => {
-    if (typeof plugin !== "string") return true
-    return plugin !== packageName && !plugin.startsWith(`${packageName}@`)
-  })
-  config.plugin.push(openCodePluginSpec)
+  warnIfOmoContinuationStillEnabled(config, options)
 
-  writeText(configPath, `${JSON.stringify(config, null, 2)}\n`, options)
+  config.plugin = config.plugin.filter((plugin) => !isPackagePluginSpec(plugin, packageName))
+  // LMAS must load before continuation plugins so prompt/fetch guards are installed
+  // before those plugins capture OpenCode prompt methods.
+  config.plugin.unshift(openCodePluginSpec)
+
+  writeJsonConfigWithStringArray(configPath, config, "plugin", config.plugin, options)
+  const omoDisableReason = options.disableOmoContinuation
+    ? "requested by --disable-omo-continuation"
+    : !options.keepOmoContinuation
+      ? "OpenCode install defaults to disabling known OMO continuation hooks"
+      : ""
+  maybeDisableOmoContinuation(configDir, options, omoDisableReason)
+  maybeDisableOpenCodeShadowSkills(configDir, options, { skipBackup: Boolean(omoDisableReason) })
+  moveLegacyCrossAgentOpenCodeSkillConflicts(options)
   copyFileAsset(paths.openCodeSkill, skillTarget, options)
   refreshOpenCodePluginCache(options)
 
   console.log("OpenCode install configured.")
   console.log(`  plugin: ${openCodePluginSpec}`)
   console.log(`  skill: ${skillTarget}`)
-  console.log(`  plugin cache: ${join(resolveOpenCodeCacheDir(), "packages", packageName)}`)
-  console.log(`  root plugin cache: ${resolveOpenCodeCacheDir()}`)
+  console.log(`  plugin cache: ${resolveOpenCodeCacheDir()}`)
 }
 
 function removeMarketplaceEntry(marketplace, entryName) {
@@ -514,22 +1004,28 @@ function removeMarketplaceEntry(marketplace, entryName) {
 }
 
 function installCodex(options) {
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex")
   const agentsRoot = join(homedir(), ".agents")
-  const codexSkillTarget = join(agentsRoot, "skills", "let-my-agent-sleep")
+  const codexSkillTarget = join(codexHome, "skills", openCodeSkillName)
+  const legacyCodexSkillTarget = join(agentsRoot, "skills", openCodeSkillName)
+  const legacyNamedCodexSkillTarget = join(agentsRoot, "skills", legacyCodexSkillName)
   const marketplaceDir = join(agentsRoot, "plugins")
   const marketplacePath = join(marketplaceDir, "marketplace.json")
-  const legacyCodexPluginTarget = join(marketplaceDir, "plugins", "let-my-agent-sleep")
+  const legacyCodexPluginTarget = join(marketplaceDir, "plugins", openCodeSkillName)
   const backupRoot = join(agentsRoot, "lmas-backups")
 
-  copyDirAsset(join(paths.codexPlugin, "skills", "let-my-agent-sleep"), codexSkillTarget, options)
+  copyDirAsset(join(paths.codexPlugin, "skills", openCodeSkillName), codexSkillTarget, options)
+  moveAside(legacyCodexSkillTarget, join(backupRoot, "skills"), options)
+  moveAside(legacyNamedCodexSkillTarget, join(backupRoot, "skills"), options)
   moveAside(legacyCodexPluginTarget, join(backupRoot, "plugins"), options)
-  moveMatchingSiblingBackups(join(agentsRoot, "skills"), "let-my-agent-sleep", join(backupRoot, "skills"), options)
-  moveMatchingSiblingBackups(join(marketplaceDir, "plugins"), "let-my-agent-sleep", join(backupRoot, "plugins"), options)
+  moveMatchingSiblingBackups(join(agentsRoot, "skills"), openCodeSkillName, join(backupRoot, "skills"), options)
+  moveMatchingSiblingBackups(join(agentsRoot, "skills"), legacyCodexSkillName, join(backupRoot, "skills"), options)
+  moveMatchingSiblingBackups(join(marketplaceDir, "plugins"), openCodeSkillName, join(backupRoot, "plugins"), options)
 
   if (existsSync(marketplacePath)) {
     const marketplace = readJsonIfExists(marketplacePath, {})
     const original = JSON.stringify(marketplace)
-    removeMarketplaceEntry(marketplace, "let-my-agent-sleep")
+    removeMarketplaceEntry(marketplace, openCodeSkillName)
     if (JSON.stringify(marketplace) !== original) {
       writeText(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`, { ...options, force: true })
     }
@@ -543,14 +1039,23 @@ function installCodex(options) {
 
 function installClaude(options) {
   const claudeRoot = join(homedir(), ".claude")
-  const claudeSkillTarget = join(claudeRoot, "skills", "let-my-agent-sleep")
+  const claudeCommandTarget = join(claudeRoot, "commands", `${openCodeSkillName}.md`)
+  const claudeAssetsTarget = join(claudeRoot, "lmas", openCodeSkillName)
+  const legacyClaudeExperimentalSkillTarget = join(claudeRoot, "skills", legacyClaudeSkillName)
+  const legacyClaudeSkillTarget = join(claudeRoot, "skills", openCodeSkillName)
   const backupRoot = join(claudeRoot, "lmas-backups")
 
-  copyDirAsset(paths.claudeSkill, claudeSkillTarget, options)
-  moveMatchingSiblingBackups(join(claudeRoot, "skills"), "let-my-agent-sleep", join(backupRoot, "skills"), options)
+  copyFileAsset(paths.claudeCommand, claudeCommandTarget, options)
+  copyFileAsset(paths.claudeBin, join(claudeAssetsTarget, "bin", "lmas.sh"), options)
+  copyFileAsset(paths.claudeScript, join(claudeAssetsTarget, "scripts", "lmas.sh"), options)
+  moveAside(legacyClaudeSkillTarget, join(backupRoot, "skills"), options)
+  moveAside(legacyClaudeExperimentalSkillTarget, join(backupRoot, "skills"), options)
+  moveMatchingSiblingBackups(join(claudeRoot, "skills"), openCodeSkillName, join(backupRoot, "skills"), options)
+  moveMatchingSiblingBackups(join(claudeRoot, "skills"), legacyClaudeSkillName, join(backupRoot, "skills"), options)
 
   console.log("Claude Code install configured. (experimental; automatic resume is not guaranteed)")
-  console.log(`  skill: ${claudeSkillTarget}`)
+  console.log(`  command: ${claudeCommandTarget}`)
+  console.log(`  assets: ${claudeAssetsTarget}`)
   console.log(`  backups: ${backupRoot}`)
 }
 
@@ -558,7 +1063,7 @@ async function main() {
   const argv = process.argv.slice(2)
   const command = argv[0]
 
-  if (command === "start" || command === "status" || command === "list" || command === "__watch") {
+  if (command === "start" || command === "status" || command === "cancel" || command === "list" || command === "__watch") {
     runWrapper(argv)
   }
 
@@ -586,10 +1091,10 @@ async function main() {
     console.log("Restart OpenCode so it reloads plugins and skills.")
   }
   if (selectedAgents.includes("codex")) {
-    console.log("Restart Codex so it reloads skills/plugins.")
+    console.log("Restart Codex so it reloads skills.")
   }
   if (selectedAgents.includes("claude")) {
-    console.log("Restart Claude Code so it reloads skills.")
+    console.log("Restart Claude Code so it reloads commands.")
   }
 }
 

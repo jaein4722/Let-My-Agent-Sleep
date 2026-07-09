@@ -18,5 +18,5 @@ if command -v lmas >/dev/null 2>&1; then
   exec lmas "$@"
 fi
 
-printf 'Could not find bin/lmas.sh in the installed Let My Agent Sleep skill, repo, current workspace, or PATH.\n' >&2
+printf 'Could not find bin/lmas.sh in the installed Let My Agent Sleep command assets, repo, current workspace, or PATH.\n' >&2
 exit 127

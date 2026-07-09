@@ -30,7 +30,7 @@ Environment:
   LMAS_OPENCODE_SERVER_URL   Default: http://127.0.0.1:4096
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
-  LMAS_CODEX_SESSION_ID      Required for codex adapter
+  LMAS_CODEX_SESSION_ID      Preferred for codex adapter; CODEX_THREAD_ID is also used when available
   LMAS_CLAUDE_SESSION_ID     Preferred for claude adapter exact resume
   LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
 EOF
@@ -53,6 +53,23 @@ now_system() {
 
 compact_now_system() {
   date '+%Y%m%dT%H%M%S%z'
+}
+
+resolve_against_cwd() {
+  local cwd path_value
+  cwd=$1
+  path_value=$2
+
+  case "$path_value" in
+    /*) printf '%s\n' "$path_value" ;;
+    *) printf '%s/%s\n' "$cwd" "$path_value" ;;
+  esac
+}
+
+absolute_dir() {
+  local path_value
+  path_value=$1
+  ( cd "$path_value" && pwd -P )
 }
 
 shell_quote() {
@@ -286,6 +303,44 @@ run_adapter() {
   esac
 }
 
+list_child_pids() {
+  local parent
+  parent=$1
+  ps -eo pid=,ppid= 2>/dev/null | awk -v parent="$parent" '$2 == parent { print $1 }'
+}
+
+collect_process_tree() {
+  local parent child
+  parent=$1
+  for child in $(list_child_pids "$parent"); do
+    printf '%s\n' "$child"
+    collect_process_tree "$child"
+  done
+}
+
+terminate_pids() {
+  local pid alive_pids
+  alive_pids=
+  for pid in "$@"; do
+    case "$pid" in
+      ''|*[!0-9]*) continue ;;
+    esac
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -TERM "$pid" >/dev/null 2>&1 || true
+      alive_pids="$alive_pids $pid"
+    fi
+  done
+
+  [ -n "$alive_pids" ] || return 0
+  sleep 0.2
+
+  for pid in $alive_pids; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 launch_watcher_tmux() {
   local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir session command_line log_path tmux_socket
   run_dir=$1
@@ -311,7 +366,7 @@ launch_watcher_tmux() {
 }
 
 watch_command() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir exit_code status finished_at
+  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir exit_code status finished_at child_pid
   run_dir=$1
   run_id=$2
   adapter=$3
@@ -326,7 +381,10 @@ watch_command() {
   set +e
   (
     cd "$cwd" || exit 127
-    "$@"
+    "$@" &
+    child_pid=$!
+    printf '%s\n' "$child_pid" > "$run_dir/child_pid"
+    wait "$child_pid"
   ) > "$stdout_path" 2> "$stderr_path"
   exit_code=$?
   printf '%s\n' "$exit_code" > "$run_dir/exit_code"
@@ -403,6 +461,8 @@ start_command() {
 
   [ "$#" -gt 0 ] || die "missing command after --"
   [ -d "$cwd" ] || die "cwd does not exist: $cwd"
+  cwd=$(absolute_dir "$cwd") || die "failed to resolve cwd: $cwd"
+  runs_dir=$(resolve_against_cwd "$cwd" "$runs_dir")
 
   run_id="lmas_$(compact_now_system)_$$_${RANDOM:-0}"
   run_dir="$runs_dir/$run_id"
@@ -539,8 +599,36 @@ stop_watcher() {
   esac
 }
 
+watcher_root_pid() {
+  local id run_dir session tmux_socket cwd_for_socket
+  id=$1
+  run_dir=$2
+  [ -n "$id" ] || return 1
+
+  case "$id" in
+    tmux:*)
+      session=${id#tmux:}
+      command -v tmux >/dev/null 2>&1 || return 1
+      if [ -f "$run_dir/tmux_socket.txt" ]; then
+        tmux_socket=$(sed -n '1p' "$run_dir/tmux_socket.txt")
+      else
+        tmux_socket=".lmas/tmux/${session}.sock"
+      fi
+      cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd)
+      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
+      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" display-message -p -t "$session" '#{pane_pid}' 2>/dev/null )
+      ;;
+    *[!0-9]*)
+      return 1
+      ;;
+    *)
+      printf '%s\n' "$id"
+      ;;
+  esac
+}
+
 cancel_command() {
-  local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id
+  local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id child_pid child_tree_pids watcher_pid watcher_tree_pids killed_pids
   local adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at exit_code was_alive
 
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
@@ -607,7 +695,47 @@ cancel_command() {
     return 0
   fi
 
-  stop_watcher "$pid_or_job_id" "$run_dir" || die "failed to stop watcher for run: $run_id"
+  child_pid=
+  child_tree_pids=
+  watcher_pid=
+  watcher_tree_pids=
+  killed_pids=
+  watcher_pid=$(watcher_root_pid "$pid_or_job_id" "$run_dir" || true)
+  case "$watcher_pid" in
+    ''|*[!0-9]*) watcher_pid= ;;
+    *)
+      watcher_tree_pids=$(collect_process_tree "$watcher_pid")
+      ;;
+  esac
+  if [ -f "$run_dir/child_pid" ]; then
+    child_pid=$(sed -n '1p' "$run_dir/child_pid")
+    case "$child_pid" in
+      ''|*[!0-9]*) child_pid= ;;
+      *)
+        child_tree_pids=$(collect_process_tree "$child_pid")
+        ;;
+    esac
+  fi
+  killed_pids=$(printf '%s\n%s\n%s\n%s\n' "$watcher_pid" "$watcher_tree_pids" "$child_pid" "$child_tree_pids" | awk 'NF && !seen[$1]++ { printf "%s%s", sep, $1; sep=" " }')
+
+  if ! stop_watcher "$pid_or_job_id" "$run_dir"; then
+    if [ -f "$run_dir/completion_event.txt" ]; then
+      event_file="$run_dir/completion_event.txt"
+      existing_status=$(read_field "$event_file" status)
+      {
+        printf 'LMAS_CANCEL v1\n'
+        printf 'run_id: %s\n' "$run_id"
+        printf 'status: ALREADY_COMPLETED\n'
+        printf 'existing_status: %s\n' "$existing_status"
+        printf 'run_dir: %s\n' "$run_dir"
+      }
+      return 0
+    fi
+    die "failed to stop watcher for run: $run_id"
+  fi
+  if [ -n "$killed_pids" ]; then
+    terminate_pids $killed_pids
+  fi
 
   if [ -f "$run_dir/completion_event.txt" ]; then
     event_file="$run_dir/completion_event.txt"
@@ -640,6 +768,15 @@ cancel_command() {
   {
     printf 'cancelled_at=%s\n' "$finished_at"
     printf 'cancel_reason=%s\n' "$reason"
+    if [ -n "$watcher_pid" ]; then
+      printf 'cancel_watcher_pid=%s\n' "$watcher_pid"
+    fi
+    if [ -n "$child_pid" ]; then
+      printf 'cancel_child_pid=%s\n' "$child_pid"
+    fi
+    if [ -n "$killed_pids" ]; then
+      printf 'cancel_killed_pids=%s\n' "$killed_pids"
+    fi
   } >> "$run_dir/metadata.txt"
   write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
