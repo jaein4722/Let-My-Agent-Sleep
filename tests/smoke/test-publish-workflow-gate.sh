@@ -157,6 +157,10 @@ required = [
     'node-version: "24"',
     'registry-url: "https://registry.npmjs.org"',
     "package-manager-cache: false",
+    "Check trusted publishing prerequisites",
+    'node: "22.14.0"',
+    'npm: "11.5.1"',
+    "npm --version",
     "npm publish --workspace let-my-agent-sleep",
 ]
 

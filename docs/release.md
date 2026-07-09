@@ -36,7 +36,7 @@ The npm package must have a trusted publisher configured in npm package settings
 
 The filename should be the workflow file name only, not the full `.github/workflows/publish.yml` path.
 
-The workflow already grants the required `id-token: write` permission and uses Node 24 with npm from GitHub Actions.
+The workflow already grants the required `id-token: write` permission, uses Node 24, and checks the npm trusted publishing runtime minimums before installing dependencies or publishing.
 
 ## Publish flow
 

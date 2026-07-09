@@ -34,6 +34,48 @@ jobs:
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
 
+      - name: Check trusted publishing prerequisites
+        run: |
+          set -euo pipefail
+          node - <<'JS'
+          const { execSync } = require("node:child_process")
+
+          const minimums = {
+            node: "22.14.0",
+            npm: "11.5.1",
+          }
+
+          const versions = {
+            node: process.versions.node,
+            npm: execSync("npm --version", { encoding: "utf8" }).trim(),
+          }
+
+          const parse = (version) => {
+            const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
+            if (!match) throw new Error(`unsupported version: ${version}`)
+            return match.slice(1, 4).map(Number)
+          }
+
+          const isAtLeast = (actual, minimum) => {
+            const actualParts = parse(actual)
+            const minimumParts = parse(minimum)
+            for (let index = 0; index < minimumParts.length; index += 1) {
+              if (actualParts[index] > minimumParts[index]) return true
+              if (actualParts[index] < minimumParts[index]) return false
+            }
+            return true
+          }
+
+          for (const [name, minimum] of Object.entries(minimums)) {
+            if (!isAtLeast(versions[name], minimum)) {
+              console.error(`${name} ${versions[name]} does not satisfy npm trusted publishing minimum ${minimum}`)
+              process.exit(1)
+            }
+          }
+
+          console.log(`trusted publishing prerequisites ok: node ${versions.node}, npm ${versions.npm}`)
+          JS
+
       - name: Check patch hygiene
         env:
           BEFORE_SHA: ${{ github.event.before }}
