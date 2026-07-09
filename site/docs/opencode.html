@@ -26,6 +26,7 @@
     <h2>Oh My OpenAgent continuation</h2>
     <p>During OpenCode install, LMAS disables known Oh My OpenAgent continuation hooks by default: <code>todo-continuation-enforcer</code>, <code>ralph-loop</code>, and <code>atlas</code>. This prevents OMO from re-entering an active LMAS handoff just because a todo is still open while the long-running job is expected to continue in the background.</p>
     <p>Use <code>--keep-omo-continuation</code> only when you explicitly want those OMO continuation hooks to remain enabled.</p>
+    <p>LMAS also installs a runtime guard in the OpenCode plugin. While an <code>LMAS_HANDOFF v1</code> is active, reply-expecting prompt injection into that same session is no-oped until <code>LMAS_COMPLETION_EVENT v1</code> arrives or the user explicitly asks for status or cancel. <code>noReply</code> internal notifications and LMAS completion prompts are allowed through.</p>
     <h2>Agent prompt</h2>
     <pre><code>Use the let-my-agent-sleep skill for this task.
 Start this command with lmas_start:

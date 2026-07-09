@@ -132,6 +132,8 @@ The disabled hooks are `todo-continuation-enforcer`, `ralph-loop`, and `atlas`.
 This keeps those known continuation hooks disabled in the OpenCode environment so they cannot re-enter an active LMAS handoff loop.
 Use `--keep-omo-continuation` only if you explicitly want to keep those hooks enabled.
 
+LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. `noReply` internal notifications and LMAS completion prompts are allowed through.
+
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
 ## Codex
