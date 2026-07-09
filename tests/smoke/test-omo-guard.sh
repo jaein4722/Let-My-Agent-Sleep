@@ -739,6 +739,42 @@ if (getActiveOmoGuard(completionOnlyGuards, "ses_test", 6002)) {
   throw new Error("did not expect tool guard after transform-visible completion")
 }
 
+const cancelOnlyGuards = new Map()
+updateSessionGuardFromText(
+  cancelOnlyGuards,
+  "ses_cancel_only",
+  "LMAS_HANDOFF v1\nrun_id: lmas_cancel_only\nstatus: STARTED",
+  6010,
+  { omoTurn: true },
+)
+const cancelOnlyOutput = {
+  messages: [
+    message(
+      "assistant",
+      "LMAS_CANCEL v1\nrun_id: lmas_cancel_only\nstatus: CANCELLED",
+      "cancel_only",
+      "ses_cancel_only",
+    ),
+    message(
+      "user",
+      "[SYSTEM DIRECTIVE: OH-MY-OPENCODE - TODO CONTINUATION]\n\nIncomplete tasks remain in your todo list. Continue working on the next pending task.\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "omo_after_cancel_only",
+      "ses_cancel_only",
+    ),
+  ],
+}
+cancelOnlyOutput.messages[1].parts[0].synthetic = true
+const cancelOnlyState = applyOmoContinuationGuard(cancelOnlyOutput, cancelOnlyGuards, 6011)
+if (cancelOnlyState.active) {
+  throw new Error("expected transform-visible cancel to clear event-tracked active handoff")
+}
+if (cancelOnlyOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("did not expect guard after transform-visible cancel")
+}
+if (getActiveOmoGuard(cancelOnlyGuards, "ses_cancel_only", 6012)) {
+  throw new Error("did not expect tool guard after transform-visible cancel")
+}
+
 const deletedSessionGuards = new Map()
 updateSessionGuardFromText(
   deletedSessionGuards,
@@ -884,6 +920,30 @@ updateSessionGuardFromCancelText(
 )
 if (getActiveOmoGuard(cancelIntentGuards, "ses_cancel_intent", 7065)) {
   throw new Error("expected LMAS_CANCEL to clear run guard")
+}
+
+const eventCancelGuards = new Map()
+const eventCancelBuffers = new Map()
+updateSessionGuardFromText(
+  eventCancelGuards,
+  "ses_event_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_event_cancel\nstatus: STARTED",
+  7066,
+  { omoTurn: true },
+)
+updateSessionGuardFromEvent(eventCancelGuards, eventCancelBuffers, {
+  type: "message.updated",
+  properties: {
+    message: message(
+      "assistant",
+      "LMAS_CANCEL v1\nrun_id: lmas_event_cancel\nstatus: CANCELLED",
+      "event_cancel_message",
+      "ses_event_cancel",
+    ),
+  },
+}, 7067)
+if (getActiveOmoGuard(eventCancelGuards, "ses_event_cancel", 7068)) {
+  throw new Error("expected event-visible LMAS_CANCEL to clear run guard")
 }
 
 const negatedEventCancelGuards = new Map()

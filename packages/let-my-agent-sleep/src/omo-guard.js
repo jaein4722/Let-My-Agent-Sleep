@@ -190,10 +190,12 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
   if (!sessionID || typeof text !== "string" || text.length === 0) return undefined
   const allowHandoff = options.allowHandoff ?? true
   const allowCompletion = options.allowCompletion ?? true
+  const allowCancel = options.allowCancel ?? true
   const hasAllowedHandoff = allowHandoff && text.includes(LMAS_HANDOFF)
   const hasAllowedCompletion = allowCompletion && text.includes(LMAS_COMPLETION)
+  const hasAllowedCancel = allowCancel && text.includes(LMAS_CANCEL)
 
-  if (!hasAllowedHandoff && !hasAllowedCompletion) {
+  if (!hasAllowedHandoff && !hasAllowedCompletion && !hasAllowedCancel) {
     return sessionGuards.get(sessionID)
   }
 
@@ -212,11 +214,15 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
     const completedRunIds = new Set(extractRunIds(text))
     runIds = runIds.filter((runId) => !completedRunIds.has(runId))
   }
+  if (hasAllowedCancel) {
+    const cancelRunIds = new Set(extractRunIds(text))
+    runIds = runIds.filter((runId) => !cancelRunIds.has(runId))
+  }
 
   const next = {
     active: runIds.length > 0,
     omoTurn: options.omoTurn ?? existing.omoTurn,
-    allowCancel: existing.allowCancel === true,
+    allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
     runIds,
     updatedAt: now,
   }
@@ -318,7 +324,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
       now,
       { allowHandoff },
     )
-    if (bufferedText.includes(LMAS_COMPLETION)) {
+    if (bufferedText.includes(LMAS_COMPLETION) || bufferedText.includes(LMAS_CANCEL)) {
       eventTextBuffers.delete(sessionID)
     }
     const existing = sessionGuards.get(sessionID)
@@ -360,10 +366,10 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
   eventTextBuffers.set(sessionID, text.slice(-MAX_EVENT_TEXT_BUFFER))
   const message = event?.properties?.message
   const lmasState = updateSessionGuardFromText(sessionGuards, sessionID, text, now, { allowHandoff })
-  if (text.includes(LMAS_COMPLETION)) {
+  if (text.includes(LMAS_COMPLETION) || text.includes(LMAS_CANCEL)) {
     eventTextBuffers.delete(sessionID)
   }
-  if ((allowHandoff && text.includes(LMAS_HANDOFF)) || text.includes(LMAS_COMPLETION)) return lmasState
+  if ((allowHandoff && text.includes(LMAS_HANDOFF)) || text.includes(LMAS_COMPLETION) || text.includes(LMAS_CANCEL)) return lmasState
 
   const existing = sessionGuards.get(sessionID)
   if (!existing?.active) {
@@ -435,6 +441,7 @@ export function isOmoTodoContinuationMessage(message) {
 export function analyzeLmasHandoffState(messages, fallbackSessionID) {
   const activeRuns = new Map()
   const completedRunIds = []
+  const cancelledRunIds = []
 
   messages.forEach((message, index) => {
     const text = collectTextFromMessage(message)
@@ -446,6 +453,12 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
     if (text.includes(LMAS_COMPLETION)) {
       for (const runId of extractRunIds(text)) {
         completedRunIds.push(runId)
+        activeRuns.delete(runId)
+      }
+    }
+    if (text.includes(LMAS_CANCEL)) {
+      for (const runId of extractRunIds(text)) {
+        cancelledRunIds.push(runId)
         activeRuns.delete(runId)
       }
     }
@@ -462,6 +475,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
     active: activeRunIds.length > 0,
     activeRunIds,
     completedRunIds: unique(completedRunIds),
+    cancelledRunIds: unique(cancelledRunIds),
     firstActiveIndex,
     latestUserHasCancelIntent: hasExplicitCancelIntent(collectTextFromMessage(latestUserMessage)),
     latestUserIsOmoContinuation,
@@ -488,7 +502,7 @@ export function applyOmoContinuationGuard(output, sessionGuards, now = Date.now(
   const messages = Array.isArray(output?.messages) ? output.messages : []
   const state = analyzeLmasHandoffState(messages, fallbackSessionID)
   const existingGuard = state.sessionID ? sessionGuards.get(state.sessionID) : undefined
-  const completed = new Set(state.completedRunIds || [])
+  const completed = new Set([...(state.completedRunIds || []), ...(state.cancelledRunIds || [])])
   const existingRunIds = (existingGuard?.runIds || []).filter((runId) => !completed.has(runId))
   const effectiveRunIds = unique([...existingRunIds, ...state.activeRunIds])
   const effectiveActive = effectiveRunIds.length > 0
