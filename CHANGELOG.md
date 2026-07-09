@@ -52,6 +52,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed CLI wrapper error prefixes so `doctor`, `start`, `status`, `cancel`, and `list` failures are not reported as install failures.
 - Fixed multiline command and metadata recording so event and metadata files stay line-oriented while the original command still executes unchanged.
 - Fixed OpenCode continuation guard state so `LMAS_CANCEL v1` clears active handoffs when seen through message history or event hooks.
+- Fixed malformed run handling so `lmas status` fails clearly when `handoff.txt` is missing and `lmas list` skips incomplete run directories.
 
 ## 0.2.6 and earlier
 

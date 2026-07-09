@@ -71,6 +71,20 @@ started_at: 2026-07-01T00:00:00Z
 resume_instruction: Wait for completion event or inspect $TMUX_LOST_RUN_DIR/resume_prompt.txt after the job exits.
 EOF
 TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$TMUX_LOST_RUN_ID")
+MALFORMED_RUN_ID="lmas_malformed_test"
+MALFORMED_RUN_DIR="$RUNS_DIR/$MALFORMED_RUN_ID"
+mkdir -p "$MALFORMED_RUN_DIR"
+MALFORMED_STATUS_OUTPUT="$TMPDIR_ROOT/malformed-status.out"
+if cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$MALFORMED_RUN_ID" >"$MALFORMED_STATUS_OUTPUT" 2>&1; then
+  printf 'malformed run dir without handoff should fail status\n' >&2
+  cat "$MALFORMED_STATUS_OUTPUT" >&2
+  exit 1
+fi
+grep -q 'handoff not found for run' "$MALFORMED_STATUS_OUTPUT" || {
+  printf 'malformed status failure did not explain missing handoff\n' >&2
+  cat "$MALFORMED_STATUS_OUTPUT" >&2
+  exit 1
+}
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q "^run_dir: $RUN_DIR$" || { printf 'status by id missing run_dir\n' >&2; exit 1; }
@@ -93,6 +107,10 @@ printf '%s\n' "$LIST_OUTPUT" | grep -q $'run_id\tstatus\texit_code\telapsed_seco
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0[[:space:]]*[0-9][0-9]*[[:space:]]*'./examples/fake_train.sh' 'success'" || { printf 'list did not include elapsed command summary\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include package cli started run\n' >&2; exit 1; }
+if printf '%s\n' "$LIST_OUTPUT" | grep -q "$MALFORMED_RUN_ID"; then
+  printf 'list should skip malformed run dir without handoff\n' >&2
+  exit 1
+fi
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include package cli started run\n' >&2; exit 1; }
 printf '%s\n' "$LOST_STATUS" | grep -q '^status: LOST$' || { printf 'lost run did not report LOST\n' >&2; exit 1; }

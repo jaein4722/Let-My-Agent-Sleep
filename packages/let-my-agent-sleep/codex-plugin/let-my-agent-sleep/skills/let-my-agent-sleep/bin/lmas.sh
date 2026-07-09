@@ -979,6 +979,7 @@ status_command() {
     exit_code=$(read_field "$event_file" exit_code)
   else
     event_file="$run_dir/handoff.txt"
+    [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
     pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
     if watcher_alive "$pid_or_job_id" "$run_dir"; then
       status=RUNNING
@@ -1067,6 +1068,7 @@ list_command() {
       exit_code=$(read_field "$event_file" exit_code)
     else
       event_file="$run_dir/handoff.txt"
+      [ -f "$event_file" ] || continue
       pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
       if watcher_alive "$pid_or_job_id" "$run_dir"; then
         status=RUNNING
