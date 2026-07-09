@@ -1078,6 +1078,12 @@ function doctorFail(message) {
   return false
 }
 
+function isExecutableFile(target) {
+  if (!existsSync(target)) return false
+  const stat = statSync(target)
+  return stat.isFile() && (stat.mode & 0o111) !== 0
+}
+
 function liveToolIDsUrl(serverUrl, options = {}) {
   const base = new URL(serverUrl)
   const url = new URL("/experimental/tool/ids", base)
@@ -1253,32 +1259,55 @@ async function doctorOpenCode(options) {
 function doctorCodex() {
   const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex")
   const codexSkillTarget = join(codexHome, "skills", openCodeSkillName, "SKILL.md")
+  const codexBinTarget = join(codexHome, "skills", openCodeSkillName, "bin", "lmas.sh")
+  const codexScriptTarget = join(codexHome, "skills", openCodeSkillName, "scripts", "lmas.sh")
   console.log("Codex doctor:")
   console.log(`  skill: ${codexSkillTarget}`)
+  console.log(`  binary: ${codexBinTarget}`)
+  console.log(`  wrapper: ${codexScriptTarget}`)
+  let healthy = true
   if (!existsSync(codexSkillTarget)) {
-    return doctorFail("Codex skill file is missing; run: lmas install --agent codex")
+    healthy = doctorFail("Codex skill file is missing; run: lmas install --agent codex") && healthy
+  } else {
+    doctorOk("Codex skill file is installed")
   }
-  doctorOk("Codex skill file is installed")
-  return true
+  if (!isExecutableFile(codexBinTarget)) {
+    healthy = doctorFail("Codex LMAS binary is missing or not executable; run: lmas install --agent codex") && healthy
+  } else {
+    doctorOk("Codex LMAS binary is executable")
+  }
+  if (!isExecutableFile(codexScriptTarget)) {
+    healthy = doctorFail("Codex LMAS wrapper is missing or not executable; run: lmas install --agent codex") && healthy
+  } else {
+    doctorOk("Codex LMAS wrapper is executable")
+  }
+  return healthy
 }
 
 function doctorClaude() {
   const claudeRoot = join(homedir(), ".claude")
   const claudeCommandTarget = join(claudeRoot, "commands", `${openCodeSkillName}.md`)
   const claudeBinTarget = join(claudeRoot, "lmas", openCodeSkillName, "bin", "lmas.sh")
+  const claudeScriptTarget = join(claudeRoot, "lmas", openCodeSkillName, "scripts", "lmas.sh")
   console.log("Claude Code doctor: experimental")
   console.log(`  command: ${claudeCommandTarget}`)
   console.log(`  binary: ${claudeBinTarget}`)
+  console.log(`  wrapper: ${claudeScriptTarget}`)
   let healthy = true
   if (!existsSync(claudeCommandTarget)) {
     healthy = doctorFail("Claude Code command is missing; run: lmas install --agent claude") && healthy
   } else {
     doctorOk("Claude Code command is installed")
   }
-  if (!existsSync(claudeBinTarget)) {
-    healthy = doctorFail("Claude Code LMAS binary asset is missing; run: lmas install --agent claude") && healthy
+  if (!isExecutableFile(claudeBinTarget)) {
+    healthy = doctorFail("Claude Code LMAS binary asset is missing or not executable; run: lmas install --agent claude") && healthy
   } else {
-    doctorOk("Claude Code LMAS binary asset is installed")
+    doctorOk("Claude Code LMAS binary asset is executable")
+  }
+  if (!isExecutableFile(claudeScriptTarget)) {
+    healthy = doctorFail("Claude Code LMAS wrapper asset is missing or not executable; run: lmas install --agent claude") && healthy
+  } else {
+    doctorOk("Claude Code LMAS wrapper asset is executable")
   }
   return healthy
 }

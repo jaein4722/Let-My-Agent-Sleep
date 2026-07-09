@@ -59,6 +59,60 @@ printf '%s\n' "$INSTALL_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' |
   exit 1
 }
 
+CODEX_INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --yes)
+printf '%s\n' "$CODEX_INSTALL_OUTPUT" | grep -q 'Codex install configured' || {
+  printf 'codex install did not complete before doctor test\n' >&2
+  exit 1
+}
+CODEX_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent codex --yes)
+printf '%s\n' "$CODEX_DOCTOR_OUTPUT" | grep -q 'Codex LMAS binary is executable' || {
+  printf 'codex doctor did not verify executable binary\n%s\n' "$CODEX_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+printf '%s\n' "$CODEX_DOCTOR_OUTPUT" | grep -q 'Codex LMAS wrapper is executable' || {
+  printf 'codex doctor did not verify executable wrapper\n%s\n' "$CODEX_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+chmod 0644 "$TMP_HOME/.codex/skills/let-my-agent-sleep/scripts/lmas.sh"
+CODEX_DOCTOR_FAIL_OUTPUT="$SERVER_DIR/codex-doctor-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent codex --yes >"$CODEX_DOCTOR_FAIL_OUTPUT" 2>&1; then
+  printf 'codex doctor should fail when wrapper is not executable\n' >&2
+  cat "$CODEX_DOCTOR_FAIL_OUTPUT" >&2
+  exit 1
+fi
+grep -q 'Codex LMAS wrapper is missing or not executable' "$CODEX_DOCTOR_FAIL_OUTPUT" || {
+  printf 'codex doctor failure did not explain non-executable wrapper\n' >&2
+  cat "$CODEX_DOCTOR_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+CLAUDE_INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --yes)
+printf '%s\n' "$CLAUDE_INSTALL_OUTPUT" | grep -q 'Claude Code install configured' || {
+  printf 'claude install did not complete before doctor test\n' >&2
+  exit 1
+}
+CLAUDE_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent claude --yes)
+printf '%s\n' "$CLAUDE_DOCTOR_OUTPUT" | grep -q 'Claude Code LMAS binary asset is executable' || {
+  printf 'claude doctor did not verify executable binary asset\n%s\n' "$CLAUDE_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+printf '%s\n' "$CLAUDE_DOCTOR_OUTPUT" | grep -q 'Claude Code LMAS wrapper asset is executable' || {
+  printf 'claude doctor did not verify executable wrapper asset\n%s\n' "$CLAUDE_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+chmod 0644 "$TMP_HOME/.claude/lmas/let-my-agent-sleep/bin/lmas.sh"
+CLAUDE_DOCTOR_FAIL_OUTPUT="$SERVER_DIR/claude-doctor-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent claude --yes >"$CLAUDE_DOCTOR_FAIL_OUTPUT" 2>&1; then
+  printf 'claude doctor should fail when binary asset is not executable\n' >&2
+  cat "$CLAUDE_DOCTOR_FAIL_OUTPUT" >&2
+  exit 1
+fi
+grep -q 'Claude Code LMAS binary asset is missing or not executable' "$CLAUDE_DOCTOR_FAIL_OUTPUT" || {
+  printf 'claude doctor failure did not explain non-executable binary asset\n' >&2
+  cat "$CLAUDE_DOCTOR_FAIL_OUTPUT" >&2
+  exit 1
+}
+
 cat > "$SERVER_DIR/server.mjs" <<'JS'
 import http from "node:http"
 
