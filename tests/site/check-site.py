@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site"
 DOCS = SITE / "docs"
 BASE_URL = "https://jaein4722.github.io/Let-My-Agent-Sleep/"
+INSTALL_COMMAND = "npx let-my-agent-sleep install"
+NPM_URL = "https://www.npmjs.com/package/let-my-agent-sleep"
+GITHUB_URL = "https://github.com/jaein4722/Let-My-Agent-Sleep"
 SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 
@@ -97,8 +100,9 @@ def main() -> int:
     html_files = sorted([SITE / "index.html", *DOCS.glob("*.html")])
 
     for path in html_files:
+        content = path.read_text(encoding="utf-8")
         parser = LinkParser()
-        parser.feed(path.read_text(encoding="utf-8"))
+        parser.feed(content)
 
         if not parser.title:
             errors.append(f"{path}: missing <title>")
@@ -113,6 +117,13 @@ def main() -> int:
                 errors.append(f"{path}: missing local link {link} -> {target}")
 
         if path == SITE / "index.html":
+            if content.count(INSTALL_COMMAND) < 3:
+                errors.append(f"{path}: install command CTA drifted from {INSTALL_COMMAND!r}")
+            if NPM_URL not in parser.links:
+                errors.append(f"{path}: missing npm package link {NPM_URL}")
+            if GITHUB_URL not in parser.links:
+                errors.append(f"{path}: missing GitHub repository link {GITHUB_URL}")
+
             expected_image = BASE_URL + "social-card.png"
             expected_meta = {
                 "og:type": "website",
@@ -143,7 +154,7 @@ def main() -> int:
                         "@type": "SoftwareApplication",
                         "name": "Let My Agent Sleep",
                         "url": BASE_URL,
-                        "downloadUrl": "https://www.npmjs.com/package/let-my-agent-sleep",
+                        "downloadUrl": NPM_URL,
                     }
                     for key, expected in expected_schema.items():
                         if schema.get(key) != expected:
