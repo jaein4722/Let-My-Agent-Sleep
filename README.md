@@ -174,6 +174,7 @@ lmas cancel <run_id>
 lmas start --notify https://ntfy.sh/my-topic -- python train.py
 lmas doctor --agent opencode
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096
+lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --directory "$PWD"
 LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 

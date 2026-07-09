@@ -19,6 +19,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added bounded HTTP timeouts for OpenCode adapter and secondary notification completion paths.
 - Added bounded timeout handling for OpenCode live doctor checks.
 - Added `lmas_info` as an OpenCode plugin diagnostic tool so live doctor checks can detect stale plugin caches more reliably.
+- Added `--directory` for OpenCode live doctor checks so tool exposure can be verified against the actual workspace directory.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 

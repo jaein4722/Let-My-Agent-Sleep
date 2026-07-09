@@ -63,9 +63,11 @@ cat > "$SERVER_DIR/server.mjs" <<'JS'
 import http from "node:http"
 
 const mode = process.argv[2]
+const expectedDirectory = process.argv[3] || ""
 const expectedAuth = `Basic ${Buffer.from("opencode:s3cr3t").toString("base64")}`
 const server = http.createServer((request, response) => {
-  if (request.url !== "/experimental/tool/ids") {
+  const url = new URL(request.url, "http://127.0.0.1")
+  if (url.pathname !== "/experimental/tool/ids") {
     response.writeHead(404, { "content-type": "application/json" })
     response.end(JSON.stringify({ error: "not found" }))
     return
@@ -85,8 +87,15 @@ const server = http.createServer((request, response) => {
     return
   }
 
+  if (mode === "directory-ok" && url.searchParams.get("directory") !== expectedDirectory) {
+    response.writeHead(200, { "content-type": "application/json" })
+    response.end(JSON.stringify(["bash"]))
+    return
+  }
+
   const tools = mode === "ok"
     || mode === "auth-ok"
+    || mode === "directory-ok"
     ? ["bash", "lmas_start", "lmas_status", "lmas_cancel", "lmas_info"]
     : ["bash", "lmas_status"]
   response.writeHead(200, { "content-type": "application/json" })
@@ -129,6 +138,27 @@ AUTH_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
 AUTH_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$AUTH_SERVER_URL" --server-password "s3cr3t" --yes)
 printf '%s\n' "$AUTH_DOCTOR_OUTPUT" | grep -q 'OpenCode live server exposes LMAS tools' || {
   printf 'doctor did not verify authenticated live OpenCode tools\n%s\n' "$AUTH_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
+rm -f "$SERVER_DIR/port"
+
+WORKSPACE_DIR="$TMP_HOME/workspace with spaces"
+mkdir -p "$WORKSPACE_DIR"
+node "$SERVER_DIR/server.mjs" directory-ok "$WORKSPACE_DIR" > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+DIRECTORY_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+
+DIRECTORY_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$DIRECTORY_SERVER_URL" --directory "$WORKSPACE_DIR" --yes)
+printf '%s\n' "$DIRECTORY_DOCTOR_OUTPUT" | grep -q 'OpenCode live server exposes LMAS tools' || {
+  printf 'doctor did not pass workspace directory to live OpenCode tool check\n%s\n' "$DIRECTORY_DOCTOR_OUTPUT" >&2
   exit 1
 }
 

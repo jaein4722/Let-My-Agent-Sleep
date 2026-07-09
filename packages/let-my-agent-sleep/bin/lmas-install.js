@@ -40,7 +40,7 @@ const paths = {
 function usage() {
   console.log(`Usage:
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
-  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--server-username <name>] [--server-password <password>]
+  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--directory <path>] [--server-username <name>] [--server-password <password>]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
@@ -58,6 +58,8 @@ Options:
                    Do not modify Oh My OpenAgent disabled_hooks during OpenCode install.
   --server-url <url>
                    During OpenCode doctor, also verify the live server exposes lmas tools.
+  --directory <path>
+                   During OpenCode live doctor, pass the workspace directory to OpenCode.
   --server-username <name>
                    Basic-auth username for OpenCode live doctor. Default: LMAS_OPENCODE_USERNAME, OPENCODE_SERVER_USERNAME, or opencode.
   --server-password <password>
@@ -91,6 +93,7 @@ function parseArgs(argv) {
     disableOmoContinuation: false,
     keepOmoContinuation: false,
     serverUrl: "",
+    directory: "",
     serverUsername: "",
     serverPassword: "",
   }
@@ -131,6 +134,17 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--server-url=")) {
       options.serverUrl = arg.slice("--server-url=".length)
+      continue
+    }
+    if (arg === "--directory") {
+      const value = argv[index + 1]
+      if (!value) throw new Error("--directory requires a value")
+      options.directory = value
+      index += 1
+      continue
+    }
+    if (arg.startsWith("--directory=")) {
+      options.directory = arg.slice("--directory=".length)
       continue
     }
     if (arg === "--server-username") {
@@ -1063,9 +1077,11 @@ function doctorFail(message) {
   return false
 }
 
-function liveToolIDsUrl(serverUrl) {
+function liveToolIDsUrl(serverUrl, options = {}) {
   const base = new URL(serverUrl)
-  return new URL("/experimental/tool/ids", base)
+  const url = new URL("/experimental/tool/ids", base)
+  if (options.directory) url.searchParams.set("directory", options.directory)
+  return url
 }
 
 function openCodeAuthHeaders(options) {
@@ -1085,7 +1101,7 @@ async function doctorOpenCodeLiveTools(options) {
   const timeout = setTimeout(() => controller.abort(), Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds * 1000 : 30000)
   let response
   try {
-    response = await fetch(liveToolIDsUrl(serverUrl), {
+    response = await fetch(liveToolIDsUrl(serverUrl, options), {
       headers: openCodeAuthHeaders(options),
       signal: controller.signal,
     })
