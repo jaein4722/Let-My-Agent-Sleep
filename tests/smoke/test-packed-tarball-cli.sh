@@ -28,6 +28,8 @@ PKG="$EXTRACT_DIR/package"
 [ -f "$PKG/src/index.js" ] || { printf 'packed tarball missing OpenCode plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
 [ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
+[ -f "$PKG/CHANGELOG.md" ] || { printf 'packed tarball missing CHANGELOG.md\n' >&2; exit 1; }
+grep -q '^## 0.2.7 - Unreleased$' "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md missing 0.2.7 entry\n' >&2; exit 1; }
 
 OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-ai/plugin']" "$PKG/package.json")
 [ "$OPENCODE_PLUGIN_DEP" = "1.2.27" ] || {

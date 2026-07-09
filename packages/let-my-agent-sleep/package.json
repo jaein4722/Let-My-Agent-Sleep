@@ -27,6 +27,7 @@
     "claude/let-my-agent-sleep/commands",
     "claude/let-my-agent-sleep/assets",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "keywords": [

@@ -17,6 +17,7 @@ npm view let-my-agent-sleep version
 ```
 
 Only push a release version when the local package version is newer than the npm version.
+Update `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` for the release candidate before pushing.
 
 Run the local checks:
 
