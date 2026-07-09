@@ -1353,6 +1353,9 @@ async function main() {
   console.log("Let My Agent Sleep install complete.")
   if (selectedAgents.includes("opencode")) {
     console.log("Restart OpenCode so it reloads plugins and skills.")
+    console.log("After restart, verify the install with:")
+    console.log("  lmas doctor --agent opencode")
+    console.log("  lmas doctor --agent opencode --server-url http://127.0.0.1:4096")
   }
   if (selectedAgents.includes("codex")) {
     console.log("Restart Codex so it reloads skills.")
