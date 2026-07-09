@@ -95,13 +95,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tmux
 
+      - name: Check site docs
+        if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
+        run: npm run test:site
+
       - name: Run smoke tests
         if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
         run: npm run test:smoke
 
       - name: Pack dry run
         if: steps.release.outputs.publish_needed == 'true'
-        run: npm pack --workspace let-my-agent-sleep --dry-run
+        run: npm run pack
 
       - name: Publish to npm
         if: steps.release.outputs.publish_needed == 'true'
