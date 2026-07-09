@@ -46,6 +46,23 @@ for changelog in CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; do
   fi
 done
 
+if [ -z "${GITHUB_ACTIONS:-}" ]; then
+  UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+  if [ -z "$UPSTREAM" ]; then
+    printf 'could not determine upstream branch; cannot verify publish workflow trigger path\n' >&2
+    exit 1
+  fi
+
+  TRIGGER_CHANGES=$(git diff --name-only "$UPSTREAM..HEAD" -- \
+    packages/let-my-agent-sleep/package.json \
+    .github/workflows/publish.yml)
+  if [ -z "$TRIGGER_CHANGES" ]; then
+    printf 'push range %s..HEAD does not include a publish workflow trigger path\n' "$UPSTREAM" >&2
+    printf 'change packages/let-my-agent-sleep/package.json or .github/workflows/publish.yml before relying on push-triggered publish automation\n' >&2
+    exit 1
+  fi
+fi
+
 npm run test:syntax
 npm run test:site
 npm run test:smoke

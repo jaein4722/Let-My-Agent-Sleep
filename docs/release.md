@@ -16,6 +16,7 @@ This checks:
 - Current npm version from `npm view let-my-agent-sleep version`.
 - Local version is newer than the npm version.
 - `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` contain a dated release heading, not `Unreleased`.
+- Local `@{upstream}..HEAD` includes a publish workflow trigger path: `packages/let-my-agent-sleep/package.json` or `.github/workflows/publish.yml`.
 - `npm run test:syntax`.
 - `npm run test:site`.
 - `npm run test:smoke`.

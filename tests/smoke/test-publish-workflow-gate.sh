@@ -29,6 +29,21 @@ if (patch > 0) {
 JS
 )
 
+python3 - <<'PY'
+from pathlib import Path
+
+release_check = Path("tests/release/check.sh").read_text()
+for text in [
+    "git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}'",
+    "git diff --name-only \"$UPSTREAM..HEAD\"",
+    "packages/let-my-agent-sleep/package.json",
+    ".github/workflows/publish.yml",
+    "publish workflow trigger path",
+]:
+    if text not in release_check:
+        raise SystemExit(f"release check missing publish-trigger invariant: {text}")
+PY
+
 extract_step_script() {
   step_name=$1
   target=$2
