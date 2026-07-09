@@ -36,18 +36,32 @@ export function tool(definition) {
   return definition
 }
 
+function schema(kind) {
+  return {
+    optional() { return this },
+    describe() { return this },
+    safeParse(value) {
+      if (kind === "string") {
+        return { success: typeof value === "string" }
+      }
+      return { success: true }
+    },
+    parse(value) {
+      const result = this.safeParse(value)
+      if (!result.success) {
+        throw new Error(`invalid ${kind}`)
+      }
+      return value
+    },
+  }
+}
+
 tool.schema = {
   string() {
-    return {
-      optional() { return this },
-      describe() { return this },
-    }
+    return schema("string")
   },
   record() {
-    return {
-      optional() { return this },
-      describe() { return this },
-    }
+    return schema("record")
   },
 }
 JS
