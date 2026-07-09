@@ -145,6 +145,30 @@ bash -n "$DETECT_SCRIPT"
 bash -n "$FALSE_SCRIPT"
 bash -n "$TRUE_SCRIPT"
 
+python3 - <<'PY'
+from pathlib import Path
+
+workflow = Path(".github/workflows/publish.yml").read_text()
+required = [
+    "id-token: write",
+    "contents: write",
+    "uses: actions/checkout@v6",
+    "uses: actions/setup-node@v6",
+    'node-version: "24"',
+    'registry-url: "https://registry.npmjs.org"',
+    "package-manager-cache: false",
+    "npm publish --workspace let-my-agent-sleep",
+]
+
+for text in required:
+    if text not in workflow:
+        raise SystemExit(f"publish workflow missing trusted publishing invariant: {text}")
+
+for forbidden in ["NODE_AUTH_TOKEN", "NPM_TOKEN", "--otp", "always-auth"]:
+    if forbidden in workflow:
+        raise SystemExit(f"publish workflow should not use token/OTP publishing path: {forbidden}")
+PY
+
 MOCK_BIN="$TMPDIR_ROOT/bin"
 mkdir -p "$MOCK_BIN"
 
