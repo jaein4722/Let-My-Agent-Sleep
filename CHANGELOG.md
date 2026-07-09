@@ -23,6 +23,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `--directory` for OpenCode live doctor checks so tool exposure can be verified against the actual workspace directory.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
+- Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.
 
 ### Changed
 
