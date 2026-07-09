@@ -182,8 +182,11 @@ Common files:
 - `stderr.log`
 - `metadata.txt`
 - `resume_prompt.txt`
+- `progress.txt` (optional, written by your job)
 
 Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata.
+
+`lmas list` includes `elapsed_seconds` and a short command summary. `lmas status <run_id>` includes the command, elapsed time, and the last line of `progress.txt` when that file exists. This is for explicit user-requested status checks only; agents must still stop after `LMAS_HANDOFF v1` and must not poll.
 
 ## Why Not nohup?
 

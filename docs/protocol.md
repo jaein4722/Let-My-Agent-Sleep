@@ -72,6 +72,9 @@ It reports:
 - `run_id`
 - `status: RUNNING | LOST | SUCCEEDED | FAILED | CANCELLED | TIMEOUT`
 - `exit_code` when complete
+- `started_at` when known
+- `elapsed_seconds` when epoch metadata is available
+- `command` when known
 - `run_dir`
 - `stdout`
 - `stderr`
@@ -79,6 +82,9 @@ It reports:
 - `watcher_log`
 - `adapter_log`
 - `resume_prompt` when available
+- `progress` and `progress_path` when `progress.txt` exists
+
+Jobs may append lightweight progress lines to `<run_dir>/progress.txt`, such as `step=1200 loss=0.43`. LMAS never reads this file during handoff waiting. It is surfaced only when the user explicitly asks for status.
 
 `RUNNING` is not a completion event. If an agent sees `RUNNING`, it should stop the current turn and wait for `LMAS_COMPLETION_EVENT v1` unless the user explicitly asks for another status check.
 

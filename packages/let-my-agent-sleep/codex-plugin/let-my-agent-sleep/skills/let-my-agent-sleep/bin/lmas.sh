@@ -52,6 +52,10 @@ now_system() {
   printf '%s%s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$(timezone_offset)"
 }
 
+now_epoch() {
+  date '+%s'
+}
+
 compact_now_system() {
   date '+%Y%m%dT%H%M%S%z'
 }
@@ -394,7 +398,7 @@ launch_watcher_tmux() {
 }
 
 watch_command() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir exit_code status finished_at child_pid
+  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir exit_code status finished_at finished_epoch child_pid
   run_dir=$1
   run_id=$2
   adapter=$3
@@ -424,13 +428,15 @@ watch_command() {
   fi
 
   finished_at=$(now_system)
+  finished_epoch=$(now_epoch)
+  printf 'finished_epoch=%s\n' "$finished_epoch" >> "$metadata_path"
   write_completion_event "$run_dir" "$run_id" "$status" "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
   run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
+  local adapter runs_dir cwd artifacts_dir run_id run_dir command_text started_at started_epoch metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
@@ -502,6 +508,7 @@ start_command() {
 
   command_text=$(quote_command "$@")
   started_at=$(now_system)
+  started_epoch=$(now_epoch)
   codex_session_id=
   if [ "$adapter" = "codex" ]; then
     codex_session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
@@ -518,6 +525,7 @@ start_command() {
     printf 'cwd=%s\n' "$cwd"
     printf 'command=%s\n' "$command_text"
     printf 'started_at=%s\n' "$started_at"
+    printf 'started_epoch=%s\n' "$started_epoch"
     printf 'artifacts_dir=%s\n' "$artifacts_dir"
     if [ -n "$codex_session_id" ]; then
       printf 'codex_session_id=%s\n' "$codex_session_id"
@@ -570,6 +578,37 @@ read_metadata_field() {
   if [ -f "$file" ]; then
     awk -F= -v key="$field" '$1 == key { print substr($0, length(key) + 2); exit }' "$file"
   fi
+}
+
+safe_tsv_field() {
+  printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+short_tsv_field() {
+  printf '%s' "$1" | tr '\t\r\n' '   ' | cut -c 1-96
+}
+
+elapsed_seconds_for_run() {
+  local run_dir status start_epoch end_epoch current_epoch
+  run_dir=$1
+  status=$2
+
+  start_epoch=$(read_metadata_field "$run_dir/metadata.txt" started_epoch)
+  case "$start_epoch" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+
+  if [ "$status" = "RUNNING" ] || [ "$status" = "LOST" ]; then
+    current_epoch=$(now_epoch)
+    printf '%s\n' "$((current_epoch - start_epoch))"
+    return 0
+  fi
+
+  end_epoch=$(read_metadata_field "$run_dir/metadata.txt" finished_epoch)
+  case "$end_epoch" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  printf '%s\n' "$((end_epoch - start_epoch))"
 }
 
 watcher_alive() {
@@ -657,7 +696,7 @@ watcher_root_pid() {
 
 cancel_command() {
   local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id child_pid child_tree_pids child_group_pids watcher_pid watcher_tree_pids watcher_group_pids killed_pids surviving_pids
-  local adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at exit_code was_alive
+  local adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at finished_epoch exit_code was_alive
 
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
   reason="user requested cancellation"
@@ -793,10 +832,12 @@ cancel_command() {
   metadata_path="$run_dir/metadata.txt"
   exit_code=130
   finished_at=$(now_system)
+  finished_epoch=$(now_epoch)
 
   printf '%s\n' "$exit_code" > "$run_dir/exit_code"
   {
     printf 'cancelled_at=%s\n' "$finished_at"
+    printf 'finished_epoch=%s\n' "$finished_epoch"
     printf 'cancel_reason=%s\n' "$reason"
     if [ -n "$watcher_pid" ]; then
       printf 'cancel_watcher_pid=%s\n' "$watcher_pid"
@@ -827,7 +868,7 @@ cancel_command() {
 }
 
 status_command() {
-  local runs_dir run_ref run_dir event_file status exit_code run_id pid_or_job_id
+  local runs_dir run_ref run_dir event_file status exit_code run_id pid_or_job_id command_text started_at elapsed progress_path progress_line
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
 
   while [ "$#" -gt 0 ]; do
@@ -867,6 +908,12 @@ status_command() {
   fi
 
   run_id=$(read_field "$event_file" run_id)
+  command_text=$(read_metadata_field "$run_dir/metadata.txt" command)
+  [ -n "$command_text" ] || command_text=$(read_field "$run_dir/handoff.txt" command)
+  started_at=$(read_metadata_field "$run_dir/metadata.txt" started_at)
+  [ -n "$started_at" ] || started_at=$(read_field "$run_dir/handoff.txt" started_at)
+  elapsed=$(elapsed_seconds_for_run "$run_dir" "$status")
+  progress_path="$run_dir/progress.txt"
   {
     printf 'LMAS_STATUS v1\n'
     printf 'run_id: %s\n' "$run_id"
@@ -878,6 +925,15 @@ status_command() {
     if [ -n "$exit_code" ]; then
       printf 'exit_code: %s\n' "$exit_code"
     fi
+    if [ -n "$started_at" ]; then
+      printf 'started_at: %s\n' "$started_at"
+    fi
+    if [ -n "$elapsed" ]; then
+      printf 'elapsed_seconds: %s\n' "$elapsed"
+    fi
+    if [ -n "$command_text" ]; then
+      printf 'command: %s\n' "$command_text"
+    fi
     printf 'run_dir: %s\n' "$run_dir"
     printf 'stdout: %s\n' "$run_dir/stdout.log"
     printf 'stderr: %s\n' "$run_dir/stderr.log"
@@ -887,11 +943,16 @@ status_command() {
     if [ -f "$run_dir/resume_prompt.txt" ]; then
       printf 'resume_prompt: %s\n' "$run_dir/resume_prompt.txt"
     fi
+    if [ -f "$progress_path" ]; then
+      progress_line=$(tail -n 1 "$progress_path" 2>/dev/null || true)
+      printf 'progress: %s\n' "$progress_line"
+      printf 'progress_path: %s\n' "$progress_path"
+    fi
   }
 }
 
 list_command() {
-  local runs_dir run_dir run_id status exit_code event_file
+  local runs_dir run_dir run_id status exit_code event_file elapsed command_text
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
 
   while [ "$#" -gt 0 ]; do
@@ -911,7 +972,7 @@ list_command() {
     esac
   done
 
-  printf 'run_id\tstatus\texit_code\trun_dir\n'
+  printf 'run_id\tstatus\texit_code\telapsed_seconds\tcommand\trun_dir\n'
   [ -d "$runs_dir" ] || return 0
 
   for run_dir in "$runs_dir"/lmas_*; do
@@ -931,7 +992,10 @@ list_command() {
       exit_code=
     fi
     run_id=$(read_field "$event_file" run_id)
-    printf '%s\t%s\t%s\t%s\n' "$run_id" "$status" "$exit_code" "$run_dir"
+    elapsed=$(elapsed_seconds_for_run "$run_dir" "$status")
+    command_text=$(read_metadata_field "$run_dir/metadata.txt" command)
+    [ -n "$command_text" ] || command_text=$(read_field "$run_dir/handoff.txt" command)
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$run_id" "$status" "$exit_code" "$elapsed" "$(short_tsv_field "$command_text")" "$(safe_tsv_field "$run_dir")"
   done
 }
 

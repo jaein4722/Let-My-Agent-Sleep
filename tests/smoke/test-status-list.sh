@@ -27,6 +27,7 @@ done
 
 [ -f "$RUN_DIR/completion_event.txt" ] || { printf 'missing completion_event.txt\n' >&2; exit 1; }
 [ -f "$CLI_START_RUN_DIR/completion_event.txt" ] || { printf 'missing package cli start completion_event.txt\n' >&2; exit 1; }
+printf 'step=12 loss=0.42\n' > "$RUN_DIR/progress.txt"
 
 STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_ID")
 STATUS_BY_DIR=$(cd "$ROOT" && ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_DIR")
@@ -72,10 +73,18 @@ EOF
 TMUX_LOST_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$TMUX_LOST_RUN_ID")
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^LMAS_STATUS v1$' || { printf 'missing status by id event\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_ID" | grep -q '^status: SUCCEEDED$' || { printf 'status by id did not report SUCCEEDED\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -Eq '^elapsed_seconds: [0-9]+$' || { printf 'status by id missing elapsed_seconds\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^command: './examples/fake_train.sh' 'success'$" || { printf 'status by id missing command\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q '^progress: step=12 loss=0.42$' || { printf 'status by id missing progress\n' >&2; exit 1; }
+printf '%s\n' "$STATUS_BY_ID" | grep -q "^progress_path: $RUN_DIR/progress.txt$" || { printf 'status by id missing progress path\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_DIR" | grep -q "^run_id: $RUN_ID$" || { printf 'status by dir reported wrong run id\n' >&2; exit 1; }
 printf '%s\n' "$STATUS_BY_CLI" | grep -q '^LMAS_STATUS v1$' || { printf 'package cli status did not emit status event\n' >&2; exit 1; }
 printf '%s\n' "$CLI_START_STATUS_BY_CLI" | grep -q '^status: SUCCEEDED$' || { printf 'package cli started run did not report SUCCEEDED\n' >&2; exit 1; }
+grep -Eq '^started_epoch=[0-9]+$' "$RUN_DIR/metadata.txt" || { printf 'metadata missing started_epoch\n' >&2; exit 1; }
+grep -Eq '^finished_epoch=[0-9]+$' "$RUN_DIR/metadata.txt" || { printf 'metadata missing finished_epoch\n' >&2; exit 1; }
+printf '%s\n' "$LIST_OUTPUT" | grep -q $'run_id\tstatus\texit_code\telapsed_seconds\tcommand\trun_dir' || { printf 'list header missing observability columns\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include completed run\n' >&2; exit 1; }
+printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0[[:space:]]*[0-9][0-9]*[[:space:]]*'./examples/fake_train.sh' 'success'" || { printf 'list did not include elapsed command summary\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include package cli started run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_BY_CLI" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'package cli list did not include package cli started run\n' >&2; exit 1; }
