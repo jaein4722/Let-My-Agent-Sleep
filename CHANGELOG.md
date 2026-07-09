@@ -20,6 +20,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `npm run test:syntax` to release and CI gates for shell and JavaScript syntax checks.
 - Added a README handoff demo GIF and native-background-task comparison note.
 - Added package metadata coverage that verifies npm README public site links are backed by generated site files.
+- Added package metadata coverage that verifies root README public links and local site demo assets.
 - Added bounded HTTP timeouts for OpenCode adapter and secondary notification completion paths.
 - Added bounded timeout handling for OpenCode live doctor checks.
 - Added `lmas_info` as an OpenCode plugin diagnostic tool so live doctor checks can detect stale plugin caches more reliably.

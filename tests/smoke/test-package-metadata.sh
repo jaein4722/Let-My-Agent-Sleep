@@ -11,12 +11,14 @@ const root = process.argv[2]
 const pkgPath = path.join(root, "packages/let-my-agent-sleep/package.json")
 const lockPath = path.join(root, "package-lock.json")
 const readmePath = path.join(root, "packages/let-my-agent-sleep/README.md")
+const rootReadmePath = path.join(root, "README.md")
 const rootLicensePath = path.join(root, "LICENSE")
 const packageLicensePath = path.join(root, "packages/let-my-agent-sleep/LICENSE")
 const publicSiteBase = "https://jaein4722.github.io/Let-My-Agent-Sleep/"
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
 const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"))
 const readme = fs.readFileSync(readmePath, "utf8")
+const rootReadme = fs.readFileSync(rootReadmePath, "utf8")
 
 function assert(condition, message) {
   if (!condition) {
@@ -33,25 +35,32 @@ function sitePathForPublicUrl(url) {
   return path.join(root, "site", relative)
 }
 
-function assertReadmeUrlBackedBySiteAsset(url, minBytes) {
-  assert(readme.includes(url), `npm README should include ${url}`)
+function assertReadmeUrlBackedBySiteAsset(label, content, url, minBytes) {
+  assert(content.includes(url), `${label} should include ${url}`)
   const sitePath = sitePathForPublicUrl(url)
-  assert(fs.existsSync(sitePath), `npm README URL is not backed by a site asset: ${url}`)
+  assert(fs.existsSync(sitePath), `${label} URL is not backed by a site asset: ${url}`)
   assert(fs.statSync(sitePath).size >= minBytes, `site asset for ${url} is unexpectedly small`)
 }
 
-function assertReadmePublicUrlsBackedBySite() {
+function assertReadmePublicUrlsBackedBySite(label, content) {
   const urls = new Set()
   const pattern = /https:\/\/jaein4722\.github\.io\/Let-My-Agent-Sleep\/[^\s)"'<>]*/g
-  for (const match of readme.matchAll(pattern)) {
+  for (const match of content.matchAll(pattern)) {
     urls.add(match[0])
   }
-  assert(urls.size > 0, "npm README should include public site URLs")
+  assert(urls.size > 0, `${label} should include public site URLs`)
 
   for (const url of urls) {
     const sitePath = sitePathForPublicUrl(url)
-    assert(fs.existsSync(sitePath), `npm README public URL is not backed by a site file: ${url}`)
+    assert(fs.existsSync(sitePath), `${label} public URL is not backed by a site file: ${url}`)
   }
+}
+
+function assertRootReadmeSiteAsset(relativePath, minBytes) {
+  assert(rootReadme.includes(relativePath), `root README should include ${relativePath}`)
+  const sitePath = path.join(root, relativePath)
+  assert(fs.existsSync(sitePath), `root README local site asset is missing: ${relativePath}`)
+  assert(fs.statSync(sitePath).size >= minBytes, `root README local site asset is unexpectedly small: ${relativePath}`)
 }
 
 assert(pkg.name === "let-my-agent-sleep", "unexpected package name")
@@ -72,9 +81,12 @@ for (const file of ["src", "bin", "skills", "codex-plugin", "claude/let-my-agent
 }
 assert(lock.packages?.["packages/let-my-agent-sleep"]?.version === pkg.version, "package-lock workspace version does not match package.json")
 assert(fs.readFileSync(rootLicensePath, "utf8") === fs.readFileSync(packageLicensePath, "utf8"), "package LICENSE differs from root LICENSE")
-assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
-assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
-assertReadmePublicUrlsBackedBySite()
+assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
+assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
+assertReadmePublicUrlsBackedBySite("npm README", readme)
+assertReadmePublicUrlsBackedBySite("root README", rootReadme)
+assertRootReadmeSiteAsset("site/social-card.png", 10_000)
+assertRootReadmeSiteAsset("site/demo.gif", 10_000)
 
 console.log(`ok package metadata: ${pkg.version}`)
 JS
