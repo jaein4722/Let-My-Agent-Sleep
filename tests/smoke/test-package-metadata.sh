@@ -11,6 +11,8 @@ const root = process.argv[2]
 const pkgPath = path.join(root, "packages/let-my-agent-sleep/package.json")
 const lockPath = path.join(root, "package-lock.json")
 const readmePath = path.join(root, "packages/let-my-agent-sleep/README.md")
+const rootLicensePath = path.join(root, "LICENSE")
+const packageLicensePath = path.join(root, "packages/let-my-agent-sleep/LICENSE")
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
 const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"))
 const readme = fs.readFileSync(readmePath, "utf8")
@@ -20,6 +22,13 @@ function assert(condition, message) {
     console.error(message)
     process.exit(1)
   }
+}
+
+function assertReadmeUrlBackedBySiteAsset(url, minBytes) {
+  assert(readme.includes(url), `npm README should include ${url}`)
+  const sitePath = path.join(root, "site", new URL(url).pathname.replace(/^\/Let-My-Agent-Sleep\//, ""))
+  assert(fs.existsSync(sitePath), `npm README URL is not backed by a site asset: ${url}`)
+  assert(fs.statSync(sitePath).size >= minBytes, `site asset for ${url} is unexpectedly small`)
 }
 
 assert(pkg.name === "let-my-agent-sleep", "unexpected package name")
@@ -39,8 +48,9 @@ for (const file of ["src", "bin", "skills", "codex-plugin", "claude/let-my-agent
   assert(pkg.files?.includes(file), `missing package files entry: ${file}`)
 }
 assert(lock.packages?.["packages/let-my-agent-sleep"]?.version === pkg.version, "package-lock workspace version does not match package.json")
-assert(readme.includes("https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png"), "npm README should use absolute PNG social card URL")
-assert(readme.includes("https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif"), "npm README should use absolute demo GIF URL")
+assert(fs.readFileSync(rootLicensePath, "utf8") === fs.readFileSync(packageLicensePath, "utf8"), "package LICENSE differs from root LICENSE")
+assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
+assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
 
 console.log(`ok package metadata: ${pkg.version}`)
 JS
