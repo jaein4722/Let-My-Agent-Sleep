@@ -36,7 +36,7 @@ const paths = {
 function usage() {
   console.log(`Usage:
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
-  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>]
+  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--server-username <name>] [--server-password <password>]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
@@ -54,6 +54,10 @@ Options:
                    Do not modify Oh My OpenAgent disabled_hooks during OpenCode install.
   --server-url <url>
                    During OpenCode doctor, also verify the live server exposes lmas tools.
+  --server-username <name>
+                   Basic-auth username for OpenCode live doctor. Default: LMAS_OPENCODE_USERNAME, OPENCODE_SERVER_USERNAME, or opencode.
+  --server-password <password>
+                   Basic-auth password for OpenCode live doctor. Default: LMAS_OPENCODE_PASSWORD or OPENCODE_SERVER_PASSWORD.
   --help, -h        Show this help.
 `)
 }
@@ -81,6 +85,8 @@ function parseArgs(argv) {
     disableOmoContinuation: false,
     keepOmoContinuation: false,
     serverUrl: "",
+    serverUsername: "",
+    serverPassword: "",
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -119,6 +125,28 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--server-url=")) {
       options.serverUrl = arg.slice("--server-url=".length)
+      continue
+    }
+    if (arg === "--server-username") {
+      const value = argv[index + 1]
+      if (!value) throw new Error("--server-username requires a value")
+      options.serverUsername = value
+      index += 1
+      continue
+    }
+    if (arg.startsWith("--server-username=")) {
+      options.serverUsername = arg.slice("--server-username=".length)
+      continue
+    }
+    if (arg === "--server-password") {
+      const value = argv[index + 1]
+      if (!value) throw new Error("--server-password requires a value")
+      options.serverPassword = value
+      index += 1
+      continue
+    }
+    if (arg.startsWith("--server-password=")) {
+      options.serverPassword = arg.slice("--server-password=".length)
       continue
     }
     if (arg === "--agent") {
@@ -1034,13 +1062,29 @@ function liveToolIDsUrl(serverUrl) {
   return new URL("/experimental/tool/ids", base)
 }
 
-async function doctorOpenCodeLiveTools(serverUrl) {
+function openCodeAuthHeaders(options) {
+  const password = options.serverPassword || process.env.LMAS_OPENCODE_PASSWORD || process.env.OPENCODE_SERVER_PASSWORD || ""
+  if (!password) return undefined
+
+  const username = options.serverUsername || process.env.LMAS_OPENCODE_USERNAME || process.env.OPENCODE_SERVER_USERNAME || "opencode"
+  const token = Buffer.from(`${username}:${password}`).toString("base64")
+  return { Authorization: `Basic ${token}` }
+}
+
+async function doctorOpenCodeLiveTools(options) {
   const requiredTools = ["lmas_start", "lmas_status", "lmas_cancel"]
+  const serverUrl = options.serverUrl
   let response
   try {
-    response = await fetch(liveToolIDsUrl(serverUrl))
+    response = await fetch(liveToolIDsUrl(serverUrl), {
+      headers: openCodeAuthHeaders(options),
+    })
   } catch (error) {
     return doctorFail(`OpenCode server is unreachable at ${serverUrl}: ${error.message}`)
+  }
+
+  if (response.status === 401) {
+    return doctorFail(`OpenCode server rejected live doctor authentication at ${serverUrl}; pass --server-password or set LMAS_OPENCODE_PASSWORD`)
   }
 
   if (!response.ok) {
@@ -1164,7 +1208,7 @@ async function doctorOpenCode(options) {
   }
 
   if (options.serverUrl) {
-    healthy = await doctorOpenCodeLiveTools(options.serverUrl) && healthy
+    healthy = await doctorOpenCodeLiveTools(options) && healthy
   } else {
     doctorWarn("live OpenCode tool check skipped; pass --server-url http://127.0.0.1:4096 to verify loaded tools")
   }

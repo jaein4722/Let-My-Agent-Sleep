@@ -29,6 +29,7 @@ Environment:
   LMAS_RUNS_DIR
   LMAS_OPENCODE_SERVER_URL   Default: http://127.0.0.1:4096
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
+  LMAS_OPENCODE_USERNAME     Optional basic-auth username. Default: OPENCODE_SERVER_USERNAME or opencode
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
   LMAS_CODEX_SESSION_ID      Preferred for codex adapter; CODEX_THREAD_ID is also used when available
   LMAS_CLAUDE_SESSION_ID     Preferred for claude adapter exact resume
@@ -186,12 +187,13 @@ write_resume_prompt() {
 }
 
 run_opencode_adapter() {
-  local run_dir prompt_file server_url session_id password endpoint payload escaped
+  local run_dir prompt_file server_url session_id username password endpoint payload escaped
   run_dir=$1
   prompt_file=$2
   server_url=${LMAS_OPENCODE_SERVER_URL:-http://127.0.0.1:4096}
   session_id=${LMAS_OPENCODE_SESSION_ID:-}
-  password=${LMAS_OPENCODE_PASSWORD:-}
+  username=${LMAS_OPENCODE_USERNAME:-${OPENCODE_SERVER_USERNAME:-opencode}}
+  password=${LMAS_OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}
 
   if [ -z "$session_id" ]; then
     printf 'opencode adapter skipped: LMAS_OPENCODE_SESSION_ID is empty\n' > "$run_dir/adapter.log"
@@ -204,7 +206,7 @@ run_opencode_adapter() {
 
   if [ -n "$password" ]; then
     curl -fsS -X POST "$endpoint" \
-      -u ":$password" \
+      -u "$username:$password" \
       -H 'content-type: application/json' \
       --data "$payload" > "$run_dir/adapter.log" 2>&1 || {
         printf '\nopencode adapter failed for %s\n' "$endpoint" >> "$run_dir/adapter.log"

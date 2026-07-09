@@ -24,8 +24,12 @@ Optional:
 
 ```bash
 export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:4096
+export LMAS_OPENCODE_USERNAME=opencode
 export LMAS_OPENCODE_PASSWORD=<basic-auth-password>
 ```
+
+If `LMAS_OPENCODE_USERNAME` is not set, LMAS uses `OPENCODE_SERVER_USERNAME` or `opencode`.
+If `LMAS_OPENCODE_PASSWORD` is not set, LMAS uses `OPENCODE_SERVER_PASSWORD` when present.
 
 On completion, the watcher posts `resume_prompt.txt` to:
 

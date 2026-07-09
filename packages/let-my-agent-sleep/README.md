@@ -159,6 +159,7 @@ lmas list
 lmas cancel <run_id>
 lmas doctor --agent opencode
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096
+LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.

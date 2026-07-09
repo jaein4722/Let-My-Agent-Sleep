@@ -9,17 +9,25 @@ REQUEST_LOG="$TMPDIR_ROOT/request.log"
 
 python3 - "$PORT_FILE" "$REQUEST_LOG" <<'PY' &
 import http.server
+import base64
 import socketserver
 import sys
 
 port_file, request_log = sys.argv[1], sys.argv[2]
+expected_auth = "Basic " + base64.b64encode(b"opencode:s3cr3t").decode("ascii")
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
+        if self.headers.get("authorization") != expected_auth:
+            self.send_response(401)
+            self.send_header("www-authenticate", 'Basic realm="Secure Area"')
+            self.end_headers()
+            return
         length = int(self.headers.get("content-length", "0"))
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         with open(request_log, "w", encoding="utf-8") as handle:
             handle.write(self.path + "\n")
+            handle.write(self.headers.get("authorization", "") + "\n")
             handle.write(body)
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -44,7 +52,7 @@ done
 [ -f "$PORT_FILE" ] || { printf 'fake server did not start\n' >&2; exit 1; }
 PORT=$(cat "$PORT_FILE")
 
-OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_OPENCODE_SESSION_ID="session-123" LMAS_OPENCODE_SERVER_URL="http://127.0.0.1:$PORT" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter opencode -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_OPENCODE_SESSION_ID="session-123" LMAS_OPENCODE_SERVER_URL="http://127.0.0.1:$PORT" LMAS_OPENCODE_PASSWORD="s3cr3t" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter opencode -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
@@ -57,6 +65,7 @@ wait "$SERVER_PID"
 
 [ -f "$REQUEST_LOG" ] || { printf 'adapter did not call fake server\n' >&2; exit 1; }
 grep -q '^/session/session-123/prompt_async$' "$REQUEST_LOG" || { printf 'unexpected adapter endpoint\n' >&2; exit 1; }
+grep -q '^Basic b3BlbmNvZGU6czNjcjN0$' "$REQUEST_LOG" || { printf 'adapter did not use expected opencode basic auth header\n' >&2; exit 1; }
 grep -q 'LMAS_COMPLETION_EVENT v1' "$REQUEST_LOG" || { printf 'missing completion event in adapter payload\n' >&2; exit 1; }
 grep -q '^status: SUCCEEDED$' "$RUN_DIR/completion_event.txt" || { printf 'expected SUCCEEDED\n' >&2; exit 1; }
 printf 'ok opencode adapter: %s\n' "$RUN_ID"

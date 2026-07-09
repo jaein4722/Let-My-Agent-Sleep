@@ -35,6 +35,7 @@ cat > "$SERVER_DIR/server.mjs" <<'JS'
 import http from "node:http"
 
 const mode = process.argv[2]
+const expectedAuth = `Basic ${Buffer.from("opencode:s3cr3t").toString("base64")}`
 const server = http.createServer((request, response) => {
   if (request.url !== "/experimental/tool/ids") {
     response.writeHead(404, { "content-type": "application/json" })
@@ -42,7 +43,14 @@ const server = http.createServer((request, response) => {
     return
   }
 
+  if (mode === "auth-ok" && request.headers.authorization !== expectedAuth) {
+    response.writeHead(401, { "www-authenticate": "Basic realm=\"Secure Area\"" })
+    response.end()
+    return
+  }
+
   const tools = mode === "ok"
+    || mode === "auth-ok"
     ? ["bash", "lmas_start", "lmas_status", "lmas_cancel"]
     : ["bash", "lmas_status"]
   response.writeHead(200, { "content-type": "application/json" })
@@ -66,6 +74,49 @@ SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
 LIVE_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$SERVER_URL" --yes)
 printf '%s\n' "$LIVE_DOCTOR_OUTPUT" | grep -q 'OpenCode live server exposes LMAS tools' || {
   printf 'doctor did not verify live OpenCode tools\n%s\n' "$LIVE_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
+rm -f "$SERVER_DIR/port"
+
+node "$SERVER_DIR/server.mjs" auth-ok > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+AUTH_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+
+AUTH_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$AUTH_SERVER_URL" --server-password "s3cr3t" --yes)
+printf '%s\n' "$AUTH_DOCTOR_OUTPUT" | grep -q 'OpenCode live server exposes LMAS tools' || {
+  printf 'doctor did not verify authenticated live OpenCode tools\n%s\n' "$AUTH_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+wait "$SERVER_PID" >/dev/null 2>&1 || true
+SERVER_PID=""
+rm -f "$SERVER_DIR/port"
+
+node "$SERVER_DIR/server.mjs" auth-ok > "$SERVER_DIR/port" &
+SERVER_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$SERVER_DIR/port" ] && break
+  sleep 0.1
+done
+AUTH_FAIL_SERVER_URL="http://127.0.0.1:$(cat "$SERVER_DIR/port")"
+AUTH_FAIL_OUTPUT="$SERVER_DIR/auth-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --server-url "$AUTH_FAIL_SERVER_URL" --yes >"$AUTH_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when authenticated OpenCode server is checked without password\n' >&2
+  cat "$AUTH_FAIL_OUTPUT" >&2
+  exit 1
+fi
+grep -q 'rejected live doctor authentication' "$AUTH_FAIL_OUTPUT" || {
+  printf 'doctor auth failure did not explain missing server password\n' >&2
+  cat "$AUTH_FAIL_OUTPUT" >&2
   exit 1
 }
 
