@@ -716,7 +716,7 @@ elapsed_seconds_for_run() {
     ''|*[!0-9]*) return 0 ;;
   esac
 
-  if [ "$status" = "RUNNING" ] || [ "$status" = "LOST" ]; then
+  if [ "$status" = "RUNNING" ] || [ "$status" = "LOST" ] || [ "$status" = "FINALIZING" ]; then
     current_epoch=$(now_epoch)
     printf '%s\n' "$((current_epoch - start_epoch))"
     return 0
@@ -1021,13 +1021,18 @@ status_command() {
   run_ref=$1
   run_dir=$(resolve_run_dir "$runs_dir" "$run_ref") || die "run not found: $run_ref"
 
-  if event_file=$(completion_event_file "$run_dir"); then
+  if [ -f "$run_dir/completion_event.txt" ]; then
+    event_file="$run_dir/completion_event.txt"
     status=$(read_field "$event_file" status)
     exit_code=$(read_field "$event_file" exit_code)
-  elif [ -f "$run_dir/exit_code" ]; then
+  elif [ -f "$run_dir/exit_code" ] || [ -f "$run_dir/.completion_event.txt" ]; then
     event_file="$run_dir/handoff.txt"
     [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
-    exit_code=$(sed -n '1p' "$run_dir/exit_code")
+    if [ -f "$run_dir/exit_code" ]; then
+      exit_code=$(sed -n '1p' "$run_dir/exit_code")
+    else
+      exit_code=$(read_field "$run_dir/.completion_event.txt" exit_code)
+    fi
     status=FINALIZING
   else
     event_file="$run_dir/handoff.txt"
@@ -1118,13 +1123,18 @@ list_command() {
 
   for run_dir in "$runs_dir"/lmas_*; do
     [ -d "$run_dir" ] || continue
-    if event_file=$(completion_event_file "$run_dir"); then
+    if [ -f "$run_dir/completion_event.txt" ]; then
+      event_file="$run_dir/completion_event.txt"
       status=$(read_field "$event_file" status)
       exit_code=$(read_field "$event_file" exit_code)
-    elif [ -f "$run_dir/exit_code" ]; then
+    elif [ -f "$run_dir/exit_code" ] || [ -f "$run_dir/.completion_event.txt" ]; then
       event_file="$run_dir/handoff.txt"
       [ -f "$event_file" ] || continue
-      exit_code=$(sed -n '1p' "$run_dir/exit_code")
+      if [ -f "$run_dir/exit_code" ]; then
+        exit_code=$(sed -n '1p' "$run_dir/exit_code")
+      else
+        exit_code=$(read_field "$run_dir/.completion_event.txt" exit_code)
+      fi
       status=FINALIZING
     else
       event_file="$run_dir/handoff.txt"

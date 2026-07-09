@@ -48,6 +48,19 @@ resume_instruction: Wait for completion event or inspect $FINALIZING_RUN_DIR/res
 EOF
 printf 'run_id=%s\nadapter=noop\ncwd=%s\ncommand=%s\nstarted_epoch=1\nartifacts_dir=%s\n' "$FINALIZING_RUN_ID" "$ROOT" "'sleep' '0'" "$FINALIZING_RUN_DIR" > "$FINALIZING_RUN_DIR/metadata.txt"
 printf '0\n' > "$FINALIZING_RUN_DIR/exit_code"
+cat > "$FINALIZING_RUN_DIR/.completion_event.txt" <<EOF
+LMAS_COMPLETION_EVENT v1
+run_id: $FINALIZING_RUN_ID
+status: SUCCEEDED
+exit_code: 0
+cwd: $ROOT
+command: 'sleep' '0'
+stdout: $FINALIZING_RUN_DIR/stdout.log
+stderr: $FINALIZING_RUN_DIR/stderr.log
+metadata: $FINALIZING_RUN_DIR/metadata.txt
+artifacts_dir: $FINALIZING_RUN_DIR
+finished_at: 2026-07-01T00:00:01Z
+EOF
 
 STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_ID")
 STATUS_BY_DIR=$(cd "$ROOT" && ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_DIR")

@@ -58,6 +58,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed completion event publishing so `resume_prompt.txt` is ready before `completion_event.txt` appears.
 - Fixed finalizing run handling so status/list report `FINALIZING` and cancel does not kill a job that has already exited.
 - Fixed protocol and skill documentation for `FINALIZING` so agents treat it as a stop-and-wait state.
+- Fixed status/list handling so staged `.completion_event.txt` files remain `FINALIZING` until the public completion event is published.
 
 ## 0.2.6 and earlier
 
