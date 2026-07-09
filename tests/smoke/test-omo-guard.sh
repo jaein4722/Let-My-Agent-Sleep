@@ -739,6 +739,39 @@ if (getActiveOmoGuard(completionOnlyGuards, "ses_test", 6002)) {
   throw new Error("did not expect tool guard after transform-visible completion")
 }
 
+const unrelatedCompletionGuards = new Map()
+updateSessionGuardFromText(
+  unrelatedCompletionGuards,
+  "ses_unrelated_completion",
+  "LMAS_HANDOFF v1\nrun_id: lmas_unrelated_completion_active\nstatus: STARTED",
+  6005,
+  { omoTurn: true },
+)
+const unrelatedCompletionOutput = {
+  messages: [
+    message(
+      "assistant",
+      "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_unrelated_completion_other\nstatus: SUCCEEDED",
+      "unrelated_completion",
+      "ses_unrelated_completion",
+    ),
+    message(
+      "user",
+      "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "omo_after_unrelated_completion",
+      "ses_unrelated_completion",
+    ),
+  ],
+}
+unrelatedCompletionOutput.messages[1].parts[0].synthetic = true
+const unrelatedCompletionState = applyOmoContinuationGuard(unrelatedCompletionOutput, unrelatedCompletionGuards, 6006)
+if (!unrelatedCompletionState.active) {
+  throw new Error("did not expect unrelated transform-visible completion to clear active handoff")
+}
+if (!unrelatedCompletionOutput.messages[1].parts[0].text.includes("lmas_unrelated_completion_active")) {
+  throw new Error("expected guard to remain on active run after unrelated transform-visible completion")
+}
+
 const cancelOnlyGuards = new Map()
 updateSessionGuardFromText(
   cancelOnlyGuards,
@@ -773,6 +806,39 @@ if (cancelOnlyOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HAN
 }
 if (getActiveOmoGuard(cancelOnlyGuards, "ses_cancel_only", 6012)) {
   throw new Error("did not expect tool guard after transform-visible cancel")
+}
+
+const unrelatedCancelGuards = new Map()
+updateSessionGuardFromText(
+  unrelatedCancelGuards,
+  "ses_unrelated_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_unrelated_cancel_active\nstatus: STARTED",
+  6015,
+  { omoTurn: true },
+)
+const unrelatedCancelOutput = {
+  messages: [
+    message(
+      "assistant",
+      "LMAS_CANCEL v1\nrun_id: lmas_unrelated_cancel_other\nstatus: CANCELLED",
+      "unrelated_cancel",
+      "ses_unrelated_cancel",
+    ),
+    message(
+      "user",
+      "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "omo_after_unrelated_cancel",
+      "ses_unrelated_cancel",
+    ),
+  ],
+}
+unrelatedCancelOutput.messages[1].parts[0].synthetic = true
+const unrelatedCancelState = applyOmoContinuationGuard(unrelatedCancelOutput, unrelatedCancelGuards, 6016)
+if (!unrelatedCancelState.active) {
+  throw new Error("did not expect unrelated transform-visible cancel to clear active handoff")
+}
+if (!unrelatedCancelOutput.messages[1].parts[0].text.includes("lmas_unrelated_cancel_active")) {
+  throw new Error("expected guard to remain on active run after unrelated transform-visible cancel")
 }
 
 const deletedSessionGuards = new Map()
@@ -944,6 +1010,31 @@ updateSessionGuardFromEvent(eventCancelGuards, eventCancelBuffers, {
 }, 7067)
 if (getActiveOmoGuard(eventCancelGuards, "ses_event_cancel", 7068)) {
   throw new Error("expected event-visible LMAS_CANCEL to clear run guard")
+}
+
+const unrelatedEventCancelGuards = new Map()
+const unrelatedEventCancelBuffers = new Map()
+updateSessionGuardFromText(
+  unrelatedEventCancelGuards,
+  "ses_unrelated_event_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_unrelated_event_cancel_active\nstatus: STARTED",
+  7069,
+  { omoTurn: true },
+)
+updateSessionGuardFromEvent(unrelatedEventCancelGuards, unrelatedEventCancelBuffers, {
+  type: "message.updated",
+  properties: {
+    message: message(
+      "assistant",
+      "LMAS_CANCEL v1\nrun_id: lmas_unrelated_event_cancel_other\nstatus: CANCELLED",
+      "unrelated_event_cancel_message",
+      "ses_unrelated_event_cancel",
+    ),
+  },
+}, 70695)
+const unrelatedEventCancelGuard = getActiveOmoGuard(unrelatedEventCancelGuards, "ses_unrelated_event_cancel", 70696)
+if (!unrelatedEventCancelGuard?.runIds?.includes("lmas_unrelated_event_cancel_active")) {
+  throw new Error("did not expect unrelated event-visible LMAS_CANCEL to clear active run guard")
 }
 
 const negatedEventCancelGuards = new Map()

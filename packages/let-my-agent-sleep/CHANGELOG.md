@@ -14,6 +14,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added smoke coverage for packaged assets, packed tarball CLI behavior, OpenCode plugin imports, OMO handoff guards, live doctor checks, and install idempotency.
 - Added cancel process-group cleanup, KILL fallback, and `cancel_surviving_pids` metadata when cancellation cannot fully terminate a process.
 - Added smoke coverage proving adapter failures leave `resume_prompt.txt` available and keep the completed run status intact.
+- Added guard regression coverage proving unrelated completion and cancel events do not clear active handoffs.
 - Added `elapsed_seconds`, command summaries, and optional `progress.txt` status reporting for explicit user-requested observability without polling.
 - Added secondary completion notification with `--notify <url>` and `LMAS_NOTIFY_URL`, including adapter-failure smoke coverage.
 - Added `npm run test:syntax` to release and CI gates for shell and JavaScript syntax checks.
