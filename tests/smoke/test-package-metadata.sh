@@ -13,6 +13,7 @@ const lockPath = path.join(root, "package-lock.json")
 const readmePath = path.join(root, "packages/let-my-agent-sleep/README.md")
 const rootLicensePath = path.join(root, "LICENSE")
 const packageLicensePath = path.join(root, "packages/let-my-agent-sleep/LICENSE")
+const publicSiteBase = "https://jaein4722.github.io/Let-My-Agent-Sleep/"
 const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
 const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"))
 const readme = fs.readFileSync(readmePath, "utf8")
@@ -24,11 +25,33 @@ function assert(condition, message) {
   }
 }
 
+function sitePathForPublicUrl(url) {
+  const parsed = new URL(url)
+  assert(parsed.href.startsWith(publicSiteBase), `unexpected public site URL: ${url}`)
+  let relative = parsed.pathname.replace(/^\/Let-My-Agent-Sleep\/?/, "")
+  if (relative === "" || relative.endsWith("/")) relative = path.join(relative, "index.html")
+  return path.join(root, "site", relative)
+}
+
 function assertReadmeUrlBackedBySiteAsset(url, minBytes) {
   assert(readme.includes(url), `npm README should include ${url}`)
-  const sitePath = path.join(root, "site", new URL(url).pathname.replace(/^\/Let-My-Agent-Sleep\//, ""))
+  const sitePath = sitePathForPublicUrl(url)
   assert(fs.existsSync(sitePath), `npm README URL is not backed by a site asset: ${url}`)
   assert(fs.statSync(sitePath).size >= minBytes, `site asset for ${url} is unexpectedly small`)
+}
+
+function assertReadmePublicUrlsBackedBySite() {
+  const urls = new Set()
+  const pattern = /https:\/\/jaein4722\.github\.io\/Let-My-Agent-Sleep\/[^\s)"'<>]*/g
+  for (const match of readme.matchAll(pattern)) {
+    urls.add(match[0])
+  }
+  assert(urls.size > 0, "npm README should include public site URLs")
+
+  for (const url of urls) {
+    const sitePath = sitePathForPublicUrl(url)
+    assert(fs.existsSync(sitePath), `npm README public URL is not backed by a site file: ${url}`)
+  }
 }
 
 assert(pkg.name === "let-my-agent-sleep", "unexpected package name")
@@ -51,6 +74,7 @@ assert(lock.packages?.["packages/let-my-agent-sleep"]?.version === pkg.version, 
 assert(fs.readFileSync(rootLicensePath, "utf8") === fs.readFileSync(packageLicensePath, "utf8"), "package LICENSE differs from root LICENSE")
 assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
 assertReadmeUrlBackedBySiteAsset("https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
+assertReadmePublicUrlsBackedBySite()
 
 console.log(`ok package metadata: ${pkg.version}`)
 JS
