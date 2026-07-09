@@ -20,6 +20,7 @@ tests=(
   tests/smoke/test-installer-dry-run.sh
   tests/smoke/test-idempotent-install.sh
   tests/smoke/test-opencode-legacy-cleanup.sh
+  tests/smoke/test-package-metadata.sh
   tests/smoke/test-packaged-assets.sh
   tests/smoke/test-packed-tarball-cli.sh
 )

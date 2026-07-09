@@ -1,8 +1,8 @@
 {
   "name": "let-my-agent-sleep",
   "version": "0.2.7",
-  "description": "Let My Agent Sleep: OpenCode plugin and installer for handoff workflows for long-running agent jobs.",
-  "homepage": "https://github.com/jaein4722/Let-My-Agent-Sleep#readme",
+  "description": "Start long-running agent jobs, stop polling, and resume supported OpenCode, Codex, and Claude Code sessions when they finish.",
+  "homepage": "https://jaein4722.github.io/Let-My-Agent-Sleep/",
   "bugs": {
     "url": "https://github.com/jaein4722/Let-My-Agent-Sleep/issues"
   },

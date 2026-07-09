@@ -22,6 +22,7 @@ Update `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` for the rel
 Run the local checks:
 
 ```bash
+npm run test:site
 npm run test:smoke
 npm run pack
 git diff --check
