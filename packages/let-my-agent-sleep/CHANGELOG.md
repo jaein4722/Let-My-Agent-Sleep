@@ -60,6 +60,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed protocol and skill documentation for `FINALIZING` so agents treat it as a stop-and-wait state.
 - Fixed status/list handling so staged `.completion_event.txt` files remain `FINALIZING` until the public completion event is published.
 - Fixed OpenCode guard handling so `FINALIZING` status keeps continuation tools blocked like `RUNNING`.
+- Fixed `lmas cancel` output so finalizing runs include the documented explanatory message.
 
 ## 0.2.6 and earlier
 

@@ -854,6 +854,9 @@ cancel_command() {
       write_line_field status ALREADY_COMPLETED
       write_line_field existing_status "$existing_status"
       write_line_field run_dir "$run_dir"
+      if [ "$event_file" = "$run_dir/.completion_event.txt" ]; then
+        write_line_field message "job has already exited; completion event is finalizing"
+      fi
     }
     return 0
   fi
@@ -926,6 +929,9 @@ cancel_command() {
         write_line_field status ALREADY_COMPLETED
         write_line_field existing_status "$existing_status"
         write_line_field run_dir "$run_dir"
+        if [ "$event_file" = "$run_dir/.completion_event.txt" ]; then
+          write_line_field message "job has already exited; completion event is finalizing"
+        fi
       }
       return 0
     fi
@@ -943,6 +949,9 @@ cancel_command() {
       write_line_field status ALREADY_COMPLETED
       write_line_field existing_status "$existing_status"
       write_line_field run_dir "$run_dir"
+      if [ "$event_file" = "$run_dir/.completion_event.txt" ]; then
+        write_line_field message "job has already exited; completion event is finalizing"
+      fi
     }
     return 0
   fi

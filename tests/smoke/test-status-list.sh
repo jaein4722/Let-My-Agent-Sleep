@@ -146,6 +146,7 @@ printf '%s\n' "$FINALIZING_STATUS" | grep -q '^status: FINALIZING$' || { printf 
 printf '%s\n' "$FINALIZING_STATUS" | grep -q '^agent_instruction: stop now;' || { printf 'finalizing status did not include no-poll instruction\n' >&2; exit 1; }
 printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^status: ALREADY_COMPLETED$' || { printf 'finalizing cancel did not avoid killing completed run\n' >&2; exit 1; }
 printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^existing_status: SUCCEEDED$' || { printf 'finalizing cancel did not derive succeeded status\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^message: job has already exited; completion event is finalizing$' || { printf 'finalizing cancel did not explain finalizing state\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$FINALIZING_RUN_ID[[:space:]]*FINALIZING[[:space:]]*0" || { printf 'list did not include finalizing run\n' >&2; exit 1; }
 if printf '%s\n' "$LIST_OUTPUT" | grep -q "$MALFORMED_RUN_ID"; then
   printf 'list should skip malformed run dir without handoff\n' >&2
