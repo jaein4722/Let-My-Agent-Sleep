@@ -72,6 +72,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createOpencodeClient } from "@opencode-ai/sdk"
 import { LetMyAgentSleepPlugin, findLmasScript, installFetchPromptInjectionGuard } from "./packages/let-my-agent-sleep/src/index.js"
+import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-constants.js"
 
 function message(role, text, id, sessionID = "plugin_guard_session") {
   return {
@@ -1252,7 +1253,7 @@ if (
   throw new Error("expected command hook to neutralize known OMO ralph-loop command during active LMAS handoff")
 }
 
-for (const command of ["todo-continuation-enforcer", "ulw-loop", "ultrawork", "start-work-continuation", "boulder-continuation", "unstable-agent-babysitter", "atlas"]) {
+for (const command of omoContinuationHooks.filter((hook) => hook !== "ralph-loop")) {
   const knownContinuationCommandOutput = {
     parts: [{
       type: "text",

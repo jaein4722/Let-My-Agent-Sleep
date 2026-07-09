@@ -15,6 +15,7 @@ import {
   updateSessionGuardFromStatusText,
   updateSessionGuardFromText,
 } from "./omo-guard.js"
+import { omoContinuationHooks } from "./omo-constants.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
@@ -323,15 +324,7 @@ function isCancelTool(toolName) {
 
 function isOmoContinuationCommand(command) {
   const normalized = normalizeToolName(command)
-  return normalized === "todo-continuation-enforcer"
-    || normalized === "start-work"
-    || normalized === "start-work-continuation"
-    || normalized === "ralph-loop"
-    || normalized === "ulw-loop"
-    || normalized === "ultrawork"
-    || normalized === "boulder-continuation"
-    || normalized === "unstable-agent-babysitter"
-    || normalized === "atlas"
+  return normalized === "start-work" || omoContinuationHooks.includes(normalized)
 }
 
 function collectPermissionText(value, chunks = []) {

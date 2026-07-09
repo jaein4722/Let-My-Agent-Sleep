@@ -6,6 +6,7 @@ import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, re
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
+import { omoContinuationHooks } from "../src/omo-constants.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
@@ -19,17 +20,6 @@ const openCodeHiddenCrossAgentSkills = [
   legacyCodexSkillName,
   legacyClaudeSkillName,
 ]
-const omoContinuationHooks = [
-  "todo-continuation-enforcer",
-  "ralph-loop",
-  "ulw-loop",
-  "ultrawork",
-  "start-work-continuation",
-  "boulder-continuation",
-  "unstable-agent-babysitter",
-  "atlas",
-]
-
 const paths = {
   openCodeSkill: join(packageRoot, "skills", "let-my-agent-sleep", "SKILL.md"),
   codexPlugin: join(packageRoot, "codex-plugin", "let-my-agent-sleep"),

@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 MOCK_BIN=$(mktemp -d "${TMPDIR:-/tmp}/lmas-detected-bin.XXXXXX")
 TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-installer-dry-home.XXXXXX")
 trap 'rm -rf "$MOCK_BIN" "$TMP_HOME"' EXIT
-EXPECTED_OMO_HOOKS="todo-continuation-enforcer ralph-loop ulw-loop ultrawork start-work-continuation boulder-continuation unstable-agent-babysitter atlas"
+EXPECTED_OMO_HOOKS=$(cd "$ROOT" && node --input-type=module -e 'import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-constants.js"; console.log(omoContinuationHooks.join(" "))')
 
 assert_output_mentions_omo_hooks() {
   output=$1
