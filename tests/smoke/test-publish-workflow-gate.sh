@@ -7,15 +7,37 @@ trap 'rm -rf "$TMPDIR_ROOT"' EXIT
 
 cd "$ROOT" || exit 1
 
+LOCAL_VERSION=$(node -p "require('./packages/let-my-agent-sleep/package.json').version")
+LOWER_VERSION=$(node - "$LOCAL_VERSION" <<'JS'
+const version = process.argv[2]
+const match = /^(\d+)\.(\d+)\.(\d+)([-+].*)?$/.exec(version)
+if (!match) {
+  throw new Error(`unsupported test version: ${version}`)
+}
+const major = Number(match[1])
+const minor = Number(match[2])
+const patch = Number(match[3])
+if (patch > 0) {
+  console.log(`${major}.${minor}.${patch - 1}`)
+} else if (minor > 0) {
+  console.log(`${major}.${minor - 1}.999`)
+} else if (major > 0) {
+  console.log(`${major - 1}.999.999`)
+} else {
+  throw new Error(`cannot derive lower version for ${version}`)
+}
+JS
+)
+
 extract_gate_script() {
   publish_needed=$1
   target=$2
 
-  python3 - "$publish_needed" "$target" <<'PY'
+  python3 - "$publish_needed" "$target" "$LOCAL_VERSION" <<'PY'
 from pathlib import Path
 import sys
 
-publish_needed, target = sys.argv[1:]
+publish_needed, target, local_version = sys.argv[1:]
 workflow = Path(".github/workflows/publish.yml").read_text()
 lines = workflow.splitlines()
 
@@ -49,7 +71,7 @@ for line in lines[run_start:]:
         raise SystemExit(f"unexpected indentation in release gate run block: {line!r}")
 
 script = "\n".join(block)
-script = script.replace("${{ steps.release.outputs.version }}", "0.2.7")
+script = script.replace("${{ steps.release.outputs.version }}", local_version)
 script = script.replace("${{ steps.release.outputs.publish_needed }}", publish_needed)
 Path(target).write_text(script + "\n")
 PY
@@ -77,18 +99,13 @@ PATH="$MOCK_BIN:$PATH" bash "$FALSE_SCRIPT"
 
 cat > "$MOCK_BIN/npm" <<'SH'
 #!/usr/bin/env sh
-echo 0.2.6
+printf '%s\n' "$LMAS_TEST_NPM_VERSION"
 SH
 chmod +x "$MOCK_BIN/npm"
-PATH="$MOCK_BIN:$PATH" bash "$TRUE_SCRIPT"
+LMAS_TEST_NPM_VERSION="$LOWER_VERSION" PATH="$MOCK_BIN:$PATH" bash "$TRUE_SCRIPT"
 
-cat > "$MOCK_BIN/npm" <<'SH'
-#!/usr/bin/env sh
-echo 0.2.7
-SH
-chmod +x "$MOCK_BIN/npm"
 SAME_VERSION_OUTPUT="$TMPDIR_ROOT/same-version.out"
-if PATH="$MOCK_BIN:$PATH" bash "$TRUE_SCRIPT" >"$SAME_VERSION_OUTPUT" 2>&1; then
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" PATH="$MOCK_BIN:$PATH" bash "$TRUE_SCRIPT" >"$SAME_VERSION_OUTPUT" 2>&1; then
   printf 'publish gate should fail when publish_needed=true and npm latest equals local version\n' >&2
   cat "$SAME_VERSION_OUTPUT" >&2
   exit 1
