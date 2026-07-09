@@ -1147,6 +1147,26 @@ if (
   throw new Error("expected command hook to neutralize known OMO ralph-loop command during active LMAS handoff")
 }
 
+for (const command of ["ulw-loop", "ultrawork", "start-work-continuation", "boulder-continuation", "atlas"]) {
+  const knownContinuationCommandOutput = {
+    parts: [{
+      type: "text",
+      text: `You are starting ${command}.`,
+    }],
+  }
+  await plugin["command.execute.before"](
+    { command, arguments: "continue", sessionID },
+    knownContinuationCommandOutput,
+  )
+  if (
+    knownContinuationCommandOutput.parts.length !== 1
+    || !knownContinuationCommandOutput.parts[0].text.includes("LMAS handoff is active")
+    || knownContinuationCommandOutput.parts[0].metadata?.lmas_guard !== true
+  ) {
+    throw new Error(`expected command hook to neutralize known OMO ${command} command during active LMAS handoff`)
+  }
+}
+
 const lateOmoCommandOutput = {
   parts: [{
     type: "text",

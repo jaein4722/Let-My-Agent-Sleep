@@ -28,7 +28,7 @@ TMP_PLUGIN_ORDER_KEEP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-plugin-order-keep-h
 TMP_MODE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-mode-home.XXXXXX")
 TMP_CODEX_HOME_OVERRIDE=$(mktemp -d "${TMPDIR:-/tmp}/lmas-codex-home.XXXXXX")
 PACKAGE_VERSION=$(cd "$ROOT" && node -p "require('./packages/let-my-agent-sleep/package.json').version")
-EXPECTED_OMO_HOOKS="todo-continuation-enforcer ralph-loop atlas"
+EXPECTED_OMO_HOOKS="todo-continuation-enforcer ralph-loop ulw-loop ultrawork start-work-continuation boulder-continuation atlas"
 EXPECTED_OMO_HIDDEN_SKILLS="let-my-agent-sleep-codex let-my-agent-sleep-claude"
 
 assert_output_mentions_omo_hooks() {

@@ -22,7 +22,7 @@ All notable changes to Let My Agent Sleep are documented here.
 
 ### Changed
 
-- OpenCode installs now load `let-my-agent-sleep@latest` before continuation plugins and disable known Oh My OpenAgent continuation hooks by default.
+- OpenCode installs now load `let-my-agent-sleep@latest` before continuation plugins and disable a broader set of known Oh My OpenAgent continuation hooks by default.
 - The OpenCode runtime guard now no-ops reply-expecting prompt injection into a session with an active `LMAS_HANDOFF v1`, while still allowing `noReply` notifications and `LMAS_COMPLETION_EVENT v1`.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
