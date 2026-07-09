@@ -36,6 +36,8 @@ Environment:
   LMAS_CODEX_SESSION_ID      Preferred for codex adapter; CODEX_THREAD_ID is also used when available
   LMAS_CLAUDE_SESSION_ID     Preferred for claude adapter exact resume
   LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
+  LMAS_HTTP_CONNECT_TIMEOUT  HTTP adapter/notify connect timeout seconds. Default: 5
+  LMAS_HTTP_MAX_TIME         HTTP adapter/notify total timeout seconds. Default: 30
 EOF
 }
 
@@ -193,13 +195,15 @@ write_resume_prompt() {
 }
 
 run_opencode_adapter() {
-  local run_dir prompt_file server_url session_id username password endpoint payload escaped
+  local run_dir prompt_file server_url session_id username password endpoint payload escaped connect_timeout max_time
   run_dir=$1
   prompt_file=$2
   server_url=${LMAS_OPENCODE_SERVER_URL:-http://127.0.0.1:4096}
   session_id=${LMAS_OPENCODE_SESSION_ID:-}
   username=${LMAS_OPENCODE_USERNAME:-${OPENCODE_SERVER_USERNAME:-opencode}}
   password=${LMAS_OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-}}
+  connect_timeout=${LMAS_HTTP_CONNECT_TIMEOUT:-5}
+  max_time=${LMAS_HTTP_MAX_TIME:-30}
 
   if [ -z "$session_id" ]; then
     printf 'opencode adapter skipped: LMAS_OPENCODE_SESSION_ID is empty\n' > "$run_dir/adapter.log"
@@ -212,6 +216,8 @@ run_opencode_adapter() {
 
   if [ -n "$password" ]; then
     curl -fsS -X POST "$endpoint" \
+      --connect-timeout "$connect_timeout" \
+      --max-time "$max_time" \
       -u "$username:$password" \
       -H 'content-type: application/json' \
       --data "$payload" > "$run_dir/adapter.log" 2>&1 || {
@@ -220,6 +226,8 @@ run_opencode_adapter() {
       }
   else
     curl -fsS -X POST "$endpoint" \
+      --connect-timeout "$connect_timeout" \
+      --max-time "$max_time" \
       -H 'content-type: application/json' \
       --data "$payload" > "$run_dir/adapter.log" 2>&1 || {
         printf '\nopencode adapter failed for %s\n' "$endpoint" >> "$run_dir/adapter.log"
@@ -312,10 +320,12 @@ run_adapter() {
 }
 
 run_notification() {
-  local run_dir prompt_file notify_url
+  local run_dir prompt_file notify_url connect_timeout max_time
   run_dir=$1
   prompt_file=$2
   notify_url=${LMAS_NOTIFY_URL:-}
+  connect_timeout=${LMAS_HTTP_CONNECT_TIMEOUT:-5}
+  max_time=${LMAS_HTTP_MAX_TIME:-30}
 
   if [ -f "$run_dir/notify_url.txt" ]; then
     notify_url=$(cat "$run_dir/notify_url.txt")
@@ -331,6 +341,8 @@ run_notification() {
   fi
 
   curl -fsS -X POST "$notify_url" \
+    --connect-timeout "$connect_timeout" \
+    --max-time "$max_time" \
     -H 'content-type: text/plain; charset=utf-8' \
     --data-binary @"$prompt_file" > "$run_dir/notify.log" 2>&1 || {
       printf '\nnotify failed\n' >> "$run_dir/notify.log"

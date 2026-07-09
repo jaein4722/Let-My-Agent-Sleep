@@ -180,6 +180,8 @@ Most users should let the agent call the installed skill or plugin tool instead 
 
 `--notify <url>` posts the completion resume prompt to a secondary webhook or ntfy URL after the job exits. It does not replace session resume; it is only an extra notification path. If the URL contains a secret, prefer environment injection and do not put it in prompts or shared logs.
 
+HTTP completion paths are bounded: OpenCode adapter calls and `--notify` use `LMAS_HTTP_CONNECT_TIMEOUT` (default `5` seconds) and `LMAS_HTTP_MAX_TIME` (default `30` seconds). A timeout leaves `resume_prompt.txt` available for manual recovery.
+
 ## Runtime Artifacts
 
 Runs are stored under:

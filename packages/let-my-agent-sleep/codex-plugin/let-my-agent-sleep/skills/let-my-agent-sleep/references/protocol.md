@@ -77,4 +77,6 @@ Jobs may append lightweight progress lines to `<run_dir>/progress.txt`, such as 
 
 The notification URL is stored in `notify_url.txt`, not in `metadata.txt`, because webhook URLs may contain secrets. `metadata.txt` only records `notify=enabled`.
 
+HTTP adapter and notification calls are bounded by `LMAS_HTTP_CONNECT_TIMEOUT` and `LMAS_HTTP_MAX_TIME`, defaulting to 5 and 30 seconds. Timeout failures are recorded in `adapter.log` or `notify.log` and do not change the completed run status.
+
 `LOST` means the handoff exists, no completion event was written, and the watcher process is no longer alive. Inspect `watcher_log` and `stderr` before deciding whether to relaunch.

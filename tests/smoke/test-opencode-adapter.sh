@@ -10,6 +10,10 @@ FAIL_PORT_FILE="$TMPDIR_ROOT/fail-port"
 FAIL_REQUEST_LOG="$TMPDIR_ROOT/fail-request.log"
 NOTIFY_PORT_FILE="$TMPDIR_ROOT/notify-port"
 NOTIFY_REQUEST_LOG="$TMPDIR_ROOT/notify-request.log"
+SLOW_ADAPTER_PORT_FILE="$TMPDIR_ROOT/slow-adapter-port"
+SLOW_ADAPTER_REQUEST_LOG="$TMPDIR_ROOT/slow-adapter-request.log"
+SLOW_NOTIFY_PORT_FILE="$TMPDIR_ROOT/slow-notify-port"
+SLOW_NOTIFY_REQUEST_LOG="$TMPDIR_ROOT/slow-notify-request.log"
 
 python3 - "$PORT_FILE" "$REQUEST_LOG" <<'PY' &
 import http.server
@@ -183,5 +187,116 @@ FAIL_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sl
 printf '%s\n' "$FAIL_STATUS" | grep -q '^status: SUCCEEDED$' || { printf 'adapter failure status should remain SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$FAIL_STATUS" | grep -q "resume_prompt: $FAIL_RUN_DIR/resume_prompt.txt" || { printf 'adapter failure status did not expose resume_prompt path\n' >&2; exit 1; }
 printf '%s\n' "$FAIL_STATUS" | grep -q "notify_log: $FAIL_RUN_DIR/notify.log" || { printf 'adapter failure status did not expose notify log path\n' >&2; exit 1; }
+
+python3 - "$SLOW_ADAPTER_PORT_FILE" "$SLOW_ADAPTER_REQUEST_LOG" <<'PY' &
+import http.server
+import socketserver
+import sys
+import time
+
+port_file, request_log = sys.argv[1], sys.argv[2]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get("content-length", "0"))
+        self.rfile.read(length)
+        with open(request_log, "w", encoding="utf-8") as handle:
+            handle.write(self.path + "\n")
+        time.sleep(3)
+        try:
+            self.send_response(200)
+            self.end_headers()
+        except BrokenPipeError:
+            pass
+
+    def log_message(self, format, *args):
+        return
+
+with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+    with open(port_file, "w", encoding="utf-8") as handle:
+        handle.write(str(httpd.server_address[1]))
+    httpd.handle_request()
+PY
+SLOW_ADAPTER_SERVER_PID=$!
+
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -f "$SLOW_ADAPTER_PORT_FILE" ] && break
+  sleep 0.1
+done
+
+[ -f "$SLOW_ADAPTER_PORT_FILE" ] || { printf 'slow adapter fake server did not start\n' >&2; exit 1; }
+SLOW_ADAPTER_PORT=$(cat "$SLOW_ADAPTER_PORT_FILE")
+
+SLOW_ADAPTER_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_HTTP_MAX_TIME=1 LMAS_HTTP_CONNECT_TIMEOUT=1 LMAS_OPENCODE_SESSION_ID="session-slow" LMAS_OPENCODE_SERVER_URL="http://127.0.0.1:$SLOW_ADAPTER_PORT" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter opencode -- ./examples/fake_train.sh success)
+SLOW_ADAPTER_RUN_ID=$(printf '%s\n' "$SLOW_ADAPTER_OUTPUT" | awk '/^run_id:/ { print $2 }')
+SLOW_ADAPTER_RUN_DIR="$RUNS_DIR/$SLOW_ADAPTER_RUN_ID"
+
+for _ in $(seq 1 40); do
+  [ -f "$SLOW_ADAPTER_RUN_DIR/adapter.log" ] && break
+  sleep 0.1
+done
+
+wait "$SLOW_ADAPTER_SERVER_PID" || true
+
+[ -f "$SLOW_ADAPTER_REQUEST_LOG" ] || { printf 'slow adapter server was not called\n' >&2; exit 1; }
+grep -q '^/session/session-slow/prompt_async$' "$SLOW_ADAPTER_REQUEST_LOG" || { printf 'unexpected slow adapter endpoint\n' >&2; exit 1; }
+grep -q '^status: SUCCEEDED$' "$SLOW_ADAPTER_RUN_DIR/completion_event.txt" || { printf 'slow adapter timeout should not change completion status\n' >&2; exit 1; }
+grep -Eq 'timed out|opencode adapter failed for' "$SLOW_ADAPTER_RUN_DIR/adapter.log" || { printf 'slow adapter timeout was not recorded\n' >&2; exit 1; }
+
+python3 - "$SLOW_NOTIFY_PORT_FILE" "$SLOW_NOTIFY_REQUEST_LOG" <<'PY' &
+import http.server
+import socketserver
+import sys
+import time
+
+port_file, request_log = sys.argv[1], sys.argv[2]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get("content-length", "0"))
+        self.rfile.read(length)
+        with open(request_log, "w", encoding="utf-8") as handle:
+            handle.write(self.path + "\n")
+        time.sleep(3)
+        try:
+            self.send_response(200)
+            self.end_headers()
+        except BrokenPipeError:
+            pass
+
+    def log_message(self, format, *args):
+        return
+
+with socketserver.TCPServer(("127.0.0.1", 0), Handler) as httpd:
+    with open(port_file, "w", encoding="utf-8") as handle:
+        handle.write(str(httpd.server_address[1]))
+    httpd.handle_request()
+PY
+SLOW_NOTIFY_SERVER_PID=$!
+
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  [ -f "$SLOW_NOTIFY_PORT_FILE" ] && break
+  sleep 0.1
+done
+
+[ -f "$SLOW_NOTIFY_PORT_FILE" ] || { printf 'slow notify fake server did not start\n' >&2; exit 1; }
+SLOW_NOTIFY_PORT=$(cat "$SLOW_NOTIFY_PORT_FILE")
+SLOW_NOTIFY_URL="http://127.0.0.1:$SLOW_NOTIFY_PORT/slow-notify"
+
+SLOW_NOTIFY_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_HTTP_MAX_TIME=1 LMAS_HTTP_CONNECT_TIMEOUT=1 ./packages/let-my-agent-sleep/bin/lmas.sh start --notify "$SLOW_NOTIFY_URL" -- ./examples/fake_train.sh success)
+SLOW_NOTIFY_RUN_ID=$(printf '%s\n' "$SLOW_NOTIFY_OUTPUT" | awk '/^run_id:/ { print $2 }')
+SLOW_NOTIFY_RUN_DIR="$RUNS_DIR/$SLOW_NOTIFY_RUN_ID"
+
+for _ in $(seq 1 40); do
+  [ -f "$SLOW_NOTIFY_RUN_DIR/notify.log" ] && break
+  sleep 0.1
+done
+
+wait "$SLOW_NOTIFY_SERVER_PID" || true
+
+[ -f "$SLOW_NOTIFY_REQUEST_LOG" ] || { printf 'slow notify server was not called\n' >&2; exit 1; }
+grep -q '^/slow-notify$' "$SLOW_NOTIFY_REQUEST_LOG" || { printf 'unexpected slow notify endpoint\n' >&2; exit 1; }
+grep -q '^status: SUCCEEDED$' "$SLOW_NOTIFY_RUN_DIR/completion_event.txt" || { printf 'slow notify timeout should not change completion status\n' >&2; exit 1; }
+grep -Eq 'timed out|notify failed' "$SLOW_NOTIFY_RUN_DIR/notify.log" || { printf 'slow notify timeout was not recorded\n' >&2; exit 1; }
 
 printf 'ok opencode adapter: %s\n' "$RUN_ID"

@@ -34,6 +34,7 @@ lmas status &lt;run_id&gt;</code></pre>
 LMAS_NOTIFY_URL=https://ntfy.sh/my-topic lmas start -- python train.py</code></pre>
     <p><code>--notify</code> posts the generated <code>resume_prompt.txt</code> to a webhook or ntfy URL after the adapter attempt. It does not replace session resume; it is only an extra notification path.</p>
     <p>Webhook URLs may contain secrets. LMAS stores the URL in <code>notify_url.txt</code>, not in <code>metadata.txt</code>. Metadata records only <code>notify=enabled</code>.</p>
+    <p>HTTP completion calls are bounded by <code>LMAS_HTTP_CONNECT_TIMEOUT</code> and <code>LMAS_HTTP_MAX_TIME</code>, defaulting to 5 and 30 seconds. Timeout failures are recorded in <code>adapter.log</code> or <code>notify.log</code> and do not change the completed run status.</p>
 
     <h2>Cancel</h2>
     <pre><code>lmas cancel &lt;run_id&gt;</code></pre>

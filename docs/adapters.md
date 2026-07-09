@@ -26,10 +26,13 @@ Optional:
 export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:4096
 export LMAS_OPENCODE_USERNAME=opencode
 export LMAS_OPENCODE_PASSWORD=<basic-auth-password>
+export LMAS_HTTP_CONNECT_TIMEOUT=5
+export LMAS_HTTP_MAX_TIME=30
 ```
 
 If `LMAS_OPENCODE_USERNAME` is not set, LMAS uses `OPENCODE_SERVER_USERNAME` or `opencode`.
 If `LMAS_OPENCODE_PASSWORD` is not set, LMAS uses `OPENCODE_SERVER_PASSWORD` when present.
+OpenCode HTTP injection is bounded by `LMAS_HTTP_CONNECT_TIMEOUT` and `LMAS_HTTP_MAX_TIME`. Timeout failures are recorded in `adapter.log`, and `completion_event.txt` plus `resume_prompt.txt` remain available for recovery.
 
 On completion, the watcher posts `resume_prompt.txt` to:
 
@@ -49,7 +52,7 @@ opencode run --attach http://127.0.0.1:45137 --dir "$PWD" --format json --agent 
   'Use lmas_start with command: ./examples/fake_train.sh sleep 60 and server_url: http://127.0.0.1:45137.'
 ```
 
-An empty `adapter.log` means `curl -fsS` received a successful 2xx response. A 404 means the endpoint exists but the target server does not know that session id.
+An `adapter.log` ending in an adapter failure line means injection failed or timed out. A 404 means the endpoint exists but the target server does not know that session id.
 
 After completion, prefer checking quick state with:
 
