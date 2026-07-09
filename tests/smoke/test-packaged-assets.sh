@@ -17,6 +17,8 @@ CODEX_PLUGIN_MANIFEST="$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin
 CODEX_PROTOCOL="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/references/protocol.md"
 ROOT_CHANGELOG="$ROOT/CHANGELOG.md"
 PACKAGE_CHANGELOG="$PKG/CHANGELOG.md"
+ROOT_README="$ROOT/README.md"
+PACKAGE_README="$PKG/README.md"
 GITIGNORE="$ROOT/.gitignore"
 
 [ -x "$PKG/bin/lmas-install.js" ] || { printf 'lmas-install.js is not executable\n' >&2; exit 1; }
@@ -33,12 +35,19 @@ GITIGNORE="$ROOT/.gitignore"
 [ -f "$CODEX_PROTOCOL" ] || { printf 'codex protocol reference was not packaged\n' >&2; exit 1; }
 [ -f "$ROOT_CHANGELOG" ] || { printf 'root CHANGELOG.md is missing\n' >&2; exit 1; }
 [ -f "$PACKAGE_CHANGELOG" ] || { printf 'package CHANGELOG.md is missing\n' >&2; exit 1; }
+[ -f "$ROOT_README" ] || { printf 'root README.md is missing\n' >&2; exit 1; }
+[ -f "$PACKAGE_README" ] || { printf 'package README.md is missing\n' >&2; exit 1; }
 [ -f "$GITIGNORE" ] || { printf '.gitignore is missing\n' >&2; exit 1; }
 
 cmp -s "$CANONICAL" "$CODEX_PLUGIN_BIN" || { printf 'codex plugin bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
 cmp -s "$CANONICAL" "$CODEX_SKILL_BIN" || { printf 'codex skill bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
 cmp -s "$CANONICAL" "$CLAUDE_ASSET_BIN" || { printf 'claude asset bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
 cmp -s "$ROOT_CHANGELOG" "$PACKAGE_CHANGELOG" || { printf 'package CHANGELOG.md differs from root CHANGELOG.md\n' >&2; exit 1; }
+grep -q 'site/social-card.png' "$ROOT_README" || { printf 'root README.md must use the PNG social card preview\n' >&2; exit 1; }
+grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PACKAGE_README" || {
+  printf 'package README.md must use the absolute PNG social card preview\n' >&2
+  exit 1
+}
 grep -q 'Secondary Notification' "$CODEX_PROTOCOL" || { printf 'codex protocol reference missing secondary notification section\n' >&2; exit 1; }
 grep -q '^\.lmas/$' "$GITIGNORE" || { printf '.gitignore must exclude LMAS runtime runs\n' >&2; exit 1; }
 grep -q '^\*\.tgz$' "$GITIGNORE" || { printf '.gitignore must exclude npm pack tarballs\n' >&2; exit 1; }

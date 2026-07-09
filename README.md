@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="site/social-card.svg" alt="Let My Agent Sleep - stop AI agents polling long-running jobs" width="780" />
+  <img src="site/social-card.png" alt="Let My Agent Sleep - stop AI agents polling long-running jobs" width="780" />
 
   <h1>Let My Agent Sleep</h1>
 
