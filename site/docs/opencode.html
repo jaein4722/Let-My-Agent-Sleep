@@ -23,6 +23,9 @@
       <li><code>lmas_status</code> reads a run status without polling blindly.</li>
       <li><code>lmas_cancel</code> cancels a user-selected run and records cancellation when the watcher is still alive.</li>
     </ul>
+    <h2>Oh My OpenAgent continuation</h2>
+    <p>During OpenCode install, LMAS disables known Oh My OpenAgent continuation hooks by default: <code>todo-continuation-enforcer</code>, <code>ralph-loop</code>, and <code>atlas</code>. This prevents OMO from re-entering an active LMAS handoff just because a todo is still open while the long-running job is expected to continue in the background.</p>
+    <p>Use <code>--keep-omo-continuation</code> only when you explicitly want those OMO continuation hooks to remain enabled.</p>
     <h2>Agent prompt</h2>
     <pre><code>Use the let-my-agent-sleep skill for this task.
 Start this command with lmas_start:

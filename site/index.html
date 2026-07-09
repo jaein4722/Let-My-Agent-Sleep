@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Let My Agent Sleep — Stop AI Agents Polling Long-Running Jobs</title>
-  <meta name="description" content="Let My Agent Sleep lets OpenCode, Codex, and Claude Code start long-running training, evaluation, and batch jobs, stop polling logs, and resume the same session when the job finishes." />
-  <meta name="keywords" content="AI agent long running jobs, OpenCode plugin, Codex skill, Claude Code skill, agent polling cost, resume agent session, background training job, LLM agent handoff, tmux agent workflow" />
+  <meta name="description" content="Let My Agent Sleep lets OpenCode, Codex, and Claude Code start long-running training, evaluation, and batch jobs, stop polling logs, and resume supported agent sessions when jobs finish." />
+  <meta name="keywords" content="AI agent long running jobs, OpenCode plugin, Codex skill, Claude Code command, agent polling cost, resume agent session, background training job, LLM agent handoff, tmux agent workflow" />
   <meta name="theme-color" content="#0a0d1a" />
   <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -14,12 +14,12 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://jaein4722.github.io/Let-My-Agent-Sleep/" />
   <meta property="og:title" content="Let My Agent Sleep — Stop AI Agents Polling Long-Running Jobs" />
-  <meta property="og:description" content="Start long-running training or evaluation jobs, stop agent polling, and resume the same session when the job finishes. One handoff, one wake-up." />
+  <meta property="og:description" content="Start long-running training or evaluation jobs, stop agent polling, and resume supported agent sessions when jobs finish. One handoff, one wake-up." />
   <meta property="og:image" content="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.svg" />
   <meta property="og:site_name" content="Let My Agent Sleep" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Let My Agent Sleep — Stop Agent Polling" />
-  <meta name="twitter:description" content="AI agents start long-running jobs, stop waiting, and resume the same session when the job finishes." />
+  <meta name="twitter:description" content="AI agents start long-running jobs, stop waiting, and resume supported sessions when jobs finish." />
   <meta name="twitter:image" content="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.svg" />
 
   <script type="application/ld+json">
@@ -30,14 +30,14 @@
     "alternateName": "LMAS",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "macOS, Linux",
-    "description": "Let My Agent Sleep lets AI agents start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, stop polling logs, and resume the same session when the job finishes.",
+    "description": "Let My Agent Sleep lets AI agents start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, stop polling logs, and resume supported sessions when jobs finish.",
     "url": "https://jaein4722.github.io/Let-My-Agent-Sleep/",
     "downloadUrl": "https://www.npmjs.com/package/let-my-agent-sleep",
     "codeRepository": "https://github.com/jaein4722/Let-My-Agent-Sleep",
     "license": "https://github.com/jaein4722/Let-My-Agent-Sleep/blob/master/packages/let-my-agent-sleep/LICENSE",
     "programmingLanguage": "JavaScript, Shell",
     "runtimePlatform": "Node.js, tmux",
-    "keywords": "AI agents, long-running jobs, OpenCode, Codex, Claude Code, polling cost, same-session resume, LLM agent handoff",
+    "keywords": "AI agents, long-running jobs, OpenCode, Codex, Claude Code, polling cost, supported-session resume, LLM agent handoff",
     "offers": {
       "@type": "Offer",
       "price": "0",
@@ -859,8 +859,8 @@
       <span class="eyebrow">tmux · plain files · zero infrastructure</span>
       <h1>Let My Agent Sleep</h1>
       <p class="tagline">
-        AI agents start long-running jobs, <span class="kw-cyan">stop waiting</span>, and resume the
-        <span class="kw-green">same session</span> when the job finishes. No polling. No token burn from waiting.
+        AI agents start long-running jobs, <span class="kw-cyan">stop waiting</span>, and resume a
+        <span class="kw-green">supported session</span> when the job finishes. No polling. No token burn from waiting.
       </p>
 
       <div class="code-pill">
@@ -952,7 +952,7 @@
         <div class="card ps-card ps-solution reveal">
           <span class="tag">With LMAS</span>
           <h3>One handoff, one wake-up</h3>
-          <p>The agent starts the job and goes quiet. Hours or days later — the moment the job ends — the <em>same session</em> wakes with the result and full context, and keeps working.</p>
+          <p>The agent starts the job and goes quiet. Hours or days later — the moment the job ends — the supported session wakes with the result and full context, and keeps working.</p>
           <div class="metric">1 handoff · 1 wake-up · the agent designs the next run</div>
         </div>
       </div>
@@ -962,7 +962,7 @@
     <section class="wrap" id="real-loop">
       <span class="eyebrow reveal">In practice</span>
       <h2 class="section-title reveal">What a research loop looks like.</h2>
-      <p class="section-lead reveal">When a run fails, the agent wakes, fixes, and relaunches. When it succeeds — even 20 hours later — the same session picks up and continues.</p>
+      <p class="section-lead reveal">When a run fails, the agent wakes, fixes, and relaunches. When it succeeds — even 20 hours later — the supported session picks up and continues.</p>
 
       <div class="loop-tabs reveal" role="tablist" aria-label="Research loop mode">
         <button class="term-tab tab-without" id="loop-tab-without" role="tab" aria-selected="false" aria-controls="tl-without">without LMAS</button>
@@ -1157,7 +1157,7 @@
             <h3>Claude Code</h3>
             <span class="tier tier-exp">Experimental</span>
           </div>
-          <p>Resume works; still stabilizing.</p>
+          <p>Resume when available; prompt fallback.</p>
         </div>
       </div>
     </section>
@@ -1168,7 +1168,7 @@
       <div class="faq-list">
         <div class="card faq-item reveal">
           <h3>Why not just use nohup?</h3>
-          <p><code>nohup</code> keeps the process alive. LMAS also records a handoff, watches completion, and wakes the same agent session with the stdout, stderr, metadata, and artifact paths it needs to continue.</p>
+          <p><code>nohup</code> keeps the process alive. LMAS also records a handoff, watches completion, and wakes a supported agent session with the stdout, stderr, metadata, and artifact paths it needs to continue.</p>
         </div>
         <div class="card faq-item reveal">
           <h3>Does LMAS make completion free?</h3>

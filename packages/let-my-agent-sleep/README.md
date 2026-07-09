@@ -3,7 +3,7 @@
 
   <h1>let-my-agent-sleep</h1>
 
-  <p><strong>Start long jobs. Stop the loop. Resume the same agent session when they finish.</strong></p>
+  <p><strong>Start long jobs. Stop the loop. Resume supported agent sessions when they finish.</strong></p>
 
   <p>
     <a href="https://www.npmjs.com/package/let-my-agent-sleep"><img alt="npm version" src="https://img.shields.io/npm/v/let-my-agent-sleep.svg"></a>
@@ -25,11 +25,11 @@
 
 AI agents should not spend hours polling a training log.
 
-Let My Agent Sleep, or LMAS, lets OpenCode, Codex, and Claude Code start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, hand them off, stop waiting, and resume the same session when the job finishes.
+Let My Agent Sleep, or LMAS, lets OpenCode, Codex, and Claude Code start long-running training, evaluation, preprocessing, benchmark, migration, or batch jobs, hand them off, stop waiting, and resume a supported agent session when the job finishes. When exact resume is not available, LMAS records a manual resume prompt.
 
 ```text
 start job -> LMAS_HANDOFF v1 -> agent stops
-job exits -> LMAS_COMPLETION_EVENT v1 -> same session resumes
+job exits -> LMAS_COMPLETION_EVENT v1 -> session resumes or prompt is recorded
 ```
 
 ## Contents
@@ -54,7 +54,7 @@ Without LMAS, a long-running job often turns into an expensive agent loop:
 | --- | --- |
 | Agent starts a job and keeps checking logs. | Agent starts a job and receives a handoff. |
 | Context fills with repeated `tail`, `ps`, and status output. | The session goes quiet while the job runs. |
-| Loop runners keep forcing `continue`. | Completion wakes the same session once. |
+| Loop runners keep forcing `continue`. | Completion wakes a supported session once. |
 | Cost grows with wall-clock wait time. | Cost is handoff plus completion handling. |
 
 LMAS does not make useful agent work free. It removes the waiting portion: polling turns, repeated context reloads, and artificial continue loops.
@@ -98,7 +98,7 @@ The agent should start the job, report a `run_id`, and stop. When the job finish
 | --- | --- | --- |
 | OpenCode | Primary | Plugin tools and native completion prompt injection |
 | Codex | Supported | Same-session resume from the job environment |
-| Claude Code | Experimental | Resume when possible, manual fallback prompt when needed |
+| Claude Code | Experimental | Slash command, resume when possible, manual fallback prompt when needed |
 
 Install for a specific agent:
 
@@ -122,6 +122,16 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
 
+For OpenCode installs, LMAS writes an Oh My OpenAgent config entry that disables known OMO continuation hooks:
+
+```bash
+npx let-my-agent-sleep install --agent opencode
+```
+
+The disabled hooks are `todo-continuation-enforcer`, `ralph-loop`, and `atlas`.
+This keeps those known continuation hooks disabled in the OpenCode environment so they cannot re-enter an active LMAS handoff loop.
+Use `--keep-omo-continuation` only if you explicitly want to keep those hooks enabled.
+
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
 ## Codex
@@ -134,7 +144,7 @@ Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
 ## Claude Code
 
-Claude Code support is experimental. It is available through the installed Let My Agent Sleep skill, but automatic resume behavior is not guaranteed across every Claude Code frontend or remote session setup.
+Claude Code support is experimental. It is available through the installed `/let-my-agent-sleep` command, but automatic resume behavior is not guaranteed across every Claude Code frontend or remote session setup.
 
 For exact automatic resume, set `LMAS_CLAUDE_SESSION_ID` before starting the job. Without it, LMAS leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
@@ -172,7 +182,7 @@ Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or 
 
 ## Why Not nohup?
 
-`nohup` keeps a process alive. LMAS also gives the agent a clean handoff point, records run metadata, watches for process exit, and injects a completion event so the same session can continue.
+`nohup` keeps a process alive. LMAS also gives the agent a clean handoff point, records run metadata, watches for process exit, and injects a completion event so a supported session can continue.
 
 More detail: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/why-not-nohup.html
 

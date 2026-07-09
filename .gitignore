@@ -1,5 +1,7 @@
 .lmas/
 .longbridge/
+.claude/
+node_modules/
 .opencode/bun.lock
 .opencode/node_modules/
 .DS_Store

@@ -23,18 +23,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm ci
 
       - name: Detect release state
         id: release
@@ -45,16 +46,24 @@ jobs:
           version=$(node -p "require('./packages/let-my-agent-sleep/package.json').version")
           tag="v${version}"
 
-          if npm view "let-my-agent-sleep@${version}" version >/dev/null 2>&1; then
+          npm_view_log=$(mktemp)
+          if npm view "let-my-agent-sleep@${version}" version > /dev/null 2> "$npm_view_log"; then
             publish_needed=false
-          else
+          elif grep -q 'E404' "$npm_view_log"; then
             publish_needed=true
+          else
+            cat "$npm_view_log" >&2
+            exit 1
           fi
 
-          if gh release view "$tag" >/dev/null 2>&1; then
+          gh_release_log=$(mktemp)
+          if gh release view "$tag" > /dev/null 2> "$gh_release_log"; then
             release_needed=false
-          else
+          elif grep -qi 'not found' "$gh_release_log"; then
             release_needed=true
+          else
+            cat "$gh_release_log" >&2
+            exit 1
           fi
 
           {
@@ -69,13 +78,23 @@ jobs:
           echo "publish_needed=$publish_needed"
           echo "release_needed=$release_needed"
 
+      - name: Install tmux
+        if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Run smoke tests
+        if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
+        run: npm run test:smoke
+
       - name: Pack dry run
         if: steps.release.outputs.publish_needed == 'true'
         run: npm pack --workspace let-my-agent-sleep --dry-run
 
       - name: Publish to npm
         if: steps.release.outputs.publish_needed == 'true'
-        run: npm publish --workspace let-my-agent-sleep --provenance
+        run: npm publish --workspace let-my-agent-sleep
 
       - name: Create GitHub release
         if: steps.release.outputs.release_needed == 'true'
