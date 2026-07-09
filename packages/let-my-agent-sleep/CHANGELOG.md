@@ -10,6 +10,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `lmas doctor` diagnostics for OpenCode installs, plugin order, OMO continuation configuration, plugin cache state, and live tool exposure.
 - Added GitHub Actions release automation for npm trusted publishing and GitHub release creation.
 - Added smoke coverage for packaged assets, packed tarball CLI behavior, OpenCode plugin imports, OMO handoff guards, live doctor checks, and install idempotency.
+- Added cancel process-group cleanup, KILL fallback, and `cancel_surviving_pids` metadata when cancellation cannot fully terminate a process.
 
 ### Changed
 

@@ -320,9 +320,23 @@ collect_process_tree() {
   done
 }
 
+process_pgid() {
+  local pid
+  pid=$1
+  ps -o pgid= -p "$pid" 2>/dev/null | awk 'NF { print $1; exit }'
+}
+
+list_process_group_pids() {
+  local pgid
+  pgid=$1
+  [ -n "$pgid" ] || return 0
+  ps -eo pid=,pgid= 2>/dev/null | awk -v pgid="$pgid" '$2 == pgid { print $1 }'
+}
+
 terminate_pids() {
-  local pid alive_pids
+  local pid alive_pids surviving_pids
   alive_pids=
+  surviving_pids=
   for pid in "$@"; do
     case "$pid" in
       ''|*[!0-9]*) continue ;;
@@ -341,6 +355,18 @@ terminate_pids() {
       kill -KILL "$pid" >/dev/null 2>&1 || true
     fi
   done
+
+  sleep 0.2
+
+  for pid in $alive_pids; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      surviving_pids="$surviving_pids $pid"
+    fi
+  done
+
+  if [ -n "$surviving_pids" ]; then
+    printf '%s\n' "$surviving_pids" | awk '{ for (i = 1; i <= NF; i++) if (!seen[$i]++) printf "%s%s", sep, $i; sep=" " }'
+  fi
 }
 
 launch_watcher_tmux() {
@@ -630,7 +656,7 @@ watcher_root_pid() {
 }
 
 cancel_command() {
-  local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id child_pid child_tree_pids watcher_pid watcher_tree_pids killed_pids
+  local runs_dir reason run_ref run_dir event_file existing_status run_id pid_or_job_id child_pid child_tree_pids child_group_pids watcher_pid watcher_tree_pids watcher_group_pids killed_pids surviving_pids
   local adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at exit_code was_alive
 
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
@@ -707,6 +733,7 @@ cancel_command() {
     ''|*[!0-9]*) watcher_pid= ;;
     *)
       watcher_tree_pids=$(collect_process_tree "$watcher_pid")
+      watcher_group_pids=$(list_process_group_pids "$(process_pgid "$watcher_pid")")
       ;;
   esac
   if [ -f "$run_dir/child_pid" ]; then
@@ -715,10 +742,11 @@ cancel_command() {
       ''|*[!0-9]*) child_pid= ;;
       *)
         child_tree_pids=$(collect_process_tree "$child_pid")
+        child_group_pids=$(list_process_group_pids "$(process_pgid "$child_pid")")
         ;;
     esac
   fi
-  killed_pids=$(printf '%s\n%s\n%s\n%s\n' "$watcher_pid" "$watcher_tree_pids" "$child_pid" "$child_tree_pids" | awk 'NF && !seen[$1]++ { printf "%s%s", sep, $1; sep=" " }')
+  killed_pids=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$watcher_pid" "$watcher_tree_pids" "$watcher_group_pids" "$child_pid" "$child_tree_pids" "$child_group_pids" | awk 'NF && !seen[$1]++ { printf "%s%s", sep, $1; sep=" " }')
 
   if ! stop_watcher "$pid_or_job_id" "$run_dir"; then
     if [ -f "$run_dir/completion_event.txt" ]; then
@@ -736,7 +764,7 @@ cancel_command() {
     die "failed to stop watcher for run: $run_id"
   fi
   if [ -n "$killed_pids" ]; then
-    terminate_pids $killed_pids
+    surviving_pids=$(terminate_pids $killed_pids)
   fi
 
   if [ -f "$run_dir/completion_event.txt" ]; then
@@ -778,6 +806,9 @@ cancel_command() {
     fi
     if [ -n "$killed_pids" ]; then
       printf 'cancel_killed_pids=%s\n' "$killed_pids"
+    fi
+    if [ -n "$surviving_pids" ]; then
+      printf 'cancel_surviving_pids=%s\n' "$surviving_pids"
     fi
   } >> "$run_dir/metadata.txt"
   write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"

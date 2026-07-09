@@ -18,11 +18,14 @@ Verified baseline: 17-hour and 12-hour real OpenCode training runs completed the
 
 Ordered roughly by value per effort.
 
-1. **Cancel process-tree verification.** After `tmux kill-session`, verify the job's process group is actually dead; escalate TERM → KILL on survivors. Jobs like `torchrun` or dataloader workers can outlive the pane and keep GPUs held. Record any surviving pids in `metadata.txt` so `LMAS_CANCEL` output never claims a kill that did not happen.
-2. **Failure-mode hardening.** Cover the failure modes that matter for long runs: cancel while the job has live children, adapter failure path leaving `resume_prompt.txt`, and `LOST` detection after the watcher dies.
-3. **Observability without polling.** The no-poll rule constrains the agent, not the user. Add: elapsed time and command summary columns to `lmas list`; a `progress.txt` contract the job may append to (e.g. `step=1200 loss=0.43`), which the agent reads only when the user explicitly asks for status.
-4. **Secondary completion notification.** Optional `--notify <url>` (webhook/ntfy) and an OS notification fallback when the adapter fails, alongside — never instead of — session injection. Low priority given the persistent-server assumption; treated as cheap insurance for the exact-moment-of-completion edge.
-5. **Release hygiene and pitch.** Semver + CHANGELOG for npm publishes; a README demo GIF of an OpenCode session going quiet on handoff and waking on completion; a comparison note against native background-task features, citing the 17h/12h live validation.
+1. **Failure-mode hardening.** Cover the failure modes that matter for long runs: adapter failure path leaving `resume_prompt.txt`, and more `LOST` detection cases after the watcher dies.
+2. **Observability without polling.** The no-poll rule constrains the agent, not the user. Add: elapsed time and command summary columns to `lmas list`; a `progress.txt` contract the job may append to (e.g. `step=1200 loss=0.43`), which the agent reads only when the user explicitly asks for status.
+3. **Secondary completion notification.** Optional `--notify <url>` (webhook/ntfy) and an OS notification fallback when the adapter fails, alongside — never instead of — session injection. Low priority given the persistent-server assumption; treated as cheap insurance for the exact-moment-of-completion edge.
+4. **Release pitch.** Add a README demo GIF of an OpenCode session going quiet on handoff and waking on completion; add a comparison note against native background-task features, citing the 17h/12h live validation.
+
+## Completed Hardening
+
+- **Cancel process-tree verification.** `lmas cancel` collects both child trees and process-group peers, stops the tmux watcher, escalates TERM to KILL for remaining pids, writes `cancel_killed_pids`, and records `cancel_surviving_pids` if any pid still survives. Smoke tests cover TERM-aware children, TERM-ignoring children, grandchildren, LOST cancellation, and completion/cancel races.
 
 ## Optional Ideas (not planned)
 

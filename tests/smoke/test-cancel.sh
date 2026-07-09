@@ -55,6 +55,10 @@ grep -q '^cancel_reason=smoke-test$' "$RUN_DIR/metadata.txt" || { printf 'cancel
 grep -q '^cancel_watcher_pid=' "$RUN_DIR/metadata.txt" || { printf 'cancel watcher pid missing from metadata\n' >&2; exit 1; }
 grep -q "^cancel_child_pid=$CHILD_PID$" "$RUN_DIR/metadata.txt" || { printf 'cancel child pid missing from metadata\n' >&2; exit 1; }
 grep -q '^cancel_killed_pids=' "$RUN_DIR/metadata.txt" || { printf 'cancel killed pids missing from metadata\n' >&2; exit 1; }
+if grep -q '^cancel_surviving_pids=' "$RUN_DIR/metadata.txt"; then
+  printf 'cancel should not report surviving pids for TERM-aware child\n' >&2
+  exit 1
+fi
 
 sleep 0.2
 if kill -0 "$CHILD_PID" >/dev/null 2>&1; then
@@ -112,6 +116,10 @@ printf '%s\n' "$IGNORE_STATUS_AFTER" | grep -q '^status: CANCELLED$' || { printf
 grep -q '^cancel_watcher_pid=' "$IGNORE_RUN_DIR/metadata.txt" || { printf 'ignore cancel watcher pid missing from metadata\n' >&2; exit 1; }
 grep -q "^cancel_child_pid=$IGNORE_PARENT_PID$" "$IGNORE_RUN_DIR/metadata.txt" || { printf 'ignore cancel child pid missing from metadata\n' >&2; exit 1; }
 grep -q "$IGNORE_GRANDCHILD_PID" "$IGNORE_RUN_DIR/metadata.txt" || { printf 'ignore cancel grandchild pid missing from metadata\n' >&2; exit 1; }
+if grep -q '^cancel_surviving_pids=' "$IGNORE_RUN_DIR/metadata.txt"; then
+  printf 'cancel should not report surviving pids after KILL fallback\n' >&2
+  exit 1
+fi
 
 sleep 0.3
 if kill -0 "$IGNORE_PARENT_PID" >/dev/null 2>&1; then
