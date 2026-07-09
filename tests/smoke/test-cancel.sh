@@ -42,7 +42,8 @@ done
 }
 CHILD_PID=$(sed -n '1p' "$TMPDIR_ROOT/child.pid")
 
-CANCEL_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js cancel --reason smoke-test "$RUN_ID")
+CANCEL_REASON=$(printf 'smoke-test\nfinished_epoch=bad')
+CANCEL_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js cancel --reason "$CANCEL_REASON" "$RUN_ID")
 
 printf '%s\n' "$CANCEL_OUTPUT" | grep -q '^LMAS_CANCEL v1$' || { printf 'cancel did not emit cancel event\n' >&2; exit 1; }
 printf '%s\n' "$CANCEL_OUTPUT" | grep -q '^status: CANCELLED$' || { printf 'cancel did not report CANCELLED\n' >&2; exit 1; }
@@ -51,7 +52,11 @@ printf '%s\n' "$CANCEL_OUTPUT" | grep -q '^status: CANCELLED$' || { printf 'canc
 grep -q '^status: CANCELLED$' "$RUN_DIR/completion_event.txt" || { printf 'completion event did not report CANCELLED\n' >&2; exit 1; }
 grep -q '^exit_code: 130$' "$RUN_DIR/completion_event.txt" || { printf 'completion event did not report exit_code 130\n' >&2; exit 1; }
 grep -q '^130$' "$RUN_DIR/exit_code" || { printf 'exit_code file did not contain 130\n' >&2; exit 1; }
-grep -q '^cancel_reason=smoke-test$' "$RUN_DIR/metadata.txt" || { printf 'cancel reason missing from metadata\n' >&2; exit 1; }
+grep -q '^cancel_reason=smoke-test finished_epoch=bad$' "$RUN_DIR/metadata.txt" || { printf 'cancel reason missing from metadata\n' >&2; exit 1; }
+if grep -q '^finished_epoch=bad$' "$RUN_DIR/metadata.txt"; then
+  printf 'multiline cancel reason injected a metadata field\n' >&2
+  exit 1
+fi
 grep -q '^cancel_watcher_pid=' "$RUN_DIR/metadata.txt" || { printf 'cancel watcher pid missing from metadata\n' >&2; exit 1; }
 grep -q "^cancel_child_pid=$CHILD_PID$" "$RUN_DIR/metadata.txt" || { printf 'cancel child pid missing from metadata\n' >&2; exit 1; }
 grep -q '^cancel_killed_pids=' "$RUN_DIR/metadata.txt" || { printf 'cancel killed pids missing from metadata\n' >&2; exit 1; }

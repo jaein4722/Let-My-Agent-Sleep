@@ -53,6 +53,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed multiline command and metadata recording so event and metadata files stay line-oriented while the original command still executes unchanged.
 - Fixed OpenCode continuation guard state so `LMAS_CANCEL v1` clears active handoffs when seen through message history or event hooks.
 - Fixed malformed run handling so `lmas status` fails clearly when `handoff.txt` is missing and `lmas list` skips incomplete run directories.
+- Fixed multiline cancel reasons so cancellation metadata stays line-oriented.
 
 ## 0.2.6 and earlier
 

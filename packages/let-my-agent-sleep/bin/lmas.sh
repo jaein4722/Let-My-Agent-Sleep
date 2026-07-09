@@ -918,7 +918,7 @@ cancel_command() {
   {
     printf 'cancelled_at=%s\n' "$finished_at"
     printf 'finished_epoch=%s\n' "$finished_epoch"
-    printf 'cancel_reason=%s\n' "$reason"
+    printf 'cancel_reason=%s\n' "$(safe_metadata_line "$reason")"
     if [ -n "$watcher_pid" ]; then
       printf 'cancel_watcher_pid=%s\n' "$watcher_pid"
     fi
