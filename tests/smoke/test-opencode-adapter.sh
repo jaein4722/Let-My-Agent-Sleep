@@ -27,6 +27,7 @@ SLOW_NOTIFY_REQUEST_LOG="$TMPDIR_ROOT/slow-notify-request.log"
 python3 - "$PORT_FILE" "$REQUEST_LOG" <<'PY' &
 import http.server
 import base64
+import json
 import socketserver
 import sys
 
@@ -45,7 +46,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with open(request_log, "w", encoding="utf-8") as handle:
             handle.write(self.path + "\n")
             handle.write(self.headers.get("authorization", "") + "\n")
+            handle.write(self.headers.get("content-type", "") + "\n")
             handle.write(body)
+            try:
+                payload = json.loads(body)
+                text = payload["parts"][0]["text"]
+            except Exception as error:
+                handle.write("\nJSON_ERROR: " + str(error) + "\n")
+            else:
+                handle.write("\nJSON_TEXT_BEGIN\n")
+                handle.write(text)
         self.send_response(200)
         self.send_header("content-type", "application/json")
         self.end_headers()
@@ -83,7 +93,15 @@ wait "$SERVER_PID"
 [ -f "$REQUEST_LOG" ] || { printf 'adapter did not call fake server\n' >&2; exit 1; }
 grep -q '^/session/session-123/prompt_async$' "$REQUEST_LOG" || { printf 'unexpected adapter endpoint\n' >&2; exit 1; }
 grep -q '^Basic b3BlbmNvZGU6czNjcjN0$' "$REQUEST_LOG" || { printf 'adapter did not use expected opencode basic auth header\n' >&2; exit 1; }
+grep -q '^application/json$' "$REQUEST_LOG" || { printf 'adapter did not use expected JSON content-type\n' >&2; exit 1; }
+if grep -q '^JSON_ERROR:' "$REQUEST_LOG"; then
+  printf 'adapter request body was not valid JSON\n' >&2
+  cat "$REQUEST_LOG" >&2
+  exit 1
+fi
+grep -q '^JSON_TEXT_BEGIN$' "$REQUEST_LOG" || { printf 'adapter request did not expose parsed prompt text\n' >&2; exit 1; }
 grep -q 'LMAS_COMPLETION_EVENT v1' "$REQUEST_LOG" || { printf 'missing completion event in adapter payload\n' >&2; exit 1; }
+grep -q '^status: SUCCEEDED$' "$REQUEST_LOG" || { printf 'parsed adapter prompt missing completion status\n' >&2; exit 1; }
 grep -q '^status: SUCCEEDED$' "$RUN_DIR/completion_event.txt" || { printf 'expected SUCCEEDED\n' >&2; exit 1; }
 
 python3 - "$FAIL_PORT_FILE" "$FAIL_REQUEST_LOG" <<'PY' &
