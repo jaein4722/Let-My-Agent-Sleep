@@ -17,6 +17,7 @@ tests=(
   tests/smoke/test-codex-adapter.sh
   tests/smoke/test-claude-adapter.sh
   tests/smoke/test-doctor.sh
+  tests/smoke/test-publish-workflow-gate.sh
   tests/smoke/test-installer-dry-run.sh
   tests/smoke/test-idempotent-install.sh
   tests/smoke/test-opencode-legacy-cleanup.sh
