@@ -323,12 +323,14 @@ function isCancelTool(toolName) {
 
 function isOmoContinuationCommand(command) {
   const normalized = normalizeToolName(command)
-  return normalized === "start-work"
+  return normalized === "todo-continuation-enforcer"
+    || normalized === "start-work"
     || normalized === "start-work-continuation"
     || normalized === "ralph-loop"
     || normalized === "ulw-loop"
     || normalized === "ultrawork"
     || normalized === "boulder-continuation"
+    || normalized === "unstable-agent-babysitter"
     || normalized === "atlas"
 }
 

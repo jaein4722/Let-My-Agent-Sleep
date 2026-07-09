@@ -1252,7 +1252,7 @@ if (
   throw new Error("expected command hook to neutralize known OMO ralph-loop command during active LMAS handoff")
 }
 
-for (const command of ["ulw-loop", "ultrawork", "start-work-continuation", "boulder-continuation", "atlas"]) {
+for (const command of ["todo-continuation-enforcer", "ulw-loop", "ultrawork", "start-work-continuation", "boulder-continuation", "unstable-agent-babysitter", "atlas"]) {
   const knownContinuationCommandOutput = {
     parts: [{
       type: "text",
