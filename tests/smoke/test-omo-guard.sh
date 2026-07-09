@@ -124,6 +124,20 @@ if (!exactOmoOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HAND
   throw new Error("expected exact OMO continuation prompt shape to be neutralized")
 }
 
+const markerlessExactOmoOutput = {
+  messages: [
+    message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_markerless_exact_omo\nstatus: STARTED", "markerless_exact_omo_handoff", "ses_markerless_exact_omo"),
+    message("user", exactOmoContinuationPrompt.replace("\n<!-- OMO_INTERNAL_INITIATOR -->", ""), "markerless_exact_omo_continue", "ses_markerless_exact_omo"),
+  ],
+}
+const markerlessExactOmoState = applyOmoContinuationGuard(markerlessExactOmoOutput, new Map(), 1055)
+if (!markerlessExactOmoState.latestUserIsOmoContinuation) {
+  throw new Error("expected markerless exact OMO continuation prompt shape to be recognized")
+}
+if (!markerlessExactOmoOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected markerless exact OMO continuation prompt shape to be neutralized")
+}
+
 const markerlessSyntheticOutput = {
   messages: [
     message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_markerless_synthetic\nstatus: STARTED", "markerless_synthetic_handoff", "ses_markerless_synthetic"),
@@ -704,6 +718,86 @@ updateSessionGuardFromEvent(eventDeltaMarkerOnlyGuards, eventDeltaMarkerOnlyBuff
 }, 5131)
 if (!getActiveOmoGuard(eventDeltaMarkerOnlyGuards, "ses_event_delta_marker_only", 5132)) {
   throw new Error("expected marker-only message.part.delta OMO event to activate tool guard")
+}
+
+const eventDeltaMarkerlessDirectiveGuards = new Map()
+const eventDeltaMarkerlessDirectiveBuffers = new Map()
+updateSessionGuardFromText(
+  eventDeltaMarkerlessDirectiveGuards,
+  "ses_event_delta_markerless_directive",
+  "LMAS_HANDOFF v1\nrun_id: lmas_event_delta_markerless_directive\nstatus: STARTED",
+  5135,
+)
+updateSessionGuardFromEvent(eventDeltaMarkerlessDirectiveGuards, eventDeltaMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_markerless_directive",
+    role: "user",
+    delta: exactOmoContinuationPrompt.replace("\n<!-- OMO_INTERNAL_INITIATOR -->", ""),
+  },
+}, 5136)
+if (!getActiveOmoGuard(eventDeltaMarkerlessDirectiveGuards, "ses_event_delta_markerless_directive", 5137)) {
+  throw new Error("expected markerless OMO directive message.part.delta event to activate tool guard")
+}
+
+const eventDeltaSplitMarkerlessDirectiveGuards = new Map()
+const eventDeltaSplitMarkerlessDirectiveBuffers = new Map()
+updateSessionGuardFromText(
+  eventDeltaSplitMarkerlessDirectiveGuards,
+  "ses_event_delta_split_markerless_directive",
+  "LMAS_HANDOFF v1\nrun_id: lmas_event_delta_split_markerless_directive\nstatus: STARTED",
+  5140,
+)
+const markerlessDirectiveText = exactOmoContinuationPrompt.replace("\n<!-- OMO_INTERNAL_INITIATOR -->", "")
+const markerlessDirectiveSplit = Math.floor(markerlessDirectiveText.length / 2)
+updateSessionGuardFromEvent(eventDeltaSplitMarkerlessDirectiveGuards, eventDeltaSplitMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_split_markerless_directive",
+    role: "user",
+    delta: markerlessDirectiveText.slice(0, markerlessDirectiveSplit),
+  },
+}, 5141)
+updateSessionGuardFromEvent(eventDeltaSplitMarkerlessDirectiveGuards, eventDeltaSplitMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_split_markerless_directive",
+    role: "user",
+    delta: markerlessDirectiveText.slice(markerlessDirectiveSplit),
+  },
+}, 5142)
+if (!getActiveOmoGuard(eventDeltaSplitMarkerlessDirectiveGuards, "ses_event_delta_split_markerless_directive", 5143)) {
+  throw new Error("expected split markerless OMO directive message.part.delta events to activate tool guard from buffered text")
+}
+
+const eventDeltaHandoffThenMarkerlessDirectiveGuards = new Map()
+const eventDeltaHandoffThenMarkerlessDirectiveBuffers = new Map()
+updateSessionGuardFromEvent(eventDeltaHandoffThenMarkerlessDirectiveGuards, eventDeltaHandoffThenMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_handoff_then_markerless_directive",
+    role: "assistant",
+    delta: "LMAS_HANDOFF v1\nrun_id: lmas_event_delta_handoff_then_markerless_directive\nstatus: STARTED",
+  },
+}, 5150)
+updateSessionGuardFromEvent(eventDeltaHandoffThenMarkerlessDirectiveGuards, eventDeltaHandoffThenMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_handoff_then_markerless_directive",
+    role: "user",
+    delta: markerlessDirectiveText.slice(0, markerlessDirectiveSplit),
+  },
+}, 5151)
+updateSessionGuardFromEvent(eventDeltaHandoffThenMarkerlessDirectiveGuards, eventDeltaHandoffThenMarkerlessDirectiveBuffers, {
+  type: "message.part.delta",
+  properties: {
+    sessionID: "ses_event_delta_handoff_then_markerless_directive",
+    role: "user",
+    delta: markerlessDirectiveText.slice(markerlessDirectiveSplit),
+  },
+}, 5152)
+if (!getActiveOmoGuard(eventDeltaHandoffThenMarkerlessDirectiveGuards, "ses_event_delta_handoff_then_markerless_directive", 5153)) {
+  throw new Error("expected markerless OMO directive deltas after streamed handoff delta to activate tool guard")
 }
 
 const completionOnlyGuards = new Map()

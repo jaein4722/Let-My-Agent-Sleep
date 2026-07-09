@@ -90,10 +90,29 @@ export function getRoleFromEvent(event) {
     || event?.properties?.info?.role
 }
 
-export function appendEventTextBuffer(eventTextBuffers, sessionID, text) {
-  const existing = eventTextBuffers.get(sessionID) || ""
+function getEventTextBufferKey(event, sessionID) {
+  const messageID = event?.properties?.message?.info?.id
+    || event?.properties?.messageID
+    || event?.properties?.messageId
+    || event?.properties?.part?.messageID
+    || event?.properties?.part?.messageId
+    || event?.properties?.part?.message?.id
+    || event?.properties?.info?.messageID
+    || event?.properties?.info?.messageId
+  if (messageID) return `${sessionID}:message:${messageID}`
+
+  const partID = event?.properties?.part?.id
+    || event?.properties?.partID
+    || event?.properties?.partId
+  if (partID) return `${sessionID}:part:${partID}`
+
+  return `${sessionID}:role:${getRoleFromEvent(event) || "unknown"}`
+}
+
+export function appendEventTextBuffer(eventTextBuffers, bufferKey, text) {
+  const existing = eventTextBuffers.get(bufferKey) || ""
   const next = `${existing}${text}`.slice(-MAX_EVENT_TEXT_BUFFER)
-  eventTextBuffers.set(sessionID, next)
+  eventTextBuffers.set(bufferKey, next)
   return next
 }
 
@@ -135,6 +154,21 @@ function isOmoReplyExpectingInternalText(text) {
   return stripOmoInternalMarkers(text).length > 0
 }
 
+function looksLikeOmoContinuationDirectiveText(text) {
+  if (typeof text !== "string" || text.includes(OMO_INTERNAL_NOREPLY)) return false
+  const stripped = stripOmoInternalMarkers(text)
+  if (stripped.length === 0) return false
+  if (!stripped.startsWith(OMO_DIRECTIVE_PREFIX)) return false
+
+  return stripped.includes("TODO CONTINUATION")
+    || stripped.includes("RALPH LOOP")
+    || stripped.includes("BOULDER CONTINUATION")
+    || (
+      stripped.includes("Incomplete tasks remain in your todo list")
+      && stripped.includes("Continue working on the next pending task")
+    )
+}
+
 function partIsSyntheticOrInternal(part) {
   return part?.synthetic === true
     || part?.metadata?.compaction_continue === true
@@ -166,7 +200,7 @@ function isOmoContinuationEvent(event, text) {
   const role = getRoleFromEvent(event)
   if (role && role !== "user") return false
   const eventText = getTextFromEvent(event)
-  if (!eventHasSyntheticOrInternalPart(event, eventText)) return false
+  if (!eventHasSyntheticOrInternalPart(event, eventText) && !looksLikeOmoContinuationDirectiveText(text)) return false
   return isOmoTodoContinuationMessage({
     info: { role: "user" },
     parts: [{
@@ -324,6 +358,9 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
   const sessionID = getSessionIDFromEvent(event)
   if (event?.type === "session.deleted") {
     clearSessionGuard(sessionGuards, sessionID)
+    for (const key of eventTextBuffers.keys()) {
+      if (String(key).startsWith(`${sessionID}:`)) eventTextBuffers.delete(key)
+    }
     eventTextBuffers.delete(sessionID)
     return undefined
   }
@@ -335,7 +372,8 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
   const allowHandoff = role !== "user"
 
   if (event?.type === "message.part.delta") {
-    const bufferedText = appendEventTextBuffer(eventTextBuffers, sessionID, text)
+    const bufferKey = getEventTextBufferKey(event, sessionID)
+    const bufferedText = appendEventTextBuffer(eventTextBuffers, bufferKey, text)
     const next = updateSessionGuardFromText(
       sessionGuards,
       sessionID,
@@ -343,8 +381,13 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
       now,
       { allowHandoff },
     )
-    if (bufferedText.includes(LMAS_COMPLETION) || bufferedText.includes(LMAS_CANCEL)) {
-      eventTextBuffers.delete(sessionID)
+    if (
+      bufferedText.includes(LMAS_HANDOFF)
+      || bufferedText.includes(LMAS_STATUS)
+      || bufferedText.includes(LMAS_COMPLETION)
+      || bufferedText.includes(LMAS_CANCEL)
+    ) {
+      eventTextBuffers.delete(bufferKey)
     }
     const existing = sessionGuards.get(sessionID)
     if (existing?.active && isOmoContinuationEvent(event, bufferedText)) {
@@ -435,9 +478,9 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
 export function isOmoTodoContinuationMessage(message) {
   if (message?.info?.role !== "user") return false
   const hasInternalPart = messageHasSyntheticOrInternalPart(message)
-  if (!hasInternalPart) return false
-
   const text = collectTextFromMessage(message)
+  if (!hasInternalPart) return looksLikeOmoContinuationDirectiveText(text)
+
   return text.includes(OMO_TODO_CONTINUATION) || (
     text.includes(OMO_DIRECTIVE_PREFIX)
     && (
