@@ -963,6 +963,34 @@ if (getActiveOmoGuard(statusGuards, "ses_status", 7054)) {
   throw new Error("expected completed LMAS_STATUS to clear guarded runs")
 }
 
+const finalizingCancelGuards = new Map()
+updateSessionGuardFromText(
+  finalizingCancelGuards,
+  "ses_finalizing_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_finalizing_cancel\nstatus: STARTED",
+  7055,
+  { omoTurn: true },
+)
+updateSessionGuardFromCancelText(
+  finalizingCancelGuards,
+  "ses_finalizing_cancel",
+  "LMAS_CANCEL v1\nrun_id: lmas_finalizing_cancel\nstatus: ALREADY_COMPLETED\nexisting_status: CANCELLED\nmessage: job has already exited; completion event is finalizing\n",
+  7056,
+)
+const finalizingCancelGuard = getActiveOmoGuard(finalizingCancelGuards, "ses_finalizing_cancel", 7057)
+if (!finalizingCancelGuard?.runIds?.includes("lmas_finalizing_cancel")) {
+  throw new Error("expected finalizing LMAS_CANCEL result to keep guard active")
+}
+updateSessionGuardFromText(
+  finalizingCancelGuards,
+  "ses_finalizing_cancel",
+  "LMAS_CANCEL v1\nrun_id: lmas_finalizing_cancel\nstatus: ALREADY_COMPLETED\nexisting_status: CANCELLED\nmessage: job has already exited; completion event is finalizing\n",
+  7058,
+)
+if (!getActiveOmoGuard(finalizingCancelGuards, "ses_finalizing_cancel", 7059)?.runIds?.includes("lmas_finalizing_cancel")) {
+  throw new Error("expected event-visible finalizing LMAS_CANCEL to keep guard active")
+}
+
 const cancelIntentGuards = new Map()
 const cancelIntentBuffers = new Map()
 updateSessionGuardFromText(

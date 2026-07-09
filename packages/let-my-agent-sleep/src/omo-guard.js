@@ -107,6 +107,13 @@ function extractRunIds(text) {
   return runIds
 }
 
+function isFinalizingCancelText(text) {
+  return typeof text === "string"
+    && text.includes(LMAS_CANCEL)
+    && /^status:\s*ALREADY_COMPLETED$/m.test(text)
+    && /^message:\s*job has already exited; completion event is finalizing$/m.test(text)
+}
+
 function unique(values) {
   return [...new Set(values)]
 }
@@ -214,7 +221,7 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
     const completedRunIds = new Set(extractRunIds(text))
     runIds = runIds.filter((runId) => !completedRunIds.has(runId))
   }
-  if (hasAllowedCancel) {
+  if (hasAllowedCancel && !isFinalizingCancelText(text)) {
     const cancelRunIds = new Set(extractRunIds(text))
     runIds = runIds.filter((runId) => !cancelRunIds.has(runId))
   }
@@ -287,6 +294,18 @@ export function updateSessionGuardFromCancelText(sessionGuards, sessionID, text,
     allowCancel: false,
     runIds: [],
     updatedAt: now,
+  }
+  if (isFinalizingCancelText(text)) {
+    const runIds = unique([...(Array.isArray(existing.runIds) ? existing.runIds : []), ...cancelRunIds])
+    const next = {
+      active: runIds.length > 0,
+      omoTurn: runIds.length > 0,
+      allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
+      runIds,
+      updatedAt: now,
+    }
+    sessionGuards.set(sessionID, next)
+    return next
   }
   const cancelled = new Set(cancelRunIds)
   const runIds = (Array.isArray(existing.runIds) ? existing.runIds : []).filter((runId) => !cancelled.has(runId))
