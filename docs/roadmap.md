@@ -16,9 +16,7 @@ Verified baseline: 17-hour and 12-hour real OpenCode training runs completed the
 
 ## Short-Term Plan
 
-Ordered roughly by value per effort.
-
-1. **Release pitch.** Add a README demo GIF of an OpenCode session going quiet on handoff and waking on completion; add a comparison note against native background-task features, citing the 17h/12h live validation.
+No current short-term release blockers are tracked here. New work should come from live agent validation or concrete user feedback, not speculative expansion.
 
 ## Completed Hardening
 
@@ -26,6 +24,7 @@ Ordered roughly by value per effort.
 - **Failure-mode hardening.** Smoke tests now cover adapter failure after completion event creation, preserving `resume_prompt.txt` for manual recovery, status exposure of that prompt path, missing watcher `LOST`, missing tmux session `LOST`, cancellation of already-lost runs, and completion/cancel races.
 - **Observability without polling.** `lmas list` reports elapsed seconds and a command summary. `lmas status` reports started time, elapsed seconds, command, and the last line of `progress.txt` when present. Smoke tests cover the progress contract while keeping the no-poll handoff rule intact.
 - **Secondary completion notification.** `--notify <url>` and `LMAS_NOTIFY_URL` post the generated resume prompt to a webhook/ntfy endpoint after the adapter attempt, without replacing session injection. Smoke tests cover notification delivery even when OpenCode adapter injection fails.
+- **Release pitch.** README now includes a lightweight handoff demo GIF, a native-background-task comparison note, and the verified 17-hour/12-hour OpenCode live-run baseline.
 
 ## Optional Ideas (not planned)
 

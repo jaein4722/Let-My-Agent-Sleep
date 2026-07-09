@@ -35,6 +35,7 @@ job exits -> LMAS_COMPLETION_EVENT v1 -> session resumes or prompt is recorded
 ## Contents
 
 - [Why](#why)
+- [Demo](#demo)
 - [Quick Start](#quick-start)
 - [Agent Support](#agent-support)
 - [OpenCode](#opencode)
@@ -58,6 +59,16 @@ Without LMAS, a long-running job often turns into an expensive agent loop:
 | Cost grows with wall-clock wait time. | Cost is handoff plus completion handling. |
 
 LMAS does not make useful agent work free. It removes the waiting portion: polling turns, repeated context reloads, and artificial continue loops.
+
+## Demo
+
+![LMAS handoff demo](https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif)
+
+The important boundary is the agent turn. LMAS starts the command, records `LMAS_HANDOFF v1`, and the agent stops. When the process exits, LMAS writes `LMAS_COMPLETION_EVENT v1` and resumes a supported session with stdout, stderr, metadata, and artifact paths.
+
+This is different from a plain native background task. Native backgrounding is enough only when it also prevents agent polling, preserves the session handoff, records the recovery prompt, and wakes the same supported session on completion. LMAS standardizes that behavior across OpenCode, Codex, and experimental Claude Code support.
+
+Verified live baseline: real OpenCode runs of 17 hours and 12 hours completed the full handoff -> completion -> session re-entry loop.
 
 ## Quick Start
 
