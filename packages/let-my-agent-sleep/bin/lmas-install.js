@@ -1078,7 +1078,7 @@ function openCodeAuthHeaders(options) {
 }
 
 async function doctorOpenCodeLiveTools(options) {
-  const requiredTools = ["lmas_start", "lmas_status", "lmas_cancel"]
+  const requiredTools = ["lmas_start", "lmas_status", "lmas_cancel", "lmas_info"]
   const serverUrl = options.serverUrl
   const timeoutSeconds = Number(process.env.LMAS_HTTP_MAX_TIME || 30)
   const controller = new AbortController()

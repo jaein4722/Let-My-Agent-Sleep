@@ -130,6 +130,7 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 - `lmas_start`
 - `lmas_status`
 - `lmas_cancel`
+- `lmas_info`
 
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
 
@@ -143,7 +144,7 @@ The disabled hooks are `todo-continuation-enforcer`, `ralph-loop`, `ulw-loop`, `
 This keeps those known continuation hooks disabled in the OpenCode environment so they cannot re-enter an active LMAS handoff loop.
 Use `--keep-omo-continuation` only if you explicitly want to keep those hooks enabled.
 
-LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. `noReply` internal notifications and LMAS completion prompts are allowed through.
+LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` is a diagnostic tool used by live doctor checks.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 

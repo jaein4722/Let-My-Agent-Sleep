@@ -40,7 +40,7 @@ On completion, the watcher posts `resume_prompt.txt` to:
 POST /session/:session_id/prompt_async
 ```
 
-The OpenCode npm plugin provides `lmas_start`, `lmas_status`, and `lmas_cancel`. `lmas_start` sets the session id from the OpenCode tool context.
+The OpenCode npm plugin provides `lmas_start`, `lmas_status`, `lmas_cancel`, and diagnostic `lmas_info`. `lmas_start` sets the session id from the OpenCode tool context.
 
 The OpenCode plugin also installs a runtime handoff guard. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into the same session is treated as a no-op until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. This protects the handoff from loop plugins that try to continue a session because a TODO or plan item is still open. `noReply` internal notifications and LMAS completion prompts are not blocked.
 

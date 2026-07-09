@@ -22,6 +22,7 @@
       <li><code>lmas_start</code> starts a command through LMAS handoff semantics.</li>
       <li><code>lmas_status</code> reads a run status without polling blindly.</li>
       <li><code>lmas_cancel</code> cancels a user-selected run and records cancellation when the watcher is still alive.</li>
+      <li><code>lmas_info</code> reports plugin diagnostics for live doctor checks.</li>
     </ul>
     <h2>Oh My OpenAgent continuation</h2>
     <p>During OpenCode install, LMAS disables known Oh My OpenAgent continuation hooks by default: <code>todo-continuation-enforcer</code>, <code>ralph-loop</code>, <code>ulw-loop</code>, <code>ultrawork</code>, <code>start-work-continuation</code>, <code>boulder-continuation</code>, and <code>atlas</code>. This prevents OMO from re-entering an active LMAS handoff just because a todo is still open while the long-running job is expected to continue in the background.</p>

@@ -52,14 +52,14 @@ const server = http.createServer((request, response) => {
   if (mode === "slow") {
     setTimeout(() => {
       response.writeHead(200, { "content-type": "application/json" })
-      response.end(JSON.stringify(["bash", "lmas_start", "lmas_status", "lmas_cancel"]))
+      response.end(JSON.stringify(["bash", "lmas_start", "lmas_status", "lmas_cancel", "lmas_info"]))
     }, 3000)
     return
   }
 
   const tools = mode === "ok"
     || mode === "auth-ok"
-    ? ["bash", "lmas_start", "lmas_status", "lmas_cancel"]
+    ? ["bash", "lmas_start", "lmas_status", "lmas_cancel", "lmas_info"]
     : ["bash", "lmas_status"]
   response.writeHead(200, { "content-type": "application/json" })
   response.end(JSON.stringify(tools))

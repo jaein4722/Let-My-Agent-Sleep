@@ -30,7 +30,7 @@ for (const hookName of [
   }
 }
 
-for (const toolName of ["lmas_start", "lmas_status", "lmas_cancel"]) {
+for (const toolName of ["lmas_start", "lmas_status", "lmas_cancel", "lmas_info"]) {
   const definition = hooks.tool?.[toolName]
   if (!definition || typeof definition.execute !== "function") {
     throw new Error(`missing tool definition: ${toolName}`)
@@ -47,6 +47,11 @@ if (!hooks.tool.lmas_status.args.run_id.safeParse("lmas_test").success) {
 
 if (!hooks.tool.lmas_cancel.args.run_id.safeParse("lmas_test").success) {
   throw new Error("lmas_cancel run_id schema did not accept a string")
+}
+
+const info = await hooks.tool.lmas_info.execute({}, { sessionID: "ses_info_test" })
+if (!info.includes("LMAS_INFO v1") || !info.includes("version:")) {
+  throw new Error("lmas_info did not return diagnostic info")
 }
 
 console.log("ok opencode plugin real import")

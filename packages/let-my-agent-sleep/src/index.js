@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { tool } from "@opencode-ai/plugin"
@@ -17,6 +17,7 @@ import {
 } from "./omo-guard.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
 const sessionGuards = new Map()
 const eventTextBuffers = new Map()
 const allowedCancelCallIds = new Set()
@@ -572,6 +573,25 @@ function createCancelTool(defaultServerUrl) {
   })
 }
 
+function createInfoTool(defaultServerUrl) {
+  return tool({
+    description:
+      "Return Let My Agent Sleep OpenCode plugin diagnostic information. Use for install/debug checks, not for polling active runs.",
+    args: {},
+    async execute(_args, context) {
+      return [
+        "LMAS_INFO v1",
+        `name: ${packageJson.name}`,
+        `version: ${packageJson.version}`,
+        "adapter: opencode",
+        `server_url: ${process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl}`,
+        `session_id: ${context.sessionID || ""}`,
+        `guarded_sessions: ${sessionGuards.size}`,
+      ].join("\n")
+    },
+  })
+}
+
 export const LetMyAgentSleepPlugin = async (input = {}) => {
   const { serverUrl } = input
   const defaultServerUrl = serverUrl?.toString?.().replace(/\/$/, "") || "http://127.0.0.1:4096"
@@ -648,6 +668,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       lmas_start: createStartTool(defaultServerUrl),
       lmas_status: createStatusTool(),
       lmas_cancel: createCancelTool(defaultServerUrl),
+      lmas_info: createInfoTool(defaultServerUrl),
     },
   }
 }
