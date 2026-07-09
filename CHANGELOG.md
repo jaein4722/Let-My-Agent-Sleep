@@ -56,6 +56,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed multiline cancel reasons so cancellation metadata stays line-oriented.
 - Fixed line-oriented event output for handoff, completion, status, and cancel fields.
 - Fixed completion event publishing so `resume_prompt.txt` is ready before `completion_event.txt` appears.
+- Fixed finalizing run handling so status/list report `FINALIZING` and cancel does not kill a job that has already exited.
 
 ## 0.2.6 and earlier
 

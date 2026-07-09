@@ -670,6 +670,30 @@ read_metadata_field() {
   fi
 }
 
+completion_event_file() {
+  local run_dir
+  run_dir=$1
+  if [ -f "$run_dir/completion_event.txt" ]; then
+    printf '%s\n' "$run_dir/completion_event.txt"
+    return 0
+  fi
+  if [ -f "$run_dir/.completion_event.txt" ]; then
+    printf '%s\n' "$run_dir/.completion_event.txt"
+    return 0
+  fi
+  return 1
+}
+
+status_from_exit_code() {
+  local exit_code
+  exit_code=$1
+  if [ "$exit_code" = "0" ]; then
+    printf 'SUCCEEDED\n'
+  else
+    printf 'FAILED\n'
+  fi
+}
+
 safe_tsv_field() {
   printf '%s' "$1" | tr '\t\r\n' '   '
 }
@@ -821,8 +845,7 @@ cancel_command() {
   run_ref=$1
   run_dir=$(resolve_run_dir "$runs_dir" "$run_ref") || die "run not found: $run_ref"
 
-  if [ -f "$run_dir/completion_event.txt" ]; then
-    event_file="$run_dir/completion_event.txt"
+  if event_file=$(completion_event_file "$run_dir"); then
     run_id=$(read_field "$event_file" run_id)
     existing_status=$(read_field "$event_file" status)
     {
@@ -839,6 +862,19 @@ cancel_command() {
   [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
 
   run_id=$(read_field "$event_file" run_id)
+  if [ -f "$run_dir/exit_code" ]; then
+    exit_code=$(sed -n '1p' "$run_dir/exit_code")
+    existing_status=$(status_from_exit_code "$exit_code")
+    {
+      printf 'LMAS_CANCEL v1\n'
+      write_line_field run_id "$run_id"
+      write_line_field status ALREADY_COMPLETED
+      write_line_field existing_status "$existing_status"
+      write_line_field run_dir "$run_dir"
+      write_line_field message "job has already exited; completion event is finalizing"
+    }
+    return 0
+  fi
   pid_or_job_id=$(read_field "$event_file" pid_or_job_id)
   was_alive=0
   if watcher_alive "$pid_or_job_id" "$run_dir"; then
@@ -882,8 +918,7 @@ cancel_command() {
   killed_pids=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$watcher_pid" "$watcher_tree_pids" "$watcher_group_pids" "$child_pid" "$child_tree_pids" "$child_group_pids" | awk 'NF && !seen[$1]++ { printf "%s%s", sep, $1; sep=" " }')
 
   if ! stop_watcher "$pid_or_job_id" "$run_dir"; then
-    if [ -f "$run_dir/completion_event.txt" ]; then
-      event_file="$run_dir/completion_event.txt"
+    if event_file=$(completion_event_file "$run_dir"); then
       existing_status=$(read_field "$event_file" status)
       {
         printf 'LMAS_CANCEL v1\n'
@@ -900,8 +935,7 @@ cancel_command() {
     surviving_pids=$(terminate_pids $killed_pids)
   fi
 
-  if [ -f "$run_dir/completion_event.txt" ]; then
-    event_file="$run_dir/completion_event.txt"
+  if event_file=$(completion_event_file "$run_dir"); then
     existing_status=$(read_field "$event_file" status)
     {
       printf 'LMAS_CANCEL v1\n'
@@ -987,10 +1021,14 @@ status_command() {
   run_ref=$1
   run_dir=$(resolve_run_dir "$runs_dir" "$run_ref") || die "run not found: $run_ref"
 
-  if [ -f "$run_dir/completion_event.txt" ]; then
-    event_file="$run_dir/completion_event.txt"
+  if event_file=$(completion_event_file "$run_dir"); then
     status=$(read_field "$event_file" status)
     exit_code=$(read_field "$event_file" exit_code)
+  elif [ -f "$run_dir/exit_code" ]; then
+    event_file="$run_dir/handoff.txt"
+    [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
+    exit_code=$(sed -n '1p' "$run_dir/exit_code")
+    status=FINALIZING
   else
     event_file="$run_dir/handoff.txt"
     [ -f "$event_file" ] || die "handoff not found for run: $run_ref"
@@ -1016,6 +1054,10 @@ status_command() {
     write_line_field status "$status"
     if [ "$status" = "RUNNING" ]; then
       printf 'meaning: job is still running; this is not a completion event\n'
+      printf 'agent_instruction: stop now; do not poll, tail logs, inspect artifacts, or call lmas_status again until LMAS_COMPLETION_EVENT v1 arrives or the user explicitly asks for another status check\n'
+    fi
+    if [ "$status" = "FINALIZING" ]; then
+      printf 'meaning: job process has exited and LMAS is preparing the completion event\n'
       printf 'agent_instruction: stop now; do not poll, tail logs, inspect artifacts, or call lmas_status again until LMAS_COMPLETION_EVENT v1 arrives or the user explicitly asks for another status check\n'
     fi
     if [ -n "$exit_code" ]; then
@@ -1076,10 +1118,14 @@ list_command() {
 
   for run_dir in "$runs_dir"/lmas_*; do
     [ -d "$run_dir" ] || continue
-    if [ -f "$run_dir/completion_event.txt" ]; then
-      event_file="$run_dir/completion_event.txt"
+    if event_file=$(completion_event_file "$run_dir"); then
       status=$(read_field "$event_file" status)
       exit_code=$(read_field "$event_file" exit_code)
+    elif [ -f "$run_dir/exit_code" ]; then
+      event_file="$run_dir/handoff.txt"
+      [ -f "$event_file" ] || continue
+      exit_code=$(sed -n '1p' "$run_dir/exit_code")
+      status=FINALIZING
     else
       event_file="$run_dir/handoff.txt"
       [ -f "$event_file" ] || continue

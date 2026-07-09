@@ -29,10 +29,32 @@ done
 [ -f "$CLI_START_RUN_DIR/completion_event.txt" ] || { printf 'missing package cli start completion_event.txt\n' >&2; exit 1; }
 printf 'step=12 loss=0.42\n' > "$RUN_DIR/progress.txt"
 
+FINALIZING_RUN_ID="lmas_finalizing_test"
+FINALIZING_RUN_DIR="$RUNS_DIR/$FINALIZING_RUN_ID"
+mkdir -p "$FINALIZING_RUN_DIR"
+cat > "$FINALIZING_RUN_DIR/handoff.txt" <<EOF
+LMAS_HANDOFF v1
+run_id: $FINALIZING_RUN_ID
+status: STARTED
+cwd: $ROOT
+command: 'sleep' '0'
+pid_or_job_id: 999999999
+stdout: $FINALIZING_RUN_DIR/stdout.log
+stderr: $FINALIZING_RUN_DIR/stderr.log
+metadata: $FINALIZING_RUN_DIR/metadata.txt
+artifacts_dir: $FINALIZING_RUN_DIR
+started_at: 2026-07-01T00:00:00Z
+resume_instruction: Wait for completion event or inspect $FINALIZING_RUN_DIR/resume_prompt.txt after the job exits.
+EOF
+printf 'run_id=%s\nadapter=noop\ncwd=%s\ncommand=%s\nstarted_epoch=1\nartifacts_dir=%s\n' "$FINALIZING_RUN_ID" "$ROOT" "'sleep' '0'" "$FINALIZING_RUN_DIR" > "$FINALIZING_RUN_DIR/metadata.txt"
+printf '0\n' > "$FINALIZING_RUN_DIR/exit_code"
+
 STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_ID")
 STATUS_BY_DIR=$(cd "$ROOT" && ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_DIR")
 STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js status "$RUN_ID")
 CLI_START_STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js status "$CLI_START_RUN_ID")
+FINALIZING_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$FINALIZING_RUN_ID")
+FINALIZING_CANCEL=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh cancel "$FINALIZING_RUN_ID")
 LIST_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh list)
 LIST_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js list)
 LOST_RUN_ID="lmas_lost_test"
@@ -107,6 +129,11 @@ printf '%s\n' "$LIST_OUTPUT" | grep -q $'run_id\tstatus\texit_code\telapsed_seco
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include completed run\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0[[:space:]]*[0-9][0-9]*[[:space:]]*'./examples/fake_train.sh' 'success'" || { printf 'list did not include elapsed command summary\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$CLI_START_RUN_ID[[:space:]]*SUCCEEDED[[:space:]]*0" || { printf 'list did not include package cli started run\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_STATUS" | grep -q '^status: FINALIZING$' || { printf 'finalizing run did not report FINALIZING\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_STATUS" | grep -q '^agent_instruction: stop now;' || { printf 'finalizing status did not include no-poll instruction\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^status: ALREADY_COMPLETED$' || { printf 'finalizing cancel did not avoid killing completed run\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^existing_status: SUCCEEDED$' || { printf 'finalizing cancel did not derive succeeded status\n' >&2; exit 1; }
+printf '%s\n' "$LIST_OUTPUT" | grep -q "$FINALIZING_RUN_ID[[:space:]]*FINALIZING[[:space:]]*0" || { printf 'list did not include finalizing run\n' >&2; exit 1; }
 if printf '%s\n' "$LIST_OUTPUT" | grep -q "$MALFORMED_RUN_ID"; then
   printf 'list should skip malformed run dir without handoff\n' >&2
   exit 1
