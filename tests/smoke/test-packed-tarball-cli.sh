@@ -71,6 +71,10 @@ printf '%s\n' "$HELP_OUTPUT" | grep -q '^Usage:' || {
   printf 'packed tarball CLI help failed\n' >&2
   exit 1
 }
+printf '%s\n' "$HELP_OUTPUT" | grep -q -- '--workspace <id>' || {
+  printf 'packed tarball CLI help missing OpenCode workspace live doctor option\n' >&2
+  exit 1
+}
 
 INSTALL_OUTPUT=$(cd / && HOME="$INSTALL_HOME" node "$PKG/bin/lmas-install.js" install --agent all --dry-run --yes 2>&1)
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'OpenCode install configured' || {
@@ -95,6 +99,11 @@ printf '%s\n' "$INSTALL_OUTPUT" | grep -q '.claude/commands/let-my-agent-sleep.m
 }
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q '.codex/skills/let-my-agent-sleep' || {
   printf 'packed tarball install dry-run missing Codex skill target\n' >&2
+  printf '%s\n' "$INSTALL_OUTPUT" >&2
+  exit 1
+}
+printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --workspace "<workspace-id>"' || {
+  printf 'packed tarball install dry-run missing OpenCode workspace live doctor instruction\n' >&2
   printf '%s\n' "$INSTALL_OUTPUT" >&2
   exit 1
 }

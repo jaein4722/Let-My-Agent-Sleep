@@ -31,7 +31,7 @@ const paths = {
 function usage() {
   console.log(`Usage:
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
-  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--directory <path>] [--server-username <name>] [--server-password <password>]
+  lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--directory <path>] [--workspace <id>] [--server-username <name>] [--server-password <password>]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
@@ -51,6 +51,8 @@ Options:
                    During OpenCode doctor, also verify the live server exposes lmas tools.
   --directory <path>
                    During OpenCode live doctor, pass the workspace directory to OpenCode.
+  --workspace <id>
+                   During OpenCode live doctor, pass the workspace id/name to OpenCode.
   --server-username <name>
                    Basic-auth username for OpenCode live doctor. Default: LMAS_OPENCODE_USERNAME, OPENCODE_SERVER_USERNAME, or opencode.
   --server-password <password>
@@ -85,6 +87,7 @@ function parseArgs(argv) {
     keepOmoContinuation: false,
     serverUrl: "",
     directory: "",
+    workspace: "",
     serverUsername: "",
     serverPassword: "",
   }
@@ -136,6 +139,17 @@ function parseArgs(argv) {
     }
     if (arg.startsWith("--directory=")) {
       options.directory = arg.slice("--directory=".length)
+      continue
+    }
+    if (arg === "--workspace") {
+      const value = argv[index + 1]
+      if (!value) throw new Error("--workspace requires a value")
+      options.workspace = value
+      index += 1
+      continue
+    }
+    if (arg.startsWith("--workspace=")) {
+      options.workspace = arg.slice("--workspace=".length)
       continue
     }
     if (arg === "--server-username") {
@@ -1089,6 +1103,7 @@ function liveToolIDsUrl(serverUrl, options = {}) {
   const base = new URL(serverUrl)
   const url = new URL("/experimental/tool/ids", base)
   if (options.directory) url.searchParams.set("directory", options.directory)
+  if (options.workspace) url.searchParams.set("workspace", options.workspace)
   return url
 }
 
@@ -1446,6 +1461,8 @@ async function main() {
     console.log("After restart, verify the install with:")
     console.log("  lmas doctor --agent opencode")
     console.log("  lmas doctor --agent opencode --server-url http://127.0.0.1:4096")
+    console.log('  lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --directory "$PWD"')
+    console.log('  lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --workspace "<workspace-id>"')
   }
   if (selectedAgents.includes("codex")) {
     console.log("Restart Codex so it reloads skills.")

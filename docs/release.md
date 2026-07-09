@@ -79,6 +79,7 @@ For an OpenCode environment, run:
 lmas doctor --agent opencode
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --directory "$PWD"
+lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --workspace "<workspace-id>"
 ```
 
 If the OpenCode server requires authentication:

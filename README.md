@@ -175,6 +175,7 @@ lmas start --notify https://ntfy.sh/my-topic -- python train.py
 lmas doctor --agent opencode
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --directory "$PWD"
+lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --workspace "<workspace-id>"
 LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 
