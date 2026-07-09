@@ -7,6 +7,7 @@ All notable changes to Let My Agent Sleep are documented here.
 ### Added
 
 - Added `lmas_cancel` support across the CLI and OpenCode plugin, including cancellation events and smoke coverage.
+- Added protocol documentation and packaged-asset checks for the `LMAS_CANCEL v1` event contract.
 - Added `lmas doctor` diagnostics for OpenCode installs, plugin order, OMO continuation configuration, plugin cache state, and live tool exposure.
 - Added GitHub Actions release automation for npm trusted publishing and GitHub release creation.
 - Added `npm run release:check` to enforce local version, npm version, changelog, smoke, site, pack, and patch hygiene checks before pushing release automation.

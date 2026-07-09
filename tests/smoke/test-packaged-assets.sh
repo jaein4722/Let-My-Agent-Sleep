@@ -15,6 +15,7 @@ OPENCODE_SKILL="$PKG/skills/let-my-agent-sleep/SKILL.md"
 CODEX_SKILL="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/SKILL.md"
 CODEX_PLUGIN_MANIFEST="$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json"
 CODEX_PROTOCOL="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/references/protocol.md"
+ROOT_PROTOCOL="$ROOT/docs/protocol.md"
 ROOT_CHANGELOG="$ROOT/CHANGELOG.md"
 PACKAGE_CHANGELOG="$PKG/CHANGELOG.md"
 ROOT_README="$ROOT/README.md"
@@ -33,6 +34,7 @@ GITIGNORE="$ROOT/.gitignore"
 [ -f "$CLAUDE_COMMAND" ] || { printf 'claude command was not packaged\n' >&2; exit 1; }
 [ -f "$CODEX_PLUGIN_MANIFEST" ] || { printf 'codex plugin manifest was not packaged\n' >&2; exit 1; }
 [ -f "$CODEX_PROTOCOL" ] || { printf 'codex protocol reference was not packaged\n' >&2; exit 1; }
+[ -f "$ROOT_PROTOCOL" ] || { printf 'root protocol doc is missing\n' >&2; exit 1; }
 [ -f "$ROOT_CHANGELOG" ] || { printf 'root CHANGELOG.md is missing\n' >&2; exit 1; }
 [ -f "$PACKAGE_CHANGELOG" ] || { printf 'package CHANGELOG.md is missing\n' >&2; exit 1; }
 [ -f "$ROOT_README" ] || { printf 'root README.md is missing\n' >&2; exit 1; }
@@ -48,7 +50,15 @@ grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PACKA
   printf 'package README.md must use the absolute PNG social card preview\n' >&2
   exit 1
 }
-grep -q 'Secondary Notification' "$CODEX_PROTOCOL" || { printf 'codex protocol reference missing secondary notification section\n' >&2; exit 1; }
+for protocol in "$ROOT_PROTOCOL" "$CODEX_PROTOCOL"; do
+  grep -q 'LMAS_CANCEL v1' "$protocol" || { printf '%s missing cancel event contract\n' "$protocol" >&2; exit 1; }
+  grep -q 'status: CANCELLED' "$protocol" || { printf '%s missing CANCELLED cancel status contract\n' "$protocol" >&2; exit 1; }
+  grep -q 'status: ALREADY_COMPLETED' "$protocol" || { printf '%s missing ALREADY_COMPLETED cancel status contract\n' "$protocol" >&2; exit 1; }
+  grep -q 'status: LOST' "$protocol" || { printf '%s missing LOST cancel status contract\n' "$protocol" >&2; exit 1; }
+  grep -q 'completion_event' "$protocol" || { printf '%s missing cancel completion_event field\n' "$protocol" >&2; exit 1; }
+  grep -q 'resume_prompt' "$protocol" || { printf '%s missing cancel resume_prompt field\n' "$protocol" >&2; exit 1; }
+  grep -q 'Secondary Notification' "$protocol" || { printf '%s missing secondary notification section\n' "$protocol" >&2; exit 1; }
+done
 grep -q '^\.lmas/$' "$GITIGNORE" || { printf '.gitignore must exclude LMAS runtime runs\n' >&2; exit 1; }
 grep -q '^\*\.tgz$' "$GITIGNORE" || { printf '.gitignore must exclude npm pack tarballs\n' >&2; exit 1; }
 grep -q '^__pycache__/$' "$GITIGNORE" || { printf '.gitignore must exclude Python bytecode caches\n' >&2; exit 1; }

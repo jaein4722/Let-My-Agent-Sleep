@@ -37,6 +37,43 @@ Required fields:
 - `artifacts_dir`
 - `finished_at`
 
+## Cancel Event
+
+`LMAS_CANCEL v1` is emitted by:
+
+```bash
+lmas.sh cancel <run_id>
+```
+
+Use it only when the user explicitly asks to cancel a handoffed run. Do not cancel a run merely because it is long-running.
+
+When cancellation succeeds, LMAS writes a normal `LMAS_COMPLETION_EVENT v1` with `status: CANCELLED` and `exit_code: 130`, writes `resume_prompt.txt`, and runs the configured adapter and secondary notification path.
+
+Successful cancellation reports:
+
+- `run_id`
+- `status: CANCELLED`
+- `exit_code`
+- `run_dir`
+- `completion_event`
+- `resume_prompt`
+
+If the run already has `completion_event.txt`, cancel is a no-op and reports:
+
+- `run_id`
+- `status: ALREADY_COMPLETED`
+- `existing_status`
+- `run_dir`
+
+If the handoff exists but the watcher is already gone and no completion event exists, cancel reports:
+
+- `run_id`
+- `status: LOST`
+- `run_dir`
+- `message`
+
+`LOST` does not write a `CANCELLED` completion event or `resume_prompt.txt`, because LMAS can no longer prove the watcher-owned command state.
+
 ## Status Event
 
 `LMAS_STATUS v1` is emitted by:

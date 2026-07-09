@@ -1,6 +1,6 @@
 # Let My Agent Sleep Protocol v1
 
-Let My Agent Sleep separates long-running work into two events: handoff and completion.
+Let My Agent Sleep separates long-running work into a handoff event, a completion event, and explicit local control events.
 
 ## `LMAS_HANDOFF v1`
 
@@ -40,6 +40,39 @@ Fields:
 - `metadata`
 - `artifacts_dir`
 - `finished_at`
+
+## `LMAS_CANCEL v1`
+
+Printed by `lmas cancel <run_id>` after a user explicitly asks LMAS to stop a handoffed run.
+
+Meaning: cancellation was requested for a known LMAS run. Agents must not cancel a run merely because it is long-running; cancellation is a user-directed control action.
+
+Successful cancellation writes a normal completion event with `status: CANCELLED` and `exit_code: 130`, writes `resume_prompt.txt`, and runs the configured adapter and secondary notification path.
+
+Fields for successful cancellation:
+
+- `run_id`
+- `status: CANCELLED`
+- `exit_code`
+- `run_dir`
+- `completion_event`
+- `resume_prompt`
+
+If the run already has `completion_event.txt`, cancel is a no-op and reports:
+
+- `run_id`
+- `status: ALREADY_COMPLETED`
+- `existing_status`
+- `run_dir`
+
+If the handoff exists but the watcher is already gone and no completion event exists, cancel reports:
+
+- `run_id`
+- `status: LOST`
+- `run_dir`
+- `message`
+
+`LOST` does not write a `CANCELLED` completion event or `resume_prompt.txt`, because LMAS can no longer prove the watcher-owned command state.
 
 ## Run Directory
 
