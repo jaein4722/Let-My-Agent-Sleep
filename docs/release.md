@@ -4,29 +4,24 @@ This project publishes `let-my-agent-sleep` from GitHub Actions with npm trusted
 
 ## Before pushing a release
 
-Check the package version:
+Run the release check:
 
 ```bash
-node -p "require('./packages/let-my-agent-sleep/package.json').version"
+npm run release:check
 ```
 
-Check the current npm version:
+This checks:
 
-```bash
-npm view let-my-agent-sleep version
-```
+- Local `packages/let-my-agent-sleep/package.json` version.
+- Current npm version from `npm view let-my-agent-sleep version`.
+- Local version is newer than the npm version.
+- `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` contain a dated release heading, not `Unreleased`.
+- `npm run test:site`.
+- `npm run test:smoke`.
+- `npm run pack`.
+- `git diff --check`.
 
-Only push a release version when the local package version is newer than the npm version.
-Update `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` for the release candidate before pushing. The release heading should use the published version and release date, not `Unreleased`.
-
-Run the local checks:
-
-```bash
-npm run test:site
-npm run test:smoke
-npm run pack
-git diff --check
-```
+Only push a release version after `npm run release:check` passes.
 
 ## npm trusted publisher
 
