@@ -149,6 +149,7 @@ python3 - <<'PY'
 from pathlib import Path
 
 workflow = Path(".github/workflows/publish.yml").read_text()
+lines = workflow.splitlines()
 required = [
     "id-token: write",
     "contents: write",
@@ -171,6 +172,32 @@ for text in required:
 for forbidden in ["NODE_AUTH_TOKEN", "NPM_TOKEN", "--otp", "always-auth"]:
     if forbidden in workflow:
         raise SystemExit(f"publish workflow should not use token/OTP publishing path: {forbidden}")
+
+try:
+    push_index = lines.index("  push:")
+except ValueError as error:
+    raise SystemExit("publish workflow missing push trigger") from error
+
+branch_block = lines[push_index + 1:push_index + 4]
+if branch_block != ["    branches:", "      - master", "    paths:"]:
+    raise SystemExit("publish workflow push trigger must be limited to master with explicit paths")
+
+path_lines = []
+for line in lines[push_index + 4:]:
+    if line.startswith("  ") and not line.startswith("      - "):
+        break
+    if line.startswith("      - "):
+        path_lines.append(line.removeprefix("      - "))
+
+expected_paths = [
+    "packages/let-my-agent-sleep/package.json",
+    ".github/workflows/publish.yml",
+]
+if path_lines != expected_paths:
+    raise SystemExit(
+        "publish workflow paths must trigger only on package version metadata or workflow changes; "
+        f"got {path_lines!r}"
+    )
 PY
 
 MOCK_BIN="$TMPDIR_ROOT/bin"
