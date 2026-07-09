@@ -37,6 +37,16 @@ const pluginPath = process.argv[2]
 const module = await import(pluginPath)
 const plugin = module.default
 const { LetMyAgentSleepPlugin } = module
+
+let fetchCalls = 0
+globalThis.fetch = async () => {
+  fetchCalls += 1
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  })
+}
+
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
 
 if (typeof plugin !== "function") {
@@ -84,6 +94,32 @@ const messages = [
   },
 ]
 hooks["experimental.chat.messages.transform"]({}, { messages })
+
+await hooks.event({
+  event: {
+    type: "message.part.delta",
+    properties: {
+      sessionID: "ses_packed_import",
+      delta: "LMAS_HANDOFF v1\nrun_id: lmas_packed_import\nstatus: STARTED",
+    },
+  },
+})
+
+const blockedMarkerlessPrompt = await fetch("http://127.0.0.1:4096/session/ses_packed_import/prompt_async", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    parts: [{ type: "text", text: "ordinary retry prompt without internal marker" }],
+  }),
+})
+
+if (blockedMarkerlessPrompt.status !== 204 || blockedMarkerlessPrompt.headers.get("x-lmas-guard") !== "active") {
+  throw new Error("packed plugin did not no-op markerless prompt injection during active handoff")
+}
+
+if (fetchCalls !== 0) {
+  throw new Error("packed plugin markerless prompt injection reached underlying fetch")
+}
 
 const args = { command: "cat stdout.log", timeout: 60000 }
 const output = { args }
