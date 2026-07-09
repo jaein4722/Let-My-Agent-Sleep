@@ -39,6 +39,7 @@ for (const file of ["src", "bin", "skills", "codex-plugin", "claude/let-my-agent
   assert(pkg.files?.includes(file), `missing package files entry: ${file}`)
 }
 assert(lock.packages?.["packages/let-my-agent-sleep"]?.version === pkg.version, "package-lock workspace version does not match package.json")
+assert(readme.includes("https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png"), "npm README should use absolute PNG social card URL")
 assert(readme.includes("https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif"), "npm README should use absolute demo GIF URL")
 
 console.log(`ok package metadata: ${pkg.version}`)
