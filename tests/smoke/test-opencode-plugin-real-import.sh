@@ -44,6 +44,9 @@ if (!hooks.tool.lmas_start.args.command.safeParse("echo ok").success) {
 if (!hooks.tool.lmas_status.args.run_id.safeParse("lmas_test").success) {
   throw new Error("lmas_status run_id schema did not accept a string")
 }
+if (!hooks.tool.lmas_status.description.includes("FINALIZING")) {
+  throw new Error("lmas_status description does not mention FINALIZING stop behavior")
+}
 
 if (!hooks.tool.lmas_cancel.args.run_id.safeParse("lmas_test").success) {
   throw new Error("lmas_cancel run_id schema did not accept a string")

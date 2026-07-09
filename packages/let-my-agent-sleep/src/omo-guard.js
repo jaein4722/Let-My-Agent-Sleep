@@ -245,7 +245,7 @@ export function updateSessionGuardFromStatusText(sessionGuards, sessionID, text,
   }
   const existingRunIds = Array.isArray(existing.runIds) ? existing.runIds : []
 
-  if (status === "RUNNING") {
+  if (status === "RUNNING" || status === "FINALIZING") {
     const runIds = unique([...existingRunIds, ...statusRunIds])
     const next = {
       active: runIds.length > 0,

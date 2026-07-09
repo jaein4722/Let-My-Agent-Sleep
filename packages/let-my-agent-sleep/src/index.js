@@ -474,7 +474,7 @@ function createStartTool(defaultServerUrl) {
 function createStatusTool() {
   return tool({
     description:
-      "Inspect an LMAS run only when the user explicitly asks for status or after an LMAS_COMPLETION_EVENT. If LMAS_STATUS v1 reports RUNNING, stop immediately; do not poll, tail logs, inspect artifacts, or continue checking until a completion event arrives or the user explicitly asks again.",
+      "Inspect an LMAS run only when the user explicitly asks for status or after an LMAS_COMPLETION_EVENT. If LMAS_STATUS v1 reports RUNNING or FINALIZING, stop immediately; do not poll, tail logs, inspect artifacts, or continue checking until a completion event arrives or the user explicitly asks again.",
     args: {
       run_id: tool.schema.string().describe("LMAS run id, for example lmas_20260701T134510+0900_61653_17555, or a run directory path."),
       runs_dir: tool.schema.string().optional().describe("Run directory root. Defaults to LMAS_RUNS_DIR or .lmas/runs."),

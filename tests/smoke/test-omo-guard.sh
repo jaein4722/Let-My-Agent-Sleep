@@ -946,11 +946,21 @@ if (!runningStatusGuard || !runningStatusGuard.runIds.includes("lmas_status_runn
 updateSessionGuardFromStatusText(
   statusGuards,
   "ses_status",
-  "LMAS_STATUS v1\nrun_id: lmas_status_running\nstatus: SUCCEEDED\n",
-  7052,
+  "LMAS_STATUS v1\nrun_id: lmas_status_finalizing\nstatus: FINALIZING\n",
+  7051,
 )
-if (getActiveOmoGuard(statusGuards, "ses_status", 7053)) {
-  throw new Error("expected non-RUNNING LMAS_STATUS to clear run guard")
+const finalizingStatusGuard = getActiveOmoGuard(statusGuards, "ses_status", 7052)
+if (!finalizingStatusGuard || !finalizingStatusGuard.runIds.includes("lmas_status_finalizing")) {
+  throw new Error("expected FINALIZING LMAS_STATUS to keep tool guard active")
+}
+updateSessionGuardFromStatusText(
+  statusGuards,
+  "ses_status",
+  "LMAS_STATUS v1\nrun_id: lmas_status_running\nrun_id: lmas_status_finalizing\nstatus: SUCCEEDED\n",
+  7053,
+)
+if (getActiveOmoGuard(statusGuards, "ses_status", 7054)) {
+  throw new Error("expected completed LMAS_STATUS to clear guarded runs")
 }
 
 const cancelIntentGuards = new Map()
