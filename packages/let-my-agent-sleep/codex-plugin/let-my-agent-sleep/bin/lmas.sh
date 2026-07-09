@@ -971,6 +971,7 @@ cancel_command() {
   finished_at=$(now_system)
   finished_epoch=$(now_epoch)
 
+  write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   printf '%s\n' "$exit_code" > "$run_dir/exit_code"
   {
     printf 'cancelled_at=%s\n' "$finished_at"
@@ -989,7 +990,6 @@ cancel_command() {
       printf 'cancel_surviving_pids=%s\n' "$surviving_pids"
     fi
   } >> "$run_dir/metadata.txt"
-  write_completion_event "$run_dir" "$run_id" CANCELLED "$exit_code" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$finished_at"
   write_resume_prompt "$run_dir"
   run_adapter "$adapter" "$run_dir" "$run_dir/resume_prompt.txt"
   run_notification "$run_dir" "$run_dir/resume_prompt.txt"

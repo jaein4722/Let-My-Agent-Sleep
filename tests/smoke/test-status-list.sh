@@ -61,6 +61,37 @@ metadata: $FINALIZING_RUN_DIR/metadata.txt
 artifacts_dir: $FINALIZING_RUN_DIR
 finished_at: 2026-07-01T00:00:01Z
 EOF
+FINALIZING_CANCELLED_RUN_ID="lmas_finalizing_cancelled_test"
+FINALIZING_CANCELLED_RUN_DIR="$RUNS_DIR/$FINALIZING_CANCELLED_RUN_ID"
+mkdir -p "$FINALIZING_CANCELLED_RUN_DIR"
+cat > "$FINALIZING_CANCELLED_RUN_DIR/handoff.txt" <<EOF
+LMAS_HANDOFF v1
+run_id: $FINALIZING_CANCELLED_RUN_ID
+status: STARTED
+cwd: $ROOT
+command: 'sleep' '999'
+pid_or_job_id: 999999999
+stdout: $FINALIZING_CANCELLED_RUN_DIR/stdout.log
+stderr: $FINALIZING_CANCELLED_RUN_DIR/stderr.log
+metadata: $FINALIZING_CANCELLED_RUN_DIR/metadata.txt
+artifacts_dir: $FINALIZING_CANCELLED_RUN_DIR
+started_at: 2026-07-01T00:00:00Z
+resume_instruction: Wait for completion event or inspect $FINALIZING_CANCELLED_RUN_DIR/resume_prompt.txt after the job exits.
+EOF
+printf 'run_id=%s\nadapter=noop\ncwd=%s\ncommand=%s\nstarted_epoch=1\nartifacts_dir=%s\n' "$FINALIZING_CANCELLED_RUN_ID" "$ROOT" "'sleep' '999'" "$FINALIZING_CANCELLED_RUN_DIR" > "$FINALIZING_CANCELLED_RUN_DIR/metadata.txt"
+cat > "$FINALIZING_CANCELLED_RUN_DIR/.completion_event.txt" <<EOF
+LMAS_COMPLETION_EVENT v1
+run_id: $FINALIZING_CANCELLED_RUN_ID
+status: CANCELLED
+exit_code: 130
+cwd: $ROOT
+command: 'sleep' '999'
+stdout: $FINALIZING_CANCELLED_RUN_DIR/stdout.log
+stderr: $FINALIZING_CANCELLED_RUN_DIR/stderr.log
+metadata: $FINALIZING_CANCELLED_RUN_DIR/metadata.txt
+artifacts_dir: $FINALIZING_CANCELLED_RUN_DIR
+finished_at: 2026-07-01T00:00:01Z
+EOF
 
 STATUS_BY_ID=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_ID")
 STATUS_BY_DIR=$(cd "$ROOT" && ./packages/let-my-agent-sleep/bin/lmas.sh status "$RUN_DIR")
@@ -68,6 +99,8 @@ STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-age
 CLI_START_STATUS_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js status "$CLI_START_RUN_ID")
 FINALIZING_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$FINALIZING_RUN_ID")
 FINALIZING_CANCEL=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh cancel "$FINALIZING_RUN_ID")
+FINALIZING_CANCELLED_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$FINALIZING_CANCELLED_RUN_ID")
+FINALIZING_CANCELLED_CANCEL=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh cancel "$FINALIZING_CANCELLED_RUN_ID")
 LIST_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh list)
 LIST_BY_CLI=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js list)
 LOST_RUN_ID="lmas_lost_test"
@@ -148,6 +181,12 @@ printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^status: ALREADY_COMPLETED$' || { 
 printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^existing_status: SUCCEEDED$' || { printf 'finalizing cancel did not derive succeeded status\n' >&2; exit 1; }
 printf '%s\n' "$FINALIZING_CANCEL" | grep -q '^message: job has already exited; completion event is finalizing$' || { printf 'finalizing cancel did not explain finalizing state\n' >&2; exit 1; }
 printf '%s\n' "$LIST_OUTPUT" | grep -q "$FINALIZING_RUN_ID[[:space:]]*FINALIZING[[:space:]]*0" || { printf 'list did not include finalizing run\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCELLED_STATUS" | grep -q '^status: FINALIZING$' || { printf 'cancelled finalizing status did not report FINALIZING\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCELLED_STATUS" | grep -q '^exit_code: 130$' || { printf 'cancelled finalizing status did not expose exit_code 130\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCELLED_CANCEL" | grep -q '^status: ALREADY_COMPLETED$' || { printf 'cancelled finalizing cancel did not avoid duplicate cancellation\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCELLED_CANCEL" | grep -q '^existing_status: CANCELLED$' || { printf 'cancelled finalizing cancel did not preserve CANCELLED status\n' >&2; exit 1; }
+printf '%s\n' "$FINALIZING_CANCELLED_CANCEL" | grep -q '^message: job has already exited; completion event is finalizing$' || { printf 'cancelled finalizing cancel did not explain finalizing state\n' >&2; exit 1; }
+printf '%s\n' "$LIST_OUTPUT" | grep -q "$FINALIZING_CANCELLED_RUN_ID[[:space:]]*FINALIZING[[:space:]]*130" || { printf 'list did not include cancelled finalizing run\n' >&2; exit 1; }
 if printf '%s\n' "$LIST_OUTPUT" | grep -q "$MALFORMED_RUN_ID"; then
   printf 'list should skip malformed run dir without handoff\n' >&2
   exit 1
