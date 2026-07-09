@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LMAS Run Operations — Status, Progress, Notify, Cancel</title>
+  <meta name="description" content="Operational guide for Let My Agent Sleep runs: explicit status checks, progress.txt, secondary notifications, runtime artifacts, and cancellation." />
+  <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/operations.html" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header><div class="wrap nav"><a class="brand" href="../">Let My Agent Sleep</a><nav><a href="./">Docs</a><a href="../">Home</a><a href="https://github.com/jaein4722/Let-My-Agent-Sleep">GitHub</a></nav></div></header>
+  <main class="wrap">
+    <span class="eyebrow">Operations</span>
+    <h1>Inspect runs on request. Do not turn status into polling.</h1>
+    <p class="lead">LMAS keeps long-running work out of the agent loop. Operational commands are for explicit user checks, completion handling, and cancellation, not for repeatedly watching a running job.</p>
+
+    <h2>Status and list</h2>
+    <pre><code>lmas list
+lmas status &lt;run_id&gt;</code></pre>
+    <p><code>lmas list</code> shows each run id, status, exit code, elapsed seconds, a short command summary, and the run directory. <code>lmas status</code> shows the command, elapsed time, stdout, stderr, metadata, watcher log, adapter log, resume prompt, and optional notification log.</p>
+    <div class="card">
+      <h2>Agent rule</h2>
+      <p>If status is <code>RUNNING</code>, the agent should stop the turn unless the user explicitly asks for another check. <code>RUNNING</code> is not a completion event.</p>
+    </div>
+
+    <h2>Progress file</h2>
+    <p>A job may write lightweight progress lines to:</p>
+    <pre><code>.lmas/runs/&lt;run_id&gt;/progress.txt</code></pre>
+    <p>When that file exists, <code>lmas status</code> reports only the latest line as <code>progress</code>. LMAS never reads this file during handoff waiting; it is surfaced only during explicit status checks.</p>
+
+    <h2>Secondary notification</h2>
+    <pre><code>lmas start --notify https://ntfy.sh/my-topic -- python train.py
+LMAS_NOTIFY_URL=https://ntfy.sh/my-topic lmas start -- python train.py</code></pre>
+    <p><code>--notify</code> posts the generated <code>resume_prompt.txt</code> to a webhook or ntfy URL after the adapter attempt. It does not replace session resume; it is only an extra notification path.</p>
+    <p>Webhook URLs may contain secrets. LMAS stores the URL in <code>notify_url.txt</code>, not in <code>metadata.txt</code>. Metadata records only <code>notify=enabled</code>.</p>
+
+    <h2>Cancel</h2>
+    <pre><code>lmas cancel &lt;run_id&gt;</code></pre>
+    <p>Cancellation stops the watcher, terminates the process tree and process group, escalates to KILL when needed, writes a <code>CANCELLED</code> completion event when the watcher is still alive, and records any surviving pids in metadata.</p>
+
+    <h2>Runtime files</h2>
+    <ul>
+      <li><code>handoff.txt</code> records <code>LMAS_HANDOFF v1</code>.</li>
+      <li><code>completion_event.txt</code> records <code>LMAS_COMPLETION_EVENT v1</code>.</li>
+      <li><code>resume_prompt.txt</code> is the manual recovery prompt and adapter payload source.</li>
+      <li><code>stdout.log</code>, <code>stderr.log</code>, <code>metadata.txt</code>, <code>watcher.log</code>, and <code>adapter.log</code> preserve execution context.</li>
+      <li><code>notify.log</code> exists only when secondary notification is configured.</li>
+    </ul>
+  </main>
+  <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
+</body>
+</html>
