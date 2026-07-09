@@ -4,6 +4,15 @@ set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMPDIR_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/lmas-opencode.XXXXXX")
 RUNS_DIR="$TMPDIR_ROOT/runs"
+
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
 PORT_FILE="$TMPDIR_ROOT/port"
 REQUEST_LOG="$TMPDIR_ROOT/request.log"
 FAIL_PORT_FILE="$TMPDIR_ROOT/fail-port"
@@ -182,11 +191,21 @@ if grep -q "$NOTIFY_URL" "$FAIL_RUN_DIR/metadata.txt"; then
   printf 'metadata leaked notify url\n' >&2
   exit 1
 fi
+[ -f "$FAIL_RUN_DIR/notify_url.txt" ] || { printf 'notify url file was not written\n' >&2; exit 1; }
+grep -qx "$NOTIFY_URL" "$FAIL_RUN_DIR/notify_url.txt" || { printf 'notify url file did not preserve notification endpoint\n' >&2; exit 1; }
+if [ "$(file_mode "$FAIL_RUN_DIR/notify_url.txt")" != "600" ]; then
+  printf 'notify url file should be mode 600\n' >&2
+  exit 1
+fi
 
 FAIL_STATUS=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$FAIL_RUN_ID")
 printf '%s\n' "$FAIL_STATUS" | grep -q '^status: SUCCEEDED$' || { printf 'adapter failure status should remain SUCCEEDED\n' >&2; exit 1; }
 printf '%s\n' "$FAIL_STATUS" | grep -q "resume_prompt: $FAIL_RUN_DIR/resume_prompt.txt" || { printf 'adapter failure status did not expose resume_prompt path\n' >&2; exit 1; }
 printf '%s\n' "$FAIL_STATUS" | grep -q "notify_log: $FAIL_RUN_DIR/notify.log" || { printf 'adapter failure status did not expose notify log path\n' >&2; exit 1; }
+if printf '%s\n' "$FAIL_STATUS" | grep -q 'notify_url'; then
+  printf 'status leaked notify url field\n' >&2
+  exit 1
+fi
 
 python3 - "$SLOW_ADAPTER_PORT_FILE" "$SLOW_ADAPTER_REQUEST_LOG" <<'PY' &
 import http.server
