@@ -239,6 +239,8 @@ The completion event includes `status`, `exit_code`, `stdout`, `stderr`, `metada
 
 Use `lmas_cancel` from the agent or `lmas cancel <run_id>` from the CLI. If the watcher is still alive, LMAS records a `CANCELLED` completion event. If the job has already exited and LMAS is finalizing completion, cancel reports `ALREADY_COMPLETED`. If a job is killed outside LMAS and the watcher is gone, `lmas_status` reports `LOST`.
 
+When the run was started with `--notify` or `LMAS_NOTIFY_URL`, cancellation also posts the `CANCELLED` resume prompt to that secondary notification URL.
+
 ## Links
 
 - Website: https://jaein4722.github.io/Let-My-Agent-Sleep/

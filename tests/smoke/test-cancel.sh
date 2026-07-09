@@ -5,6 +5,8 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMPDIR_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/lmas-cancel.XXXXXX")
 RUNS_DIR="$TMPDIR_ROOT/runs"
 WORK_DIR="$TMPDIR_ROOT/work"
+NOTIFY_SERVER_PID=""
+trap '[ -z "$NOTIFY_SERVER_PID" ] || kill "$NOTIFY_SERVER_PID" >/dev/null 2>&1 || true' EXIT
 mkdir -p "$WORK_DIR"
 CHILD_SCRIPT="$TMPDIR_ROOT/cancel-child.sh"
 cat > "$CHILD_SCRIPT" <<'EOF'
@@ -137,6 +139,76 @@ if kill -0 "$IGNORE_GRANDCHILD_PID" >/dev/null 2>&1; then
   kill -KILL "$IGNORE_GRANDCHILD_PID" >/dev/null 2>&1 || true
   exit 1
 fi
+
+NOTIFY_PORT_FILE="$TMPDIR_ROOT/notify-port"
+NOTIFY_REQUEST_LOG="$TMPDIR_ROOT/notify-request.log"
+cat > "$TMPDIR_ROOT/notify-server.mjs" <<'JS'
+import http from "node:http"
+import { appendFileSync } from "node:fs"
+
+const logPath = process.argv[2]
+const server = http.createServer((request, response) => {
+  let body = ""
+  request.setEncoding("utf8")
+  request.on("data", (chunk) => {
+    body += chunk
+  })
+  request.on("end", () => {
+    appendFileSync(logPath, `${request.url}\n${request.headers["content-type"] || ""}\n${body}\n`)
+    response.writeHead(200, { "content-type": "text/plain" })
+    response.end("ok")
+  })
+})
+
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address()
+  console.log(address.port)
+})
+JS
+node "$TMPDIR_ROOT/notify-server.mjs" "$NOTIFY_REQUEST_LOG" > "$NOTIFY_PORT_FILE" &
+NOTIFY_SERVER_PID=$!
+for _ in $(seq 1 100); do
+  [ -s "$NOTIFY_PORT_FILE" ] && break
+  sleep 0.1
+done
+[ -s "$NOTIFY_PORT_FILE" ] || { printf 'cancel notify fake server did not start\n' >&2; exit 1; }
+NOTIFY_URL="http://127.0.0.1:$(cat "$NOTIFY_PORT_FILE")/cancel-notify"
+
+rm -f "$TMPDIR_ROOT/child.pid"
+NOTIFY_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter noop --cwd "$WORK_DIR" --notify "$NOTIFY_URL" -- "$CHILD_SCRIPT" "$TMPDIR_ROOT")
+NOTIFY_RUN_ID=$(printf '%s\n' "$NOTIFY_OUTPUT" | awk '/^run_id:/ { print $2 }')
+NOTIFY_RUN_DIR="$RUNS_DIR/$NOTIFY_RUN_ID"
+for _ in $(seq 1 100); do
+  [ -f "$TMPDIR_ROOT/child.pid" ] && break
+  sleep 0.1
+done
+[ -f "$TMPDIR_ROOT/child.pid" ] || {
+  printf 'notify cancel child pid was not recorded before cancel\n' >&2
+  [ -f "$NOTIFY_RUN_DIR/watcher.log" ] && sed -n '1,160p' "$NOTIFY_RUN_DIR/watcher.log" >&2
+  exit 1
+}
+
+NOTIFY_CANCEL_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js cancel --reason notify-smoke-test "$NOTIFY_RUN_ID")
+printf '%s\n' "$NOTIFY_CANCEL_OUTPUT" | grep -q '^status: CANCELLED$' || { printf 'notify cancel did not report CANCELLED\n' >&2; exit 1; }
+[ -f "$NOTIFY_RUN_DIR/notify.log" ] || { printf 'cancel did not write notify.log\n' >&2; exit 1; }
+[ -f "$NOTIFY_REQUEST_LOG" ] || { printf 'notify server was not called after cancel\n' >&2; exit 1; }
+grep -q '^/cancel-notify$' "$NOTIFY_REQUEST_LOG" || { printf 'cancel notify server received unexpected path\n' >&2; exit 1; }
+grep -q '^text/plain; charset=utf-8$' "$NOTIFY_REQUEST_LOG" || { printf 'cancel notify server received unexpected content-type\n' >&2; exit 1; }
+grep -q 'LMAS_COMPLETION_EVENT v1' "$NOTIFY_REQUEST_LOG" || { printf 'cancel notify payload missing completion event\n' >&2; exit 1; }
+grep -q '^status: CANCELLED$' "$NOTIFY_REQUEST_LOG" || { printf 'cancel notify payload missing CANCELLED status\n' >&2; exit 1; }
+grep -q '^exit_code: 130$' "$NOTIFY_REQUEST_LOG" || { printf 'cancel notify payload missing exit_code 130\n' >&2; exit 1; }
+grep -q 'notify sent' "$NOTIFY_RUN_DIR/notify.log" || { printf 'cancel notify success was not recorded\n' >&2; exit 1; }
+grep -q '^notify=enabled$' "$NOTIFY_RUN_DIR/metadata.txt" || { printf 'cancel metadata did not record notification enabled state\n' >&2; exit 1; }
+if grep -q "$NOTIFY_URL" "$NOTIFY_RUN_DIR/metadata.txt"; then
+  printf 'cancel metadata leaked notify url\n' >&2
+  exit 1
+fi
+NOTIFY_STATUS_AFTER=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh status "$NOTIFY_RUN_ID")
+printf '%s\n' "$NOTIFY_STATUS_AFTER" | grep -q "^notify_log: $NOTIFY_RUN_DIR/notify.log$" || { printf 'cancel status did not expose notify log path\n' >&2; exit 1; }
+
+kill "$NOTIFY_SERVER_PID" >/dev/null 2>&1 || true
+wait "$NOTIFY_SERVER_PID" >/dev/null 2>&1 || true
+NOTIFY_SERVER_PID=""
 
 LOST_RUN_ID="lmas_cancel_lost_test"
 LOST_RUN_DIR="$RUNS_DIR/$LOST_RUN_ID"
