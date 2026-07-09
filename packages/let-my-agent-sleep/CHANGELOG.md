@@ -29,6 +29,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
 - Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.
+- Publish automation now rejects release candidates that are not newer than npm latest or are missing dated changelog headings.
 - The package now pins `@opencode-ai/plugin` to `1.2.27` for reproducible plugin behavior.
 - The npm package description and homepage now point users to the public landing page and supported-agent value proposition.
 

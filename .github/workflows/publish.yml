@@ -89,6 +89,46 @@ jobs:
           echo "publish_needed=$publish_needed"
           echo "release_needed=$release_needed"
 
+      - name: Check release version and changelog
+        if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
+        run: |
+          set -euo pipefail
+          version="${{ steps.release.outputs.version }}"
+          latest=$(npm view let-my-agent-sleep version)
+
+          node - "$version" "$latest" <<'JS'
+          const [localVersion, latestVersion] = process.argv.slice(2)
+
+          function parseVersion(version) {
+            const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version)
+            if (!match) {
+              throw new Error(`unsupported semver version: ${version}`)
+            }
+            return match.slice(1, 4).map(Number)
+          }
+
+          const local = parseVersion(localVersion)
+          const latest = parseVersion(latestVersion)
+          const comparison = local.findIndex((part, index) => part !== latest[index])
+          const isNewer = comparison !== -1 && local[comparison] > latest[comparison]
+
+          if (!isNewer) {
+            console.error(`release version ${localVersion} must be newer than npm latest ${latestVersion}`)
+            process.exit(1)
+          }
+          JS
+
+          for changelog in CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; do
+            if ! grep -Fq "## ${version} - " "$changelog"; then
+              printf '%s does not contain a dated %s release heading\n' "$changelog" "$version" >&2
+              exit 1
+            fi
+            if grep -Fq "## ${version} - Unreleased" "$changelog"; then
+              printf '%s still marks %s as Unreleased\n' "$changelog" "$version" >&2
+              exit 1
+            fi
+          done
+
       - name: Install tmux
         if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
         run: |
