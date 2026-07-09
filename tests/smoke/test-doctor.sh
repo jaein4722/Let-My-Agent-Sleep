@@ -31,6 +31,34 @@ printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'live OpenCode tool check skipped' || {
   exit 1
 }
 
+node --input-type=module - "$TMP_HOME/.cache/opencode/package.json" <<'JS'
+import { readFileSync, writeFileSync } from "node:fs"
+
+const target = process.argv[2]
+const config = JSON.parse(readFileSync(target, "utf8"))
+config.dependencies["let-my-agent-sleep"] = "0.1.5"
+writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`)
+JS
+
+STALE_CACHE_FAIL_OUTPUT="$SERVER_DIR/stale-cache-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$STALE_CACHE_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when OpenCode plugin cache dependency is stale\n' >&2
+  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
+  exit 1
+fi
+
+grep -q 'OpenCode plugin cache dependency is stale' "$STALE_CACHE_FAIL_OUTPUT" || {
+  printf 'doctor stale cache failure did not explain cache dependency problem\n' >&2
+  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
+  exit 1
+}
+
+INSTALL_REPAIR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
+printf '%s\n' "$INSTALL_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' || {
+  printf 'opencode reinstall did not complete after stale cache doctor test\n' >&2
+  exit 1
+}
+
 cat > "$SERVER_DIR/server.mjs" <<'JS'
 import http from "node:http"
 

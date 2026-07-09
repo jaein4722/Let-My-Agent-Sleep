@@ -40,6 +40,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed package asset layout for Claude Code experimental command assets and Codex plugin skill wrappers.
 - Fixed license metadata alignment between the repository and npm package.
 - Fixed ignore coverage for generated runtime artifacts, npm pack tarballs, debug logs, and Python bytecode caches.
+- Fixed OpenCode doctor checks so stale plugin cache dependency specs are reported instead of passing as merely present.
 
 ## 0.2.6 and earlier
 

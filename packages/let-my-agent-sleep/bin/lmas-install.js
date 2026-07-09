@@ -1214,6 +1214,8 @@ async function doctorOpenCode(options) {
       const dependency = cachePackage.dependencies?.[packageName]
       if (!dependency) {
         healthy = doctorFail(`OpenCode plugin cache package.json does not depend on ${packageName}`) && healthy
+      } else if (dependency !== openCodeCacheDependencySpec) {
+        healthy = doctorFail(`OpenCode plugin cache dependency is stale: ${packageName}@${dependency}; run: lmas install --agent opencode`) && healthy
       } else {
         doctorOk(`OpenCode plugin cache dependency is present: ${packageName}@${dependency}`)
       }
