@@ -27,6 +27,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `lmas_info` as an OpenCode plugin diagnostic tool so live doctor checks can detect stale plugin caches more reliably.
 - Added `--directory` for OpenCode live doctor checks so tool exposure can be verified against the actual workspace directory.
 - Added doctor coverage for legacy OpenCode package cache directories and stale root `node_modules` installs.
+- Added shared OMO continuation hook constants so installer, runtime guards, and smoke tests cannot silently drift.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.
@@ -40,6 +41,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
 - Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.
+- Syntax checks now discover every packaged JavaScript file under `bin` and `src` instead of relying on a manual file list.
 - Release CI now checks npm trusted publishing runtime prerequisites before installing dependencies or publishing.
 - Publish automation now rejects publish candidates that are not newer than npm latest while still allowing GitHub release recovery after npm publish succeeds.
 - The package now pins `@opencode-ai/plugin` to `1.2.27` for reproducible plugin behavior.
