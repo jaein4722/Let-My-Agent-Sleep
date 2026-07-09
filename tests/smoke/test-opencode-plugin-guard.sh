@@ -751,6 +751,97 @@ await plugin["tool.execute.before"](
   { args: { todos: [] } },
 )
 
+const pathCancelSessionID = "plugin_path_cancel_session"
+const pathCancelRunID = "lmas_cancel_path"
+const pathCancelRunDir = `${fakeWorkspace}/.lmas/runs/${pathCancelRunID}`
+await plugin.event({
+  event: {
+    type: "message.part.delta",
+    properties: {
+      sessionID: pathCancelSessionID,
+      delta: `LMAS_HANDOFF v1\nrun_id: ${pathCancelRunID}\nstatus: STARTED`,
+    },
+  },
+})
+await plugin.event({
+  event: {
+    type: "message.updated",
+    properties: {
+      message: message("user", "Cancel that LMAS run now.", "path_cancel_user", pathCancelSessionID),
+    },
+  },
+})
+globalThis.Bun = {
+  spawn() {
+    return {
+      stdout: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`LMAS_STATUS v1\nrun_id: ${pathCancelRunID}\nstatus: RUNNING\n`))
+          controller.close()
+        },
+      }),
+      stderr: new ReadableStream({
+        start(controller) {
+          controller.close()
+        },
+      }),
+      exited: Promise.resolve(0),
+    }
+  },
+}
+try {
+  await plugin.tool.lmas_status.execute(
+    { run_id: pathCancelRunID },
+    { sessionID: pathCancelSessionID, directory: fakeWorkspace, worktree: fakeWorkspace },
+  )
+} finally {
+  restoreBun()
+}
+const pathCancelBeforeOutput = { args: { run_id: pathCancelRunDir } }
+await plugin["tool.execute.before"](
+  { tool: "lmas_cancel", sessionID: pathCancelSessionID, callID: "call_path_cancel_before" },
+  pathCancelBeforeOutput,
+)
+const pathCancelPermissionOutput = {}
+await plugin["permission.ask"](
+  { tool: "lmas_cancel", sessionID: pathCancelSessionID, callID: "call_path_cancel_before" },
+  pathCancelPermissionOutput,
+)
+if (pathCancelPermissionOutput.status !== "allow") {
+  throw new Error("expected allowed lmas_cancel run directory path to pass permission.ask")
+}
+let pathCancelSpawnedCommand
+globalThis.Bun = {
+  spawn(command) {
+    pathCancelSpawnedCommand = command
+    return {
+      stdout: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`LMAS_CANCEL v1\nrun_id: ${pathCancelRunID}\nstatus: CANCELLED\n`))
+          controller.close()
+        },
+      }),
+      stderr: new ReadableStream({
+        start(controller) {
+          controller.close()
+        },
+      }),
+      exited: Promise.resolve(0),
+    }
+  },
+}
+try {
+  await plugin.tool.lmas_cancel.execute(
+    { run_id: pathCancelRunDir },
+    { sessionID: pathCancelSessionID, directory: fakeWorkspace, worktree: fakeWorkspace },
+  )
+} finally {
+  restoreBun()
+}
+if (!Array.isArray(pathCancelSpawnedCommand) || pathCancelSpawnedCommand.at(-1) !== pathCancelRunDir) {
+  throw new Error("expected lmas_cancel run directory path to be passed through to the CLI")
+}
+
 const omoCancelSessionID = "plugin_omo_cancel_session"
 await plugin.event({
   event: {
