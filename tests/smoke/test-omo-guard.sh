@@ -13,6 +13,7 @@ import {
   createGuardedToolAction,
   createGuardedToolArgs,
   getActiveOmoGuard,
+  shouldBlockPromptInputDuringActiveHandoff,
   updateSessionGuardFromCancelText,
   updateSessionGuardFromEvent,
   updateSessionGuardFromStatusText,
@@ -36,6 +37,29 @@ function message(role, text, id, sessionID = "ses_test") {
       text,
     }],
   }
+}
+
+if (!shouldBlockPromptInputDuringActiveHandoff({
+  body: {
+    parts: [{ type: "text", text: "continue without an internal marker" }],
+  },
+})) {
+  throw new Error("expected active handoff prompt guard to block markerless reply-expecting prompt")
+}
+if (shouldBlockPromptInputDuringActiveHandoff({
+  body: {
+    noReply: true,
+    parts: [{ type: "text", text: "notification without reply" }],
+  },
+})) {
+  throw new Error("did not expect active handoff prompt guard to block noReply prompt")
+}
+if (shouldBlockPromptInputDuringActiveHandoff({
+  body: {
+    parts: [{ type: "text", text: "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_done\nstatus: SUCCEEDED" }],
+  },
+})) {
+  throw new Error("did not expect active handoff prompt guard to block LMAS completion event")
 }
 
 const activeGuards = new Map()

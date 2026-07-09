@@ -68,6 +68,20 @@ export function isReplyExpectingInternalPromptInput(input) {
   return parts.some(partIsSyntheticOrInternal)
 }
 
+export function shouldBlockPromptInputDuringActiveHandoff(input) {
+  const body = input?.body || input
+  if (body?.noReply === true) return false
+
+  const parts = Array.isArray(body?.parts) ? body.parts : []
+  if (parts.length === 0) return false
+
+  const text = parts.map(collectTextFromPart).filter(Boolean).join("\n")
+  if (text.includes(LMAS_COMPLETION)) return false
+  if (text.includes(OMO_INTERNAL_NOREPLY)) return false
+
+  return stripOmoInternalMarkers(text).length > 0
+}
+
 export function getRoleFromEvent(event) {
   return event?.properties?.message?.info?.role
     || event?.properties?.part?.role

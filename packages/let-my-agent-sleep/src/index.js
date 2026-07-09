@@ -9,6 +9,7 @@ import {
   getActiveOmoGuard,
   getSessionIDFromPromptInput,
   isReplyExpectingInternalPromptInput,
+  shouldBlockPromptInputDuringActiveHandoff,
   updateSessionGuardFromCancelText,
   updateSessionGuardFromEvent,
   updateSessionGuardFromStatusText,
@@ -229,7 +230,7 @@ export function installFetchPromptInjectionGuard(serverUrl) {
       try {
         const bodyText = await readFetchBodyText(input, init)
         const body = bodyText ? JSON.parse(bodyText) : undefined
-        if (isReplyExpectingInternalPromptInput({ path: { id: sessionID }, body })) {
+        if (shouldBlockPromptInputDuringActiveHandoff({ path: { id: sessionID }, body })) {
           activeGuard.handler.mark?.(sessionID, activeGuard.guard)
           return createFetchPromptGuardResponse(sessionID, activeGuard.guard.runIds || [], url.pathname)
         }
@@ -273,7 +274,7 @@ export function installPromptInjectionGuard(client) {
       session[method] = async function guardedPrompt(input, ...rest) {
         const sessionID = getSessionIDFromPromptInput(input)
         const activeGuard = getInjectionGuardForSession(sessionID)
-        if (activeGuard && isReplyExpectingInternalPromptInput(input)) {
+        if (activeGuard && shouldBlockPromptInputDuringActiveHandoff(input)) {
           activeGuard.handler.mark?.(sessionID, activeGuard.guard)
           return createPromptGuardResponse(sessionID, activeGuard.guard.runIds || [])
         }

@@ -196,14 +196,14 @@ await guardedClient.session.promptAsync({
 if (promptAsyncCalls !== 1) {
   throw new Error("expected no-reply internal promptAsync to pass through prompt injection guard")
 }
-await guardedClient.session.promptAsync({
+const blockedMarkerlessPromptAsync = await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
   body: {
     parts: [{ type: "text", text: "ordinary user prompt" }],
   },
 })
-if (promptAsyncCalls !== 2) {
-  throw new Error("expected ordinary promptAsync to pass through prompt injection guard")
+if (promptAsyncCalls !== 1 || blockedMarkerlessPromptAsync?.data?.lmas_guard !== true) {
+  throw new Error("expected active LMAS handoff to no-op markerless reply-expecting promptAsync before injection")
 }
 await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
@@ -214,14 +214,14 @@ await guardedClient.session.promptAsync({
     }],
   },
 })
-if (promptAsyncCalls !== 3) {
+if (promptAsyncCalls !== 2) {
   throw new Error("expected plain LMAS completion promptAsync to pass through prompt injection guard")
 }
 const blockedBodyShapedPrompt = await guardedClient.session.promptAsync({
   sessionID: promptGuardSessionID,
   parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
 })
-if (promptAsyncCalls !== 3 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 2 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
   throw new Error("expected body-shaped internal prompt input to be no-oped by prompt injection guard")
 }
 const reusedPromptGuardModule = await import(`./packages/let-my-agent-sleep/src/index.js?reused-prompt-guard=${Date.now()}`)
@@ -248,7 +248,7 @@ const blockedThroughExistingPromptWrapper = await guardedClient.session.promptAs
     parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
   },
 })
-if (promptAsyncCalls !== 3 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 2 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
   throw new Error("expected a reloaded plugin module to share an already-installed LMAS prompt guard")
 }
 const blockedLiveRoutePrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
@@ -278,6 +278,17 @@ if (blockedLiveRouteSyncPrompt.status !== 200) {
 }
 if (fetchCalls !== 0) {
   throw new Error("expected live-route sync prompt internal prompt to be no-oped before fetch")
+}
+const blockedLiveRouteMarkerlessPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    parts: [{ type: "text", text: "ordinary retry prompt without internal marker" }],
+  }),
+})
+await expectGuardedFetchResponse(blockedLiveRouteMarkerlessPrompt, "live-route markerless reply-expecting prompt")
+if (fetchCalls !== 0) {
+  throw new Error("expected live-route markerless reply-expecting prompt to be no-oped before fetch")
 }
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
