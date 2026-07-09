@@ -28,6 +28,9 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `--directory` for OpenCode live doctor checks so tool exposure can be verified against the actual workspace directory.
 - Added doctor coverage for legacy OpenCode package cache directories and stale root `node_modules` installs.
 - Added shared OMO continuation hook constants so installer, runtime guards, and smoke tests cannot silently drift.
+- Added OpenCode adapter smoke coverage that validates completion prompt injection as parseable JSON with the expected prompt text.
+- Added Codex and Claude adapter smoke coverage for fallback session detection, missing-session skip behavior, and Claude `--continue` resume mode.
+- Added a local release check that verifies the push range includes a publish workflow trigger path before release commits are pushed.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.
