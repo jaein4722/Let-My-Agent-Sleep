@@ -50,6 +50,29 @@ grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PACKA
   printf 'package README.md must use the absolute PNG social card preview\n' >&2
   exit 1
 }
+python3 - "$ROOT_README" "$PACKAGE_README" <<'PY'
+from pathlib import Path
+import sys
+
+root_readme, package_readme = map(Path, sys.argv[1:])
+expected = root_readme.read_text().replace(
+    'src="site/social-card.png"',
+    'src="https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png"',
+).replace(
+    '<h1>Let My Agent Sleep</h1>',
+    '<h1>let-my-agent-sleep</h1>',
+).replace(
+    '![LMAS handoff demo](site/demo.gif)',
+    '![LMAS handoff demo](https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif)',
+)
+actual = package_readme.read_text()
+
+if actual != expected:
+    sys.stderr.write(
+        "package README.md must match root README.md except for npm-safe absolute media paths and package-name heading\n"
+    )
+    sys.exit(1)
+PY
 for protocol in "$ROOT_PROTOCOL" "$CODEX_PROTOCOL"; do
   grep -q 'LMAS_CANCEL v1' "$protocol" || { printf '%s missing cancel event contract\n' "$protocol" >&2; exit 1; }
   grep -q 'status: CANCELLED' "$protocol" || { printf '%s missing CANCELLED cancel status contract\n' "$protocol" >&2; exit 1; }
