@@ -28,10 +28,15 @@ PKG="$EXTRACT_DIR/package"
 [ -f "$PKG/src/index.js" ] || { printf 'packed tarball missing OpenCode plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
 [ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
+[ -f "$PKG/README.md" ] || { printf 'packed tarball missing README.md\n' >&2; exit 1; }
 [ -f "$PKG/CHANGELOG.md" ] || { printf 'packed tarball missing CHANGELOG.md\n' >&2; exit 1; }
+[ -f "$PKG/LICENSE" ] || { printf 'packed tarball missing LICENSE\n' >&2; exit 1; }
 PACKAGE_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/package.json")
 grep -Eq "^## $PACKAGE_VERSION - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md missing dated %s entry\n' "$PACKAGE_VERSION" >&2; exit 1; }
 ! grep -q 'Unreleased' "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md still contains Unreleased\n' >&2; exit 1; }
+grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PKG/README.md" || { printf 'packed tarball README.md missing absolute PNG social card URL\n' >&2; exit 1; }
+grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif' "$PKG/README.md" || { printf 'packed tarball README.md missing absolute demo GIF URL\n' >&2; exit 1; }
+cmp -s "$ROOT/LICENSE" "$PKG/LICENSE" || { printf 'packed tarball LICENSE differs from root LICENSE\n' >&2; exit 1; }
 
 OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-ai/plugin']" "$PKG/package.json")
 [ "$OPENCODE_PLUGIN_DEP" = "1.2.27" ] || {
