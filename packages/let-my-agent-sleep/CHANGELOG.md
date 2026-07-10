@@ -2,6 +2,16 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.3.1 - 2026-07-10
+
+### Fixed
+
+- Fixed OpenCode install behavior so LMAS no longer disables Oh My OpenAgent continuation hooks by default.
+- Fixed `lmas doctor` so enabled OMO continuation hooks are reported as the default policy instead of a failed install.
+- Clarified that LMAS blocks reply-expecting continuation only while an `LMAS_HANDOFF v1` is active in the same OpenCode session.
+- Kept `--disable-omo-continuation` as an explicit opt-in for users who want to disable known OMO continuation hooks globally.
+- Marked `--keep-omo-continuation` as a deprecated no-op because keeping OMO continuation hooks is now the default.
+
 ## 0.3.0 - 2026-07-10
 
 ### Added

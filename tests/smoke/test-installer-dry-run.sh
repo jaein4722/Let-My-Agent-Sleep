@@ -43,8 +43,10 @@ printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'plugin: let-my-agent-sleep@latest' |
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/skills/let-my-agent-sleep/SKILL.md' || { printf 'opencode dry-run missing skill target\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.cache/opencode/package.json' || { printf 'opencode dry-run missing root plugin cache target\n' >&2; exit 1; }
-assert_output_mentions_omo_hooks "$OPENCODE_OUTPUT"
-printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'reason: OpenCode install defaults to disabling known OMO continuation hooks' || { printf 'opencode dry-run missing default OMO continuation disable reason\n' >&2; exit 1; }
+if printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured'; then
+  printf 'opencode dry-run should not disable OMO continuation hooks by default\n' >&2
+  exit 1
+fi
 assert_output_mentions_omo_hooks "$OMO_OUTPUT"
 printf '%s\n' "$OMO_OUTPUT" | grep -q 'reason: requested by --disable-omo-continuation' || { printf 'explicit OMO continuation dry-run missing disable reason\n' >&2; exit 1; }
 printf '%s\n' "$OMO_OUTPUT" | grep -q 'oh-my-openagent.json' || { printf 'omo continuation dry-run missing omo config target\n' >&2; exit 1; }

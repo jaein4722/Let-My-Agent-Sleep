@@ -348,15 +348,18 @@ assert_output_mentions_omo_hooks "$OMO_COMMENT_ONLY_OUTPUT" "comment-only omo co
 assert_output_mentions_omo_hooks "$OMO_COMMENT_ONLY_SECOND_OUTPUT" "second comment-only omo continuation install"
 printf '%s\n' "$OMO_JSONC_OUTPUT" | grep -q 'oh-my-opencode.jsonc' || { printf 'omo jsonc continuation install did not target existing jsonc file\n' >&2; exit 1; }
 printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'plugin order install did not complete\n' >&2; exit 1; }
-printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured' || { printf 'omo plugin install did not automatically disable continuation hook\n' >&2; exit 1; }
-printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'reason: OpenCode install defaults to disabling known OMO continuation hooks' || { printf 'omo plugin auto-disable reason was not reported\n' >&2; exit 1; }
+printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'OMO continuation hooks are left enabled by default' || { printf 'omo plugin default install did not report continuation hooks stay enabled\n' >&2; exit 1; }
+if printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured'; then
+  printf 'omo plugin default install should not automatically disable continuation hooks\n' >&2
+  exit 1
+fi
 printf '%s\n' "$PLUGIN_ORDER_DISABLE_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured' || { printf 'omo plugin disable install did not configure continuation hook\n' >&2; exit 1; }
 printf '%s\n' "$PLUGIN_ORDER_DISABLE_OUTPUT" | grep -q 'reason: requested by --disable-omo-continuation' || { printf 'omo plugin explicit disable reason was not reported\n' >&2; exit 1; }
-if printf '%s\n' "$PLUGIN_ORDER_DISABLE_OUTPUT" | grep -q '\[warn\] Oh My OpenAgent plugin detected'; then
+if printf '%s\n' "$PLUGIN_ORDER_DISABLE_OUTPUT" | grep -q '\[info\] Oh My OpenAgent plugin detected'; then
   printf 'omo plugin explicit disable install should not emit continuation warning\n' >&2
   exit 1
 fi
-printf '%s\n' "$PLUGIN_ORDER_KEEP_OUTPUT" | grep -q 'OMO continuation hooks were left enabled because --keep-omo-continuation was used' || { printf 'omo plugin keep install did not warn continuation stayed enabled\n' >&2; exit 1; }
+printf '%s\n' "$PLUGIN_ORDER_KEEP_OUTPUT" | grep -q 'OMO continuation hooks are left enabled by default' || { printf 'omo plugin keep install did not report continuation stayed enabled\n' >&2; exit 1; }
 
 if [ "$CONFLICT_STATUS" -eq 0 ]; then
   printf 'conflicting omo continuation flags should fail\n' >&2
@@ -385,12 +388,12 @@ if [ -e "$TMP_XDG_HOME/.config/opencode/opencode.jsonc" ]; then
 fi
 
 if [ ! -f "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" ]; then
-  printf 'xdg omo install did not write disabled hook under XDG_CONFIG_HOME\n' >&2
+  printf 'xdg omo install did not write hidden skill config under XDG_CONFIG_HOME\n' >&2
   exit 1
 fi
 
 if [ -e "$TMP_XDG_OMO_HOME/.config/opencode/oh-my-openagent.json" ]; then
-  printf 'xdg omo install incorrectly wrote disabled hook under HOME .config\n' >&2
+  printf 'xdg omo install incorrectly wrote hidden skill config under HOME .config\n' >&2
   exit 1
 fi
 
@@ -400,7 +403,7 @@ if [ ! -f "$TMP_CUSTOM_CONFIG_DIR/opencode.jsonc" ]; then
 fi
 
 if [ ! -f "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" ]; then
-  printf 'custom omo install did not write disabled hook under OPENCODE_CONFIG_DIR\n' >&2
+  printf 'custom omo install did not write hidden skill config under OPENCODE_CONFIG_DIR\n' >&2
   exit 1
 fi
 
@@ -410,7 +413,7 @@ if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" ]; then
 fi
 
 if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" ]; then
-  printf 'custom omo install did not write disabled hook next to OPENCODE_CONFIG_FILE\n' >&2
+  printf 'custom omo install did not write hidden skill config next to OPENCODE_CONFIG_FILE\n' >&2
   exit 1
 fi
 
@@ -425,7 +428,7 @@ if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/opencode.jsonc" ]; then
 fi
 
 if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/oh-my-openagent.json" ]; then
-  printf 'custom omo install incorrectly wrote disabled hook under HOME .config\n' >&2
+  printf 'custom omo install incorrectly wrote hidden skill config under HOME .config\n' >&2
   exit 1
 fi
 
@@ -494,10 +497,10 @@ if [ "$FRESH_ROOT_CACHE_VERSION" != ">=0.0.0" ]; then
   exit 1
 fi
 
-assert_file_has_omo_hooks "$TMP_HOME/.config/opencode/oh-my-openagent.json" "fresh opencode install"
-assert_file_has_omo_hooks "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" "xdg opencode install"
-assert_file_has_omo_hooks "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_DIR install"
-assert_file_has_omo_hooks "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_FILE install"
+assert_file_lacks_omo_hook "$TMP_HOME/.config/opencode/oh-my-openagent.json" "todo-continuation-enforcer" "fresh opencode install"
+assert_file_lacks_omo_hook "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" "todo-continuation-enforcer" "xdg opencode install"
+assert_file_lacks_omo_hook "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" "todo-continuation-enforcer" "custom OPENCODE_CONFIG_DIR install"
+assert_file_lacks_omo_hook "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" "todo-continuation-enforcer" "custom OPENCODE_CONFIG_FILE install"
 assert_file_lacks_omo_hook "$TMP_HOME/.config/opencode/oh-my-openagent.json" "start-work" "fresh opencode install"
 assert_file_has_omo_hidden_skills "$TMP_HOME/.config/opencode/oh-my-openagent.json" "fresh opencode install"
 assert_file_has_omo_hidden_skills "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" "xdg opencode install"
@@ -625,8 +628,7 @@ if grep -q '"stale": true' "$TMP_PLUGIN_ORDER_HOME/.config/opencode/opencode.jso
   exit 1
 fi
 
-assert_file_has_omo_hooks "$TMP_PLUGIN_ORDER_HOME/.config/opencode/oh-my-openagent.json" "omo plugin auto install"
-assert_file_lacks_omo_hook "$TMP_PLUGIN_ORDER_HOME/.config/opencode/oh-my-openagent.json" "start-work" "omo plugin auto install"
+assert_file_lacks_omo_hook "$TMP_PLUGIN_ORDER_HOME/.config/opencode/oh-my-openagent.json" "todo-continuation-enforcer" "omo plugin default install"
 assert_file_has_omo_hidden_skills "$TMP_PLUGIN_ORDER_HOME/.config/opencode/oh-my-openagent.json" "omo plugin auto install"
 
 assert_file_has_omo_hooks "$TMP_PLUGIN_ORDER_DISABLE_HOME/.config/opencode/oh-my-openagent.json" "omo plugin disable install"

@@ -27,8 +27,8 @@ printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'let-my-agent-sleep is first in the Ope
   printf 'doctor did not verify LMAS-first plugin order\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
-printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'OMO continuation hooks are disabled' || {
-  printf 'doctor did not verify OMO continuation hooks\n%s\n' "$DOCTOR_OUTPUT" >&2
+printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'OMO continuation hooks are enabled by default' || {
+  printf 'doctor did not report default OMO continuation policy\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
 printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'live OpenCode tool check skipped' || {

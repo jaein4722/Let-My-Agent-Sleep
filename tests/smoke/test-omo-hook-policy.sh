@@ -47,23 +47,27 @@ if (actual.size !== expectedDisabledHooks.length) {
   throw new Error(`OMO continuation hook policy has unexpected hooks: ${omoContinuationHooks.join(", ")}`)
 }
 
-const expectedSentence = `The disabled hooks are ${expectedDisabledHooks.map((hook) => `\`${hook}\``).join(", ").replace(/, (`[^`]+`)$/, ", and $1")}.`
 for (const readmePath of ["README.md", "packages/let-my-agent-sleep/README.md"]) {
   const readme = readFileSync(readmePath, "utf8")
-  if (!readme.includes(expectedSentence)) {
-    throw new Error(`${readmePath} does not match OMO continuation hook policy`)
+  for (const text of [
+    "LMAS leaves Oh My OpenAgent continuation hooks enabled by default",
+    "LMAS does not globally disable OMO continuation features",
+    "--disable-omo-continuation",
+  ]) {
+    if (!readme.includes(text)) {
+      throw new Error(`${readmePath} does not document default OMO continuation policy: ${text}`)
+    }
   }
 }
 
 const opencodeSiteDocs = readFileSync("site/docs/opencode.html", "utf8")
-for (const hook of expectedDisabledHooks) {
-  if (!opencodeSiteDocs.includes(`<code>${hook}</code>`)) {
-    throw new Error(`site/docs/opencode.html does not mention disabled OMO hook: ${hook}`)
-  }
-}
-for (const hook of intentionallyNotDisabledHooks) {
-  if (opencodeSiteDocs.includes(`<code>${hook}</code>`)) {
-    throw new Error(`site/docs/opencode.html documents a hook that should not be disabled: ${hook}`)
+for (const text of [
+  "LMAS leaves Oh My OpenAgent continuation hooks enabled by default",
+  "LMAS does not globally disable OMO continuation features",
+  "<code>--disable-omo-continuation</code>",
+]) {
+  if (!opencodeSiteDocs.includes(text)) {
+    throw new Error(`site/docs/opencode.html does not document default OMO continuation policy: ${text}`)
   }
 }
 JS

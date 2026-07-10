@@ -44,9 +44,9 @@ Options:
   --force           Overwrite existing Let My Agent Sleep-managed files without backup.
   --disable-omo-continuation
                    Add known OMO continuation hooks to oh-my-openagent disabled_hooks.
-                   This is the default during OpenCode install.
+                   By default LMAS leaves OMO continuation hooks unchanged and relies on runtime guards.
   --keep-omo-continuation
-                   Do not modify Oh My OpenAgent disabled_hooks during OpenCode install.
+                   Deprecated no-op. OMO continuation hooks are kept by default.
   --server-url <url>
                    During OpenCode doctor, also verify the live server exposes lmas tools.
   --directory <path>
@@ -1030,15 +1030,15 @@ function isOmoPluginSpec(plugin) {
     || spec?.startsWith("oh-my-opencode@") === true
 }
 
-function warnIfOmoContinuationStillEnabled(config, options) {
+function reportOmoContinuationPolicy(config, options) {
   if (options.disableOmoContinuation) return
-  if (!options.keepOmoContinuation) return
   if (!Array.isArray(config.plugin) || !config.plugin.some(isOmoPluginSpec)) return
 
-  console.log("[warn] Oh My OpenAgent plugin detected.")
-  console.log("[warn] OMO continuation hooks were left enabled because --keep-omo-continuation was used.")
-  console.log("[warn] To disable it, run:")
-  console.log("[warn]   lmas install --agent opencode")
+  console.log("[info] Oh My OpenAgent plugin detected.")
+  console.log("[info] OMO continuation hooks are left enabled by default.")
+  console.log("[info] LMAS runtime guards block continuation only while an LMAS handoff is active.")
+  console.log("[info] To disable OMO continuation hooks globally, run:")
+  console.log("[info]   lmas install --agent opencode --disable-omo-continuation")
 }
 
 function installOpenCode(options) {
@@ -1055,7 +1055,7 @@ function installOpenCode(options) {
     throw new Error(`${configPath} has unsupported "plugin" shape; expected string or array`)
   }
 
-  warnIfOmoContinuationStillEnabled(config, options)
+  reportOmoContinuationPolicy(config, options)
 
   config.plugin = config.plugin.filter((plugin) => !isPackagePluginSpec(plugin, packageName))
   // LMAS must load before continuation plugins so prompt/fetch guards are installed
@@ -1065,9 +1065,7 @@ function installOpenCode(options) {
   writeJsonConfigWithStringArray(configPath, config, "plugin", config.plugin, options)
   const omoDisableReason = options.disableOmoContinuation
     ? "requested by --disable-omo-continuation"
-    : !options.keepOmoContinuation
-      ? "OpenCode install defaults to disabling known OMO continuation hooks"
-      : ""
+    : ""
   maybeDisableOmoContinuation(configDir, options, omoDisableReason)
   maybeDisableOpenCodeShadowSkills(configDir, options, { skipBackup: Boolean(omoDisableReason) })
   moveLegacyCrossAgentOpenCodeSkillConflicts(options)
@@ -1226,16 +1224,16 @@ async function doctorOpenCode(options) {
   }
 
   if (!existsSync(omoConfigPath)) {
-    healthy = doctorFail("Oh My OpenAgent config is missing; LMAS cannot confirm continuation hooks are disabled") && healthy
+    healthy = doctorFail("Oh My OpenAgent config is missing; LMAS cannot confirm legacy cross-agent skill hiding") && healthy
   } else {
     try {
       const omoConfig = readJsoncIfExists(omoConfigPath, {})
       const disabledHooks = Array.isArray(omoConfig.disabled_hooks) ? omoConfig.disabled_hooks : []
       const missingHooks = omoContinuationHooks.filter((hookName) => !disabledHooks.includes(hookName))
       if (missingHooks.length > 0) {
-        healthy = doctorFail(`OMO continuation hooks are still enabled: ${missingHooks.join(", ")}`) && healthy
+        doctorWarn(`OMO continuation hooks are enabled by default: ${missingHooks.join(", ")}`)
       } else {
-        doctorOk(`OMO continuation hooks are disabled: ${omoContinuationHooks.join(", ")}`)
+        doctorOk(`OMO continuation hooks are globally disabled: ${omoContinuationHooks.join(", ")}`)
       }
 
       const disabledSkills = Array.isArray(omoConfig.disabled_skills) ? omoConfig.disabled_skills : []
