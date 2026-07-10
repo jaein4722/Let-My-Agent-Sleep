@@ -396,6 +396,18 @@ if (
 ) {
   throw new Error("expected active LMAS handoff to be preserved in OpenCode compaction context")
 }
+const systemTransformOutput = { system: [] }
+await promptGuardPlugin["experimental.chat.system.transform"](
+  { sessionID: promptGuardSessionID, model: {} },
+  systemTransformOutput,
+)
+if (
+  systemTransformOutput.system.length !== 1
+  || !systemTransformOutput.system[0].includes("LMAS handoff is active")
+  || !systemTransformOutput.system[0].includes("lmas_prompt_guard")
+) {
+  throw new Error("expected active LMAS handoff to be preserved in OpenCode system context")
+}
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -641,6 +653,14 @@ await promptGuardPlugin["experimental.session.compacting"](
 )
 if (sessionCompactingAfterCompletionOutput.context.length !== 0) {
   throw new Error("did not expect OpenCode compaction context to be modified after LMAS completion")
+}
+const systemTransformAfterCompletionOutput = { system: [] }
+await promptGuardPlugin["experimental.chat.system.transform"](
+  { sessionID: promptGuardSessionID, model: {} },
+  systemTransformAfterCompletionOutput,
+)
+if (systemTransformAfterCompletionOutput.system.length !== 0) {
+  throw new Error("did not expect OpenCode system context to be modified after LMAS completion")
 }
 
 const originalBun = globalThis.Bun

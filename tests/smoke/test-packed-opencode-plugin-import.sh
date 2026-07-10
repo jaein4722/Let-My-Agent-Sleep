@@ -57,6 +57,7 @@ for (const hookName of [
   "event",
   "chat.message",
   "experimental.chat.messages.transform",
+  "experimental.chat.system.transform",
   "experimental.compaction.autocontinue",
   "experimental.session.compacting",
   "tool.execute.before",
@@ -154,6 +155,19 @@ if (
   || !sessionCompactingOutput.context[0].includes("lmas_packed_import")
 ) {
   throw new Error("packed plugin did not preserve LMAS handoff state in compaction context")
+}
+
+const systemTransformOutput = { system: [] }
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "ses_packed_import", model: {} },
+  systemTransformOutput,
+)
+if (
+  systemTransformOutput.system.length !== 1
+  || !systemTransformOutput.system[0].includes("LMAS handoff is active")
+  || !systemTransformOutput.system[0].includes("lmas_packed_import")
+) {
+  throw new Error("packed plugin did not preserve LMAS handoff state in system context")
 }
 
 const args = { command: "cat stdout.log", timeout: 60000 }

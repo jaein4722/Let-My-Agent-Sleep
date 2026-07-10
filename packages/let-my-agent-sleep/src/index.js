@@ -672,6 +672,13 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       applyOmoContinuationGuard(output, getRuntimeSessionID(input))
     },
+    "experimental.chat.system.transform": async (input, output) => {
+      ensureFetchGuard()
+      const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
+      if (!guard) return
+      if (!Array.isArray(output.system)) output.system = []
+      output.system.push(createCompactionGuardContext(guard.runIds))
+    },
     "experimental.compaction.autocontinue": async (input, output) => {
       ensureFetchGuard()
       const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
