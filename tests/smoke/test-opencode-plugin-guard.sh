@@ -211,13 +211,47 @@ await guardedClient.session.promptAsync({
 if (promptAsyncCalls !== 1) {
   throw new Error("expected no-reply internal promptAsync to pass through prompt injection guard")
 }
+await guardedClient.session.promptAsync({
+  path: { id: promptGuardSessionID },
+  body: {
+    agent: "sisyphus",
+    model: { providerID: "test", modelID: "test" },
+    parts: [{ type: "text", text: "background wake notification\n<!-- OMO_INTERNAL_INITIATOR -->\n<!-- OMO_INTERNAL_NOREPLY -->" }],
+  },
+})
+if (promptAsyncCalls !== 2) {
+  throw new Error("expected no-reply marker promptAsync to pass through prompt injection guard even without a noReply flag")
+}
+const blockedModelFallbackShapePromptAsync = await guardedClient.session.promptAsync({
+  path: { id: promptGuardSessionID },
+  body: {
+    agent: "sisyphus",
+    model: { providerID: "test", modelID: "fallback" },
+    parts: [{ type: "text", text: "continue" }],
+  },
+})
+if (promptAsyncCalls !== 2 || blockedModelFallbackShapePromptAsync?.data?.lmas_guard !== true) {
+  throw new Error("expected active LMAS handoff to no-op OMO model-fallback shaped promptAsync")
+}
+const blockedRuntimeFallbackShapePromptAsync = await guardedClient.session.promptAsync({
+  path: { id: promptGuardSessionID },
+  body: {
+    messageID: "retry_message",
+    system: "retry with another model",
+    tools: { bash: true },
+    parts: [{ type: "text", text: "Retry the previous user request." }],
+  },
+})
+if (promptAsyncCalls !== 2 || blockedRuntimeFallbackShapePromptAsync?.data?.lmas_guard !== true) {
+  throw new Error("expected active LMAS handoff to no-op OMO runtime-fallback shaped promptAsync")
+}
 const blockedMarkerlessPromptAsync = await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
   body: {
     parts: [{ type: "text", text: "ordinary user prompt" }],
   },
 })
-if (promptAsyncCalls !== 1 || blockedMarkerlessPromptAsync?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 2 || blockedMarkerlessPromptAsync?.data?.lmas_guard !== true) {
   throw new Error("expected active LMAS handoff to no-op markerless reply-expecting promptAsync before injection")
 }
 await guardedClient.session.promptAsync({
@@ -229,14 +263,14 @@ await guardedClient.session.promptAsync({
     }],
   },
 })
-if (promptAsyncCalls !== 2) {
+if (promptAsyncCalls !== 3) {
   throw new Error("expected plain LMAS completion promptAsync to pass through prompt injection guard")
 }
 const blockedBodyShapedPrompt = await guardedClient.session.promptAsync({
   sessionID: promptGuardSessionID,
   parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
 })
-if (promptAsyncCalls !== 2 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 3 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
   throw new Error("expected body-shaped internal prompt input to be no-oped by prompt injection guard")
 }
 const reusedPromptGuardModule = await import(`./packages/let-my-agent-sleep/src/index.js?reused-prompt-guard=${Date.now()}`)
@@ -263,7 +297,7 @@ const blockedThroughExistingPromptWrapper = await guardedClient.session.promptAs
     parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
   },
 })
-if (promptAsyncCalls !== 2 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 3 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
   throw new Error("expected a reloaded plugin module to share an already-installed LMAS prompt guard")
 }
 const blockedLiveRoutePrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {

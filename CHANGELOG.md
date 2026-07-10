@@ -35,6 +35,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added `--workspace` for OpenCode live doctor checks so workspace-scoped tool exposure can be verified on newer OpenCode servers.
 - Added package-lock dependency drift coverage for the pinned OpenCode plugin dependency.
 - Added OMO hook policy smoke coverage so fallback continuation hooks stay disabled without disabling broader work-starting or notification hooks.
+- Added OpenCode prompt guard coverage for OMO fallback-shaped prompt payloads and no-reply wake notifications.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.
