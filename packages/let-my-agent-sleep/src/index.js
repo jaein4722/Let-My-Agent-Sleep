@@ -612,6 +612,12 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       applyOmoContinuationGuard(output, input?.sessionID)
     },
+    "experimental.compaction.autocontinue": async (input, output) => {
+      ensureFetchGuard()
+      const guard = getSessionActiveHandoff(input?.sessionID)
+      if (!guard) return
+      output.enabled = false
+    },
     "tool.execute.before": async (input, output) => {
       ensureFetchGuard()
       const guard = getSessionOmoGuard(input.sessionID)

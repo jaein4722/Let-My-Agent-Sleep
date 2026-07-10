@@ -366,6 +366,14 @@ await expectGuardedFetchResponse(blockedLiveRouteRuntimeFallbackPrompt, "live-ro
 if (fetchCalls !== 0) {
   throw new Error("expected live-route OMO runtime-fallback shaped prompt to be no-oped before fetch")
 }
+const compactionAutocontinueOutput = { enabled: true }
+await promptGuardPlugin["experimental.compaction.autocontinue"](
+  { sessionID: promptGuardSessionID, agent: "sisyphus" },
+  compactionAutocontinueOutput,
+)
+if (compactionAutocontinueOutput.enabled !== false) {
+  throw new Error("expected active LMAS handoff to disable OpenCode compaction autocontinue")
+}
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -574,6 +582,23 @@ await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`
 })
 if (fetchCalls !== 3) {
   throw new Error("expected live-route LMAS completion prompt to pass through fetch guard")
+}
+await promptGuardPlugin.event({
+  event: {
+    type: "message.part.delta",
+    properties: {
+      sessionID: promptGuardSessionID,
+      delta: "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_prompt_guard\nstatus: SUCCEEDED",
+    },
+  },
+})
+const compactionAutocontinueAfterCompletionOutput = { enabled: true }
+await promptGuardPlugin["experimental.compaction.autocontinue"](
+  { sessionID: promptGuardSessionID, agent: "sisyphus" },
+  compactionAutocontinueAfterCompletionOutput,
+)
+if (compactionAutocontinueAfterCompletionOutput.enabled !== true) {
+  throw new Error("did not expect OpenCode compaction autocontinue to be disabled after LMAS completion")
 }
 
 const originalBun = globalThis.Bun
