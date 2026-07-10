@@ -825,6 +825,19 @@ await plugin["permission.ask"](
 if (cancelPermissionOutput.status !== "allow") {
   throw new Error("expected allowed lmas_cancel call to pass permission.ask")
 }
+const cancelCamelCallBeforeOutput = { args: { run_id: "lmas_cancel_intent" } }
+await plugin["tool.execute.before"](
+  { tool: "lmas_cancel", sessionID: cancelIntentSessionID, callId: "call_cancel_intent_camel" },
+  cancelCamelCallBeforeOutput,
+)
+const cancelCamelCallPermissionOutput = {}
+await plugin["permission.ask"](
+  { tool: "lmas_cancel", sessionID: cancelIntentSessionID, callId: "call_cancel_intent_camel" },
+  cancelCamelCallPermissionOutput,
+)
+if (cancelCamelCallPermissionOutput.status !== "allow") {
+  throw new Error("expected allowed lmas_cancel callId alias to pass permission.ask")
+}
 const cancelCompactionAutocontinueBeforeOutput = { enabled: true }
 await plugin["experimental.compaction.autocontinue"](
   { sessionID: cancelIntentSessionID, agent: "sisyphus" },

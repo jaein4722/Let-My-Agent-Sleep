@@ -359,6 +359,13 @@ function callKey(sessionID, callID) {
   return `${sessionID}:${callID}`
 }
 
+function getCallID(input) {
+  return input?.callID
+    || input?.callId
+    || input?.tool?.callID
+    || input?.tool?.callId
+}
+
 function replaceArgsInPlace(output, args) {
   if (output.args && typeof output.args === "object" && !Array.isArray(output.args)) {
     for (const key of Object.keys(output.args)) {
@@ -623,7 +630,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       const guard = getSessionOmoGuard(input.sessionID)
       if (!guard) return
       if (isCancelTool(input.tool) && guardAllowsCancel(guard, output.args?.run_id)) {
-        const key = callKey(input.sessionID, input.callID)
+        const key = callKey(input.sessionID, getCallID(input))
         if (key) allowedCancelCallIds.add(key)
         return
       }
@@ -652,7 +659,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       const guard = getSessionOmoGuard(input.sessionID)
       if (!guard) return
-      const key = callKey(input.sessionID, input.callID || input.tool?.callID)
+      const key = callKey(input.sessionID, getCallID(input))
       if (key && allowedCancelCallIds.has(key)) {
         allowedCancelCallIds.delete(key)
         output.status = "allow"
