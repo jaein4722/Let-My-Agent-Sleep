@@ -1254,6 +1254,44 @@ await plugin["tool.execute.before"](
   { args: { todos: [] } },
 )
 
+const fallbackCliFinalizingCancelSessionID = "plugin_fallback_cli_finalizing_cancel_session"
+await plugin["tool.execute.after"](
+  {
+    tool: "bash",
+    sessionID: fallbackCliFinalizingCancelSessionID,
+    callID: "call_fallback_cli_finalizing_cancel",
+    args: { command: "lmas cancel lmas_fallback_finalizing_cancel" },
+  },
+  {
+    title: "bash",
+    output: [
+      "LMAS_CANCEL v1",
+      "run_id: lmas_fallback_finalizing_cancel",
+      "status: ALREADY_COMPLETED",
+      "existing_status: SUCCEEDED",
+      "run_dir: .lmas/runs/lmas_fallback_finalizing_cancel",
+      "message: job has already exited; completion event is finalizing",
+    ].join("\n"),
+    metadata: {},
+  },
+)
+let fallbackCliFinalizingCancelBlocked = false
+try {
+  await plugin["tool.execute.before"](
+    {
+      tool: "todowrite",
+      sessionID: fallbackCliFinalizingCancelSessionID,
+      callID: "call_fallback_cli_finalizing_cancel_todowrite",
+    },
+    { args: { todos: [] } },
+  )
+} catch (error) {
+  fallbackCliFinalizingCancelBlocked = String(error?.message || "").includes("LMAS handoff is active")
+}
+if (!fallbackCliFinalizingCancelBlocked) {
+  throw new Error("expected finalizing LMAS_CANCEL output to activate guard for CLI fallback")
+}
+
 const output = {
   messages: [
     message(

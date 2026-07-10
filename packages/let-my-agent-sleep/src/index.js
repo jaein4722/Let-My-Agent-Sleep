@@ -432,6 +432,7 @@ function updateSessionGuardFromToolOutput(input, output) {
     omoTurn: text.includes("LMAS_HANDOFF v1") ? true : undefined,
   })
   updateSessionGuardFromStatusText(sessionGuards, sessionID, text)
+  updateSessionGuardFromCancelText(sessionGuards, sessionID, text)
 }
 
 export function findLmasScript(cwd, context) {
