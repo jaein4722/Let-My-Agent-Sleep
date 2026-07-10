@@ -19,21 +19,31 @@ if (typeof plugin !== "function") {
   throw new Error("default export is not a plugin function")
 }
 
-for (const hookName of [
+const officialGuardHooks = [
   "event",
   "chat.message",
   "experimental.chat.messages.transform",
   "experimental.chat.system.transform",
-  "experimental.compaction.autocontinue",
   "experimental.session.compacting",
   "tool.execute.before",
   "tool.execute.after",
   "shell.env",
   "command.execute.before",
   "permission.ask",
-]) {
+]
+const compatibilityGuardHooks = [
+  "experimental.compaction.autocontinue",
+]
+
+for (const hookName of officialGuardHooks) {
   if (typeof hooks[hookName] !== "function") {
-    throw new Error(`missing hook: ${hookName}`)
+    throw new Error(`missing official guard hook: ${hookName}`)
+  }
+}
+
+for (const hookName of compatibilityGuardHooks) {
+  if (typeof hooks[hookName] !== "function") {
+    throw new Error(`missing compatibility guard hook: ${hookName}`)
   }
 }
 

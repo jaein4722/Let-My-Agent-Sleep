@@ -98,6 +98,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed OpenCode guard handling so finalizing `LMAS_CANCEL v1` results do not unblock continuation before the completion event is published.
 - Fixed OpenCode guard handling so user-pasted `LMAS_CANCEL v1` logs do not clear active handoffs.
 - Fixed OpenCode `lmas_status` guard handling so active handoffs only allow status checks after an explicit user status request; non-status user follow-ups cannot accidentally reopen polling.
+- Fixed OpenCode guard documentation and import smoke wording so `experimental.compaction.autocontinue` is treated as a best-effort compatibility hook, not as part of the pinned official `@opencode-ai/plugin@1.2.27` type surface.
 
 ## 0.2.6 and earlier
 
