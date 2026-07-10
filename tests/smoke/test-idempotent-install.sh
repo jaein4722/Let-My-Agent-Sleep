@@ -12,9 +12,12 @@ TMP_XDG_OMO_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-xdg-omo-home.XXXXXX")
 TMP_XDG_OMO_CONFIG_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-xdg-omo-config.XXXXXX")
 TMP_CUSTOM_CONFIG_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-custom-config-home.XXXXXX")
 TMP_CUSTOM_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-custom-config-dir.XXXXXX")
+TMP_CUSTOM_CONFIG_FILE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-custom-config-file-home.XXXXXX")
+TMP_CUSTOM_CONFIG_FILE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/lmas-install-custom-config-file-dir.XXXXXX")
 EXPECTED_XDG_CONFIG_HOME=$(cd "$TMP_XDG_CONFIG_HOME" && pwd)
 EXPECTED_XDG_OMO_CONFIG_HOME=$(cd "$TMP_XDG_OMO_CONFIG_HOME" && pwd)
 EXPECTED_CUSTOM_CONFIG_DIR=$(cd "$TMP_CUSTOM_CONFIG_DIR" && pwd)
+EXPECTED_CUSTOM_CONFIG_FILE_DIR=$(cd "$TMP_CUSTOM_CONFIG_FILE_DIR" && pwd)
 TMP_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-jsonc-home.XXXXXX")
 TMP_COMMENT_ONLY_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-comment-only-jsonc-home.XXXXXX")
 TMP_REPLACE_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-replace-jsonc-home.XXXXXX")
@@ -158,6 +161,7 @@ JSONC
 XDG_OMO_OUTPUT=$(cd "$ROOT" && HOME="$TMP_XDG_OMO_HOME" XDG_CONFIG_HOME="$TMP_XDG_OMO_CONFIG_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 
 CUSTOM_CONFIG_OUTPUT=$(cd "$ROOT" && HOME="$TMP_CUSTOM_CONFIG_HOME" OPENCODE_CONFIG_DIR="$TMP_CUSTOM_CONFIG_DIR" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
+CUSTOM_CONFIG_FILE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_CUSTOM_CONFIG_FILE_HOME" OPENCODE_CONFIG_FILE="$EXPECTED_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 
 mkdir -p "$TMP_JSONC_HOME/.config/opencode"
 cat > "$TMP_JSONC_HOME/.config/opencode/opencode.jsonc" <<'JSONC'
@@ -330,6 +334,9 @@ printf '%s\n' "$XDG_OUTPUT" | grep -Fq "$EXPECTED_XDG_CONFIG_HOME/opencode/openc
 printf '%s\n' "$XDG_OMO_OUTPUT" | grep -Fq "$EXPECTED_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" || { printf 'xdg omo install did not use XDG_CONFIG_HOME omo config path\n' >&2; exit 1; }
 printf '%s\n' "$CUSTOM_CONFIG_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_DIR/opencode.jsonc" || { printf 'custom opencode install did not use OPENCODE_CONFIG_DIR config path\n' >&2; exit 1; }
 printf '%s\n' "$CUSTOM_CONFIG_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_DIR/oh-my-openagent.json" || { printf 'custom omo install did not use OPENCODE_CONFIG_DIR omo config path\n' >&2; exit 1; }
+printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" || { printf 'custom opencode install did not use OPENCODE_CONFIG_FILE config path\n' >&2; exit 1; }
+printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" || { printf 'custom omo install did not use OPENCODE_CONFIG_FILE sibling omo config path\n' >&2; exit 1; }
+printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/skills/let-my-agent-sleep/SKILL.md" || { printf 'custom opencode install did not use OPENCODE_CONFIG_FILE sibling skill path\n' >&2; exit 1; }
 printf '%s\n' "$JSONC_OUTPUT" | grep -q 'opencode.jsonc' || { printf 'opencode jsonc config was not used\n' >&2; exit 1; }
 printf '%s\n' "$COMMENT_ONLY_JSONC_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'comment-only opencode jsonc install did not complete\n' >&2; exit 1; }
 printf '%s\n' "$COMMENT_ONLY_JSONC_SECOND_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'second comment-only opencode jsonc install did not complete\n' >&2; exit 1; }
@@ -397,6 +404,21 @@ if [ ! -f "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" ]; then
   exit 1
 fi
 
+if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" ]; then
+  printf 'custom opencode install did not create OPENCODE_CONFIG_FILE target\n' >&2
+  exit 1
+fi
+
+if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" ]; then
+  printf 'custom omo install did not write disabled hook next to OPENCODE_CONFIG_FILE\n' >&2
+  exit 1
+fi
+
+if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/skills/let-my-agent-sleep/SKILL.md" ]; then
+  printf 'custom opencode install did not install skill next to OPENCODE_CONFIG_FILE\n' >&2
+  exit 1
+fi
+
 if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/opencode.jsonc" ]; then
   printf 'custom opencode install incorrectly wrote under HOME .config\n' >&2
   exit 1
@@ -404,6 +426,16 @@ fi
 
 if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/oh-my-openagent.json" ]; then
   printf 'custom omo install incorrectly wrote disabled hook under HOME .config\n' >&2
+  exit 1
+fi
+
+if [ -e "$TMP_CUSTOM_CONFIG_FILE_HOME/.config/opencode/opencode.jsonc" ]; then
+  printf 'custom OPENCODE_CONFIG_FILE install incorrectly wrote under HOME .config\n' >&2
+  exit 1
+fi
+
+if [ -e "$TMP_CUSTOM_CONFIG_FILE_HOME/.config/opencode/oh-my-openagent.json" ]; then
+  printf 'custom OPENCODE_CONFIG_FILE omo install incorrectly wrote under HOME .config\n' >&2
   exit 1
 fi
 
@@ -465,10 +497,12 @@ fi
 assert_file_has_omo_hooks "$TMP_HOME/.config/opencode/oh-my-openagent.json" "fresh opencode install"
 assert_file_has_omo_hooks "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" "xdg opencode install"
 assert_file_has_omo_hooks "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_DIR install"
+assert_file_has_omo_hooks "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_FILE install"
 assert_file_lacks_omo_hook "$TMP_HOME/.config/opencode/oh-my-openagent.json" "start-work" "fresh opencode install"
 assert_file_has_omo_hidden_skills "$TMP_HOME/.config/opencode/oh-my-openagent.json" "fresh opencode install"
 assert_file_has_omo_hidden_skills "$TMP_XDG_OMO_CONFIG_HOME/opencode/oh-my-openagent.json" "xdg opencode install"
 assert_file_has_omo_hidden_skills "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_DIR install"
+assert_file_has_omo_hidden_skills "$TMP_CUSTOM_CONFIG_FILE_DIR/oh-my-openagent.json" "custom OPENCODE_CONFIG_FILE install"
 
 if grep -q '"let-my-agent-sleep"' "$TMP_HOME/.config/opencode/opencode.jsonc"; then
   printf 'fresh opencode config should not keep bare plugin entry\n' >&2

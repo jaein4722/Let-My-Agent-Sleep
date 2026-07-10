@@ -827,6 +827,9 @@ function writeJsonConfigWithStringArray(target, config, key, values, options) {
 }
 
 function resolveOpenCodeConfigDir() {
+  const customConfigFile = process.env.OPENCODE_CONFIG_FILE?.trim()
+  if (customConfigFile) return dirname(customConfigFile)
+
   const customConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim()
   if (customConfigDir) return customConfigDir
 
@@ -835,7 +838,8 @@ function resolveOpenCodeConfigDir() {
 }
 
 function resolveOpenCodeConfigPath(configDir) {
-  if (process.env.OPENCODE_CONFIG_FILE) return process.env.OPENCODE_CONFIG_FILE
+  const customConfigFile = process.env.OPENCODE_CONFIG_FILE?.trim()
+  if (customConfigFile) return customConfigFile
 
   const jsoncPath = join(configDir, "opencode.jsonc")
   const jsonPath = join(configDir, "opencode.json")

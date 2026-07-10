@@ -101,6 +101,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed OpenCode guard documentation and import smoke wording so `experimental.compaction.autocontinue` is treated as a best-effort compatibility hook, not as part of the pinned official `@opencode-ai/plugin@1.2.27` type surface.
 - Fixed consumer documentation to distinguish LMAS having no daemon from the OpenCode adapter requirement that the owning OpenCode server/session must still be alive for automatic completion injection.
 - Fixed the OpenCode site docs so the listed disabled Oh My OpenAgent continuation hooks match the installer behavior.
+- Fixed OpenCode installs with `OPENCODE_CONFIG_FILE` so skills and Oh My OpenAgent config are written next to the selected config file instead of the default config directory.
 
 ## 0.2.6 and earlier
 
