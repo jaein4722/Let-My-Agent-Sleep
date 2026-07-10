@@ -23,6 +23,7 @@ for (const hookName of [
   "event",
   "experimental.chat.messages.transform",
   "experimental.compaction.autocontinue",
+  "experimental.session.compacting",
   "tool.execute.before",
   "command.execute.before",
   "permission.ask",

@@ -87,6 +87,15 @@ function createCommandGuardPart(sessionID, runIds) {
   }
 }
 
+function createCompactionGuardContext(runIds) {
+  const runList = runIds?.length > 0 ? runIds.join(", ") : "unknown"
+  return [
+    "LMAS handoff is active.",
+    `Active run_id(s): ${runList}.`,
+    "The agent intentionally stopped after handoff and must not continue, poll, read logs, or inspect artifacts until LMAS_COMPLETION_EVENT v1 or explicit user instruction.",
+  ].join(" ")
+}
+
 function createFetchPromptGuardResponse(sessionID, runIds, pathname) {
   if (pathname?.endsWith("/prompt_async")) {
     return new Response(null, {
@@ -649,6 +658,13 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
       if (!guard) return
       output.enabled = false
+    },
+    "experimental.session.compacting": async (input, output) => {
+      ensureFetchGuard()
+      const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
+      if (!guard) return
+      if (!Array.isArray(output.context)) output.context = []
+      output.context.push(createCompactionGuardContext(guard.runIds))
     },
     "tool.execute.before": async (input, output) => {
       ensureFetchGuard()

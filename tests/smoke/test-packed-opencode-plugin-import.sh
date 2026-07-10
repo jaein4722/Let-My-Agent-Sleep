@@ -57,6 +57,7 @@ for (const hookName of [
   "event",
   "experimental.chat.messages.transform",
   "experimental.compaction.autocontinue",
+  "experimental.session.compacting",
   "tool.execute.before",
   "command.execute.before",
   "permission.ask",
@@ -139,6 +140,19 @@ await hooks["experimental.compaction.autocontinue"](
 
 if (compactionAutocontinueOutput.enabled !== false) {
   throw new Error("packed plugin did not disable compaction autocontinue during active handoff")
+}
+
+const sessionCompactingOutput = { context: [] }
+await hooks["experimental.session.compacting"](
+  { sessionID: "ses_packed_import" },
+  sessionCompactingOutput,
+)
+if (
+  sessionCompactingOutput.context.length !== 1
+  || !sessionCompactingOutput.context[0].includes("LMAS handoff is active")
+  || !sessionCompactingOutput.context[0].includes("lmas_packed_import")
+) {
+  throw new Error("packed plugin did not preserve LMAS handoff state in compaction context")
 }
 
 const args = { command: "cat stdout.log", timeout: 60000 }

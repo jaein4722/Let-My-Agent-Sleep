@@ -384,6 +384,18 @@ await promptGuardPlugin["experimental.compaction.autocontinue"](
 if (compactionAutocontinueOutput.enabled !== false) {
   throw new Error("expected active LMAS handoff to disable OpenCode compaction autocontinue")
 }
+const sessionCompactingOutput = { context: [] }
+await promptGuardPlugin["experimental.session.compacting"](
+  { sessionID: promptGuardSessionID },
+  sessionCompactingOutput,
+)
+if (
+  sessionCompactingOutput.context.length !== 1
+  || !sessionCompactingOutput.context[0].includes("LMAS handoff is active")
+  || !sessionCompactingOutput.context[0].includes("lmas_prompt_guard")
+) {
+  throw new Error("expected active LMAS handoff to be preserved in OpenCode compaction context")
+}
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -621,6 +633,14 @@ await promptGuardPlugin["experimental.compaction.autocontinue"](
 )
 if (compactionAutocontinueAfterCompletionOutput.enabled !== true) {
   throw new Error("did not expect OpenCode compaction autocontinue to be disabled after LMAS completion")
+}
+const sessionCompactingAfterCompletionOutput = { context: [] }
+await promptGuardPlugin["experimental.session.compacting"](
+  { sessionID: promptGuardSessionID },
+  sessionCompactingAfterCompletionOutput,
+)
+if (sessionCompactingAfterCompletionOutput.context.length !== 0) {
+  throw new Error("did not expect OpenCode compaction context to be modified after LMAS completion")
 }
 
 const originalBun = globalThis.Bun
