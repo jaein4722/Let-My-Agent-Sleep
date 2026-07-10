@@ -38,6 +38,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added OpenCode prompt guard coverage for OMO fallback-shaped prompt payloads, live-route prompt injection, and no-reply wake notifications.
 - Added packed OpenCode plugin import coverage for the compaction autocontinue guard hook.
 - Added OpenCode guard coverage proving compaction autocontinue is re-enabled after LMAS cancellation clears an active handoff.
+- Added packaged OpenCode plugin coverage for the `command.execute.before` guard hook.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.

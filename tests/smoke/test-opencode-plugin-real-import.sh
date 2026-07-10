@@ -24,6 +24,7 @@ for (const hookName of [
   "experimental.chat.messages.transform",
   "experimental.compaction.autocontinue",
   "tool.execute.before",
+  "command.execute.before",
   "permission.ask",
 ]) {
   if (typeof hooks[hookName] !== "function") {

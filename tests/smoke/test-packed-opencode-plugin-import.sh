@@ -58,6 +58,7 @@ for (const hookName of [
   "experimental.chat.messages.transform",
   "experimental.compaction.autocontinue",
   "tool.execute.before",
+  "command.execute.before",
   "permission.ask",
 ]) {
   if (typeof hooks[hookName] !== "function") {
@@ -153,6 +154,26 @@ if (output.args !== args) {
 
 if (!args.command.includes("LMAS handoff is active")) {
   throw new Error("tool.execute.before did not mutate original args object in place")
+}
+
+const commandOutput = {
+  parts: [{
+    type: "text",
+    text: "Continue working on the remaining task.",
+    synthetic: true,
+    metadata: { compaction_continue: true },
+  }],
+}
+await hooks["command.execute.before"](
+  { command: "start-work", arguments: "", sessionID: "ses_packed_import" },
+  commandOutput,
+)
+if (
+  commandOutput.parts.length !== 1
+  || !commandOutput.parts[0].text.includes("LMAS handoff is active")
+  || commandOutput.parts[0].metadata?.lmas_guard !== true
+) {
+  throw new Error("packed command.execute.before did not neutralize OMO command during active handoff")
 }
 JS
 then
