@@ -23,6 +23,8 @@ export function collectTextFromMessage(message) {
 function getSessionIDFromMessage(message) {
   return message?.info?.sessionID
     || message?.info?.sessionId
+    || message?.sessionID
+    || message?.sessionId
     || (message?.parts || []).find((part) => part?.sessionID)?.sessionID
     || (message?.parts || []).find((part) => part?.sessionId)?.sessionId
 }
@@ -37,6 +39,8 @@ export function getSessionIDFromEvent(event) {
     || event?.properties?.info?.id
     || event?.properties?.message?.info?.sessionID
     || event?.properties?.message?.info?.sessionId
+    || event?.properties?.message?.sessionID
+    || event?.properties?.message?.sessionId
     || (event?.properties?.message?.parts || []).find((part) => part?.sessionID)?.sessionID
     || (event?.properties?.message?.parts || []).find((part) => part?.sessionId)?.sessionId
 }

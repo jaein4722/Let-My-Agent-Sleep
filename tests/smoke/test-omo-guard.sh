@@ -1442,6 +1442,45 @@ if (getActiveOmoGuard(camelSessionGuards, "ses_camel_message_updated", 8163)) {
   throw new Error("expected session.deleted info.sessionId to clear guard")
 }
 
+const topLevelSessionGuards = new Map()
+const topLevelSessionBuffers = new Map()
+updateSessionGuardFromEvent(topLevelSessionGuards, topLevelSessionBuffers, {
+  type: "message.updated",
+  properties: {
+    message: {
+      sessionId: "ses_top_level_message_updated",
+      info: {
+        id: "top_level_session_handoff",
+        role: "assistant",
+      },
+      parts: [{
+        id: "top_level_session_handoff_part",
+        type: "text",
+        text: "LMAS_HANDOFF v1\nrun_id: lmas_top_level_message_updated\nstatus: STARTED",
+      }],
+    },
+  },
+}, 8170)
+const topLevelSessionOutput = {
+  messages: [
+    {
+      sessionId: "ses_top_level_message_updated",
+      info: { id: "top_level_session_continue", role: "user" },
+      parts: [{
+        id: "top_level_session_continue_part",
+        type: "text",
+        text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+        synthetic: true,
+        metadata: { compaction_continue: true },
+      }],
+    },
+  ],
+}
+applyOmoContinuationGuard(topLevelSessionOutput, topLevelSessionGuards, 8171)
+if (!topLevelSessionOutput.messages[0].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected top-level message sessionId event to activate guard")
+}
+
 const messageCompletionGuards = new Map()
 const messageCompletionBuffers = new Map()
 updateSessionGuardFromText(
@@ -1563,6 +1602,39 @@ if (!camelPartOnlySessionOutput.messages[1].parts[0].text.includes("[LMAS GUARD:
 }
 if (!getActiveOmoGuard(camelPartOnlySessionGuards, "ses_camel_part_only_transform", 8321)) {
   throw new Error("expected transform camelCase part-only session id to set active guard")
+}
+
+const topLevelOnlySessionGuards = new Map()
+const topLevelOnlySessionOutput = {
+  messages: [
+    {
+      sessionId: "ses_top_level_only_transform",
+      info: { id: "top_level_only_handoff", role: "assistant" },
+      parts: [{
+        id: "top_level_only_handoff_part",
+        type: "text",
+        text: "LMAS_HANDOFF v1\nrun_id: lmas_top_level_only_session\nstatus: STARTED",
+      }],
+    },
+    {
+      sessionId: "ses_top_level_only_transform",
+      info: { id: "top_level_only_omo", role: "user" },
+      parts: [{
+        id: "top_level_only_omo_part",
+        type: "text",
+        text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+        synthetic: true,
+        metadata: { compaction_continue: true },
+      }],
+    },
+  ],
+}
+applyOmoContinuationGuard(topLevelOnlySessionOutput, topLevelOnlySessionGuards, 8330)
+if (!topLevelOnlySessionOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected transform top-level message session id to neutralize OMO continuation")
+}
+if (!getActiveOmoGuard(topLevelOnlySessionGuards, "ses_top_level_only_transform", 8331)) {
+  throw new Error("expected transform top-level message session id to set active guard")
 }
 
 console.log("ok omo guard")
