@@ -9,6 +9,7 @@ tests=(
   tests/smoke/test-failed-completion.sh
   tests/smoke/test-status-list.sh
   tests/smoke/test-cancel.sh
+  tests/smoke/test-omo-hook-policy.sh
   tests/smoke/test-omo-guard.sh
   tests/smoke/test-opencode-plugin-guard.sh
   tests/smoke/test-opencode-plugin-real-import.sh
