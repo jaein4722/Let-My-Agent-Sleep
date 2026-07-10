@@ -381,6 +381,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
 
   const role = getRoleFromEvent(event)
   const allowHandoff = role !== "user"
+  const allowCancel = role !== "user"
 
   if (event?.type === "message.part.delta") {
     const bufferKey = getEventTextBufferKey(event, sessionID)
@@ -390,7 +391,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
       sessionID,
       bufferedText,
       now,
-      { allowHandoff },
+      { allowHandoff, allowCancel },
     )
     if (
       bufferedText.includes(LMAS_HANDOFF)
@@ -438,11 +439,15 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
 
   eventTextBuffers.set(sessionID, text.slice(-MAX_EVENT_TEXT_BUFFER))
   const message = event?.properties?.message
-  const lmasState = updateSessionGuardFromText(sessionGuards, sessionID, text, now, { allowHandoff })
+  const lmasState = updateSessionGuardFromText(sessionGuards, sessionID, text, now, { allowHandoff, allowCancel })
   if (text.includes(LMAS_COMPLETION) || text.includes(LMAS_CANCEL)) {
     eventTextBuffers.delete(sessionID)
   }
-  if ((allowHandoff && text.includes(LMAS_HANDOFF)) || text.includes(LMAS_COMPLETION) || text.includes(LMAS_CANCEL)) return lmasState
+  if (
+    (allowHandoff && text.includes(LMAS_HANDOFF))
+    || text.includes(LMAS_COMPLETION)
+    || (allowCancel && text.includes(LMAS_CANCEL))
+  ) return lmasState
 
   const existing = sessionGuards.get(sessionID)
   if (!existing?.active) {
@@ -529,7 +534,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
         activeRuns.delete(runId)
       }
     }
-    if (text.includes(LMAS_CANCEL) && !isFinalizingCancelText(text)) {
+    if (message?.info?.role !== "user" && text.includes(LMAS_CANCEL) && !isFinalizingCancelText(text)) {
       for (const runId of extractRunIds(text)) {
         cancelledRunIds.push(runId)
         activeRuns.delete(runId)

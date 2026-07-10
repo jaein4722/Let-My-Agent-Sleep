@@ -902,6 +902,39 @@ if (getActiveOmoGuard(cancelOnlyGuards, "ses_cancel_only", 6012)) {
   throw new Error("did not expect tool guard after transform-visible cancel")
 }
 
+const userPastedCancelGuards = new Map()
+updateSessionGuardFromText(
+  userPastedCancelGuards,
+  "ses_user_pasted_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_user_pasted_cancel\nstatus: STARTED",
+  6013,
+  { omoTurn: true },
+)
+const userPastedCancelOutput = {
+  messages: [
+    message(
+      "user",
+      "I pasted this old cancel log:\nLMAS_CANCEL v1\nrun_id: lmas_user_pasted_cancel\nstatus: CANCELLED",
+      "user_pasted_cancel",
+      "ses_user_pasted_cancel",
+    ),
+    message(
+      "user",
+      "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "omo_after_user_pasted_cancel",
+      "ses_user_pasted_cancel",
+    ),
+  ],
+}
+userPastedCancelOutput.messages[1].parts[0].synthetic = true
+const userPastedCancelState = applyOmoContinuationGuard(userPastedCancelOutput, userPastedCancelGuards, 6014)
+if (!userPastedCancelState.active || !userPastedCancelState.activeRunIds.includes("lmas_user_pasted_cancel")) {
+  throw new Error("did not expect user-pasted LMAS_CANCEL to clear active handoff")
+}
+if (!userPastedCancelOutput.messages[1].parts[0].text.includes("lmas_user_pasted_cancel")) {
+  throw new Error("expected guard to remain after user-pasted LMAS_CANCEL")
+}
+
 const unrelatedCancelGuards = new Map()
 updateSessionGuardFromText(
   unrelatedCancelGuards,
@@ -1174,6 +1207,46 @@ updateSessionGuardFromEvent(eventCancelGuards, eventCancelBuffers, {
 }, 7067)
 if (getActiveOmoGuard(eventCancelGuards, "ses_event_cancel", 7068)) {
   throw new Error("expected event-visible LMAS_CANCEL to clear run guard")
+}
+
+const userEventCancelGuards = new Map()
+const userEventCancelBuffers = new Map()
+updateSessionGuardFromText(
+  userEventCancelGuards,
+  "ses_user_event_cancel",
+  "LMAS_HANDOFF v1\nrun_id: lmas_user_event_cancel\nstatus: STARTED",
+  70685,
+  { omoTurn: true },
+)
+updateSessionGuardFromEvent(userEventCancelGuards, userEventCancelBuffers, {
+  type: "message.updated",
+  properties: {
+    message: message(
+      "user",
+      "I pasted this old cancel log:\nLMAS_CANCEL v1\nrun_id: lmas_user_event_cancel\nstatus: CANCELLED",
+      "user_event_cancel_message",
+      "ses_user_event_cancel",
+    ),
+  },
+}, 70686)
+const userEventCancelGuard = userEventCancelGuards.get("ses_user_event_cancel")
+if (!userEventCancelGuard?.active || !userEventCancelGuard?.runIds?.includes("lmas_user_event_cancel")) {
+  throw new Error("did not expect user-authored event-visible LMAS_CANCEL to clear active run guard")
+}
+const userEventCancelOmoOutput = {
+  messages: [
+    message(
+      "user",
+      "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "omo_after_user_event_cancel",
+      "ses_user_event_cancel",
+    ),
+  ],
+}
+userEventCancelOmoOutput.messages[0].parts[0].synthetic = true
+applyOmoContinuationGuard(userEventCancelOmoOutput, userEventCancelGuards, 70688)
+if (!userEventCancelOmoOutput.messages[0].parts[0].text.includes("lmas_user_event_cancel")) {
+  throw new Error("expected guard to resume on OMO continuation after user-authored event-visible LMAS_CANCEL")
 }
 
 const unrelatedEventCancelGuards = new Map()
