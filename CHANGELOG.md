@@ -40,6 +40,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Added OpenCode guard coverage proving compaction autocontinue is re-enabled after LMAS cancellation clears an active handoff.
 - Added packaged OpenCode plugin coverage for the `command.execute.before` guard hook.
 - Added OpenCode guard coverage for part-level role fields in message payloads.
+- Added OpenCode fetch guard coverage proving pass-through `Request` bodies remain intact.
 - Added run operations docs covering status, progress, notification, cancellation, and runtime files.
 - Added site docs verification for canonical URLs, sitemap coverage, local links, and demo/social assets.
 - Added a PNG social preview card and site verification for Open Graph, Twitter, and JSON-LD metadata.

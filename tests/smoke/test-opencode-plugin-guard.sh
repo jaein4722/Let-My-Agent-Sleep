@@ -94,8 +94,18 @@ function message(role, text, id, sessionID = "plugin_guard_session") {
 }
 
 let fetchCalls = 0
+let lastFetchBodyText = ""
 globalThis.fetch = async (input, init) => {
   fetchCalls += 1
+  if (typeof init?.body === "string") {
+    lastFetchBodyText = init.body
+  } else if (init?.body && typeof init.body.text === "function") {
+    lastFetchBodyText = await init.body.text()
+  } else if (input && typeof input === "object" && typeof input.clone === "function") {
+    lastFetchBodyText = await input.clone().text()
+  } else {
+    lastFetchBodyText = ""
+  }
   return new Response(JSON.stringify({ ok: true, input: String(input), method: init?.method || "GET" }), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -573,6 +583,18 @@ await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`
 if (fetchCalls !== 2) {
   throw new Error("expected live-route no-reply internal prompt to pass through fetch guard")
 }
+const requestObjectNoReplyBody = JSON.stringify({
+  noReply: true,
+  parts: [{ type: "text", text: "request object notification\n<!-- OMO_INTERNAL_INITIATOR -->\n<!-- OMO_INTERNAL_NOREPLY -->" }],
+})
+await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: requestObjectNoReplyBody,
+}))
+if (fetchCalls !== 3 || lastFetchBodyText !== requestObjectNoReplyBody) {
+  throw new Error("expected live-route Request-object no-reply prompt to pass through fetch guard with body intact")
+}
 await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -580,7 +602,7 @@ await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`
     parts: [{ type: "text", text: "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_prompt_guard\nstatus: SUCCEEDED" }],
   }),
 })
-if (fetchCalls !== 3) {
+if (fetchCalls !== 4) {
   throw new Error("expected live-route LMAS completion prompt to pass through fetch guard")
 }
 await promptGuardPlugin.event({
