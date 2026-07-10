@@ -1067,6 +1067,74 @@ await plugin.event({
   },
 })
 
+const chatMessageSessionID = "plugin_chat_message_session"
+await plugin.event({
+  event: {
+    type: "message.part.delta",
+    properties: {
+      sessionID: chatMessageSessionID,
+      delta: "LMAS_HANDOFF v1\nrun_id: lmas_chat_message\nstatus: STARTED",
+    },
+  },
+})
+await plugin["chat.message"](
+  { sessionID: chatMessageSessionID, agent: "sisyphus" },
+  {
+    message: {
+      id: "chat_message_omo_continue",
+      sessionID: chatMessageSessionID,
+      role: "user",
+      time: { created: Date.now() },
+      agent: "test",
+      model: { providerID: "test", modelID: "test" },
+    },
+    parts: [{
+      id: "chat_message_omo_continue_part",
+      type: "text",
+      text: "Continue working on the remaining task.",
+      synthetic: true,
+    }],
+  },
+)
+let chatMessageBlocked = false
+try {
+  await plugin["tool.execute.before"](
+    { tool: "todowrite", sessionID: chatMessageSessionID, callID: "call_chat_message_omo_todowrite" },
+    { args: { todos: [] } },
+  )
+} catch (error) {
+  chatMessageBlocked = String(error?.message || "").includes("LMAS handoff is active")
+}
+if (!chatMessageBlocked) {
+  throw new Error("expected chat.message OMO continuation to activate tool guard")
+}
+await plugin["chat.message"](
+  { sessionID: chatMessageSessionID, agent: "sisyphus" },
+  {
+    message: {
+      id: "chat_message_cancel",
+      sessionID: chatMessageSessionID,
+      role: "user",
+      time: { created: Date.now() },
+      agent: "test",
+      model: { providerID: "test", modelID: "test" },
+    },
+    parts: [{
+      id: "chat_message_cancel_part",
+      type: "text",
+      text: "Cancel the LMAS run now.",
+    }],
+  },
+)
+const chatMessageCancelPermissionOutput = {}
+await plugin["permission.ask"](
+  { tool: "lmas_cancel", sessionID: chatMessageSessionID, callID: "call_chat_message_cancel_permission" },
+  chatMessageCancelPermissionOutput,
+)
+if (chatMessageCancelPermissionOutput.status !== "allow") {
+  throw new Error("expected chat.message explicit user cancel request to allow lmas_cancel permission")
+}
+
 const output = {
   messages: [
     message(

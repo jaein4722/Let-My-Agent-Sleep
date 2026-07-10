@@ -407,6 +407,21 @@ function replaceArgsInPlace(output, args) {
   output.args = args
 }
 
+function updateSessionGuardFromChatMessage(input, output) {
+  const sessionID = getRuntimeSessionID(input) || getRuntimeSessionID(output?.message)
+  const message = {
+    info: {
+      ...(output?.message || {}),
+      ...(sessionID ? { sessionID } : {}),
+    },
+    parts: Array.isArray(output?.parts) ? output.parts : [],
+  }
+  updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, {
+    type: "message.updated",
+    properties: { message },
+  })
+}
+
 export function findLmasScript(cwd, context) {
   const roots = [
     process.env.LMAS_ROOT,
@@ -649,6 +664,10 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ) return
       updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, event)
     },
+    "chat.message": async (input, output) => {
+      ensureFetchGuard()
+      updateSessionGuardFromChatMessage(input, output)
+    },
     "experimental.chat.messages.transform": (input, output) => {
       ensureFetchGuard()
       applyOmoContinuationGuard(output, getRuntimeSessionID(input))
@@ -702,7 +721,13 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       const sessionID = getRuntimeSessionID(input)
       const guard = getSessionOmoGuard(sessionID)
-      if (!guard) return
+      if (!guard) {
+        const activeGuard = getSessionActiveHandoff(sessionID)
+        if (activeGuard?.allowCancel && permissionLooksLikeCancelTool(input)) {
+          output.status = "allow"
+        }
+        return
+      }
       const key = callKey(sessionID, getCallID(input))
       if (key && allowedCancelCallIds.has(key)) {
         allowedCancelCallIds.delete(key)
