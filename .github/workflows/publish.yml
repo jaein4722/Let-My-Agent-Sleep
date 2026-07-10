@@ -96,12 +96,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_REF_NAME" != "master" ]; then
+            printf 'publish workflow must run from master; got %s\n' "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           version=$(node -p "require('./packages/let-my-agent-sleep/package.json').version")
           tag="v${version}"
+          head_sha=$(git rev-parse HEAD)
 
           npm_view_log=$(mktemp)
           if npm view "let-my-agent-sleep@${version}" version > /dev/null 2> "$npm_view_log"; then
             publish_needed=false
+            published_git_head=$(npm view "let-my-agent-sleep@${version}" gitHead)
+            if [ "$published_git_head" != "$head_sha" ]; then
+              printf 'npm %s was published from %s, not current HEAD %s\n' "$version" "$published_git_head" "$head_sha" >&2
+              exit 1
+            fi
           elif grep -q 'E404' "$npm_view_log"; then
             publish_needed=true
           else
@@ -109,9 +119,23 @@ jobs:
             exit 1
           fi
 
+          if tag_sha=$(git rev-list -n 1 "$tag" 2>/dev/null); then
+            tag_exists=true
+            if [ "$tag_sha" != "$head_sha" ]; then
+              printf 'tag %s points to %s, not current HEAD %s\n' "$tag" "$tag_sha" "$head_sha" >&2
+              exit 1
+            fi
+          else
+            tag_exists=false
+          fi
+
           gh_release_log=$(mktemp)
           if gh release view "$tag" > /dev/null 2> "$gh_release_log"; then
             release_needed=false
+            if [ "$tag_exists" != "true" ]; then
+              printf 'GitHub release %s exists but its git tag is missing\n' "$tag" >&2
+              exit 1
+            fi
           elif grep -qi 'not found' "$gh_release_log"; then
             release_needed=true
           else
@@ -124,12 +148,14 @@ jobs:
             echo "tag=$tag"
             echo "publish_needed=$publish_needed"
             echo "release_needed=$release_needed"
+            echo "tag_exists=$tag_exists"
           } >> "$GITHUB_OUTPUT"
 
           echo "version=$version"
           echo "tag=$tag"
           echo "publish_needed=$publish_needed"
           echo "release_needed=$release_needed"
+          echo "tag_exists=$tag_exists"
 
       - name: Check release version and changelog
         if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
@@ -200,7 +226,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          if [ "${{ steps.release.outputs.tag_exists }}" != "true" ]; then
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
           gh release create "${{ steps.release.outputs.tag }}" \
-            --target "$GITHUB_SHA" \
+            --verify-tag \
             --title "let-my-agent-sleep ${{ steps.release.outputs.tag }}" \
             --generate-notes

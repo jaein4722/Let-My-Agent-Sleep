@@ -13,6 +13,7 @@ npm run release:check
 This checks:
 
 - Local `packages/let-my-agent-sleep/package.json` version.
+- Git working tree and index are clean.
 - Current npm version from `npm view let-my-agent-sleep version`.
 - Local version is newer than the npm version.
 - `CHANGELOG.md` and `packages/let-my-agent-sleep/CHANGELOG.md` contain a dated release heading, not `Unreleased`.
@@ -49,15 +50,16 @@ Pushing to `master` triggers `.github/workflows/publish.yml` when either of thes
 The workflow:
 
 1. Reads the local package version.
-2. Checks whether `let-my-agent-sleep@<version>` already exists on npm.
-3. Checks whether GitHub release `v<version>` already exists.
-4. When npm publish is needed, verifies the local version is newer than npm latest. When publish or release creation is needed, verifies both changelogs contain a dated release heading.
-5. Runs syntax, site docs, and smoke tests when npm publish or GitHub release creation is needed.
-6. Runs an npm pack dry run before publishing.
-7. Publishes to npm when the version is not already published.
-8. Creates GitHub release `v<version>` when it does not already exist.
+2. Refuses to run from a branch other than `master`.
+3. Checks whether `let-my-agent-sleep@<version>` already exists on npm. If it does, its npm `gitHead` must equal the current commit.
+4. Checks whether tag and GitHub release `v<version>` already exist. Any existing tag must resolve to the current commit.
+5. When npm publish is needed, verifies the local version is newer than npm latest. When publish or release creation is needed, verifies both changelogs contain a dated release heading.
+6. Runs syntax, site docs, and smoke tests when npm publish or GitHub release creation is needed.
+7. Runs an npm pack dry run before publishing.
+8. Publishes to npm when the version is not already published.
+9. Creates or verifies the exact tag, then creates GitHub release `v<version>` with `--verify-tag` when it does not already exist.
 
-This means the workflow is idempotent for an already-published npm version. If npm publish succeeded but the GitHub release failed, rerunning the workflow should skip npm publish and create the missing release.
+This means the workflow is idempotent only when npm, the git tag, and the workflow all refer to the same commit. If npm publish succeeded but the GitHub release failed, rerunning the same commit skips npm publish and creates the missing verified tag/release; a later commit cannot reuse that version.
 
 ## After publish
 

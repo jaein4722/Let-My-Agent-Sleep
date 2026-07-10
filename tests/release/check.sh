@@ -10,6 +10,11 @@ LOCAL_VERSION=$(node -p "require('./$PACKAGE_JSON').version")
 
 printf 'release check: %s@%s\n' "$PACKAGE_NAME" "$LOCAL_VERSION"
 
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  printf 'working tree must be clean before release:check\n' >&2
+  exit 1
+fi
+
 PUBLISHED_VERSION=$(npm view "$PACKAGE_NAME" version)
 printf 'published version: %s@%s\n' "$PACKAGE_NAME" "$PUBLISHED_VERSION"
 

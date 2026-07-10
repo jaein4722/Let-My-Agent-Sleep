@@ -2,6 +2,26 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.3.2 - 2026-07-10
+
+### Fixed
+
+- Removed the `--disable-omo-continuation` and `--keep-omo-continuation` install options.
+- Removed installer writes to Oh My OpenAgent `disabled_hooks` and `disabled_skills`; existing OMO settings are preserved byte-for-byte.
+- Added a read-only doctor warning for known continuation-hook entries that may remain from an LMAS 0.3.0 install.
+- Kept OMO compatibility entirely in the OpenCode runtime guard, scoped to sessions with an active `LMAS_HANDOFF v1`.
+- Restricted runtime protocol learning to LMAS tools, recognized LMAS CLI commands, and session events; arbitrary tool output can no longer arm or clear a handoff guard.
+- Reduced the npm entry module to one plugin function export so OpenCode does not execute test helpers as additional plugins.
+- Validated protocol run IDs, removed dynamic data from guarded shell no-ops, bounded streaming buffers, and fixed split-delta handoff parsing.
+- Required explicit cancel intent and an exact active run ID without overriding the user's OpenCode permission decision.
+- Made completion and resume files atomic, added a handoff-start barrier, moved tmux sockets to short stable paths, and surfaced surviving cancellation processes.
+- Restricted completion HTTP endpoints to `http://` or `https://` and removed model-facing notification/server URL fields from OpenCode tools.
+- Pinned the OpenCode plugin spec to the exact LMAS version while leaving both legacy and versioned OpenCode cache layouts entirely under OpenCode's control.
+- Stopped OpenCode-only installs from moving Codex or Claude assets, and moved Codex update backups outside the discoverable skills directory.
+- Hardened publish recovery with master-only execution, npm `gitHead` and tag-SHA checks, verified-tag release creation, and clean-tree local release checks.
+- Re-rendered the PNG social card directly from the checked-in SVG source.
+- Removed the low-quality README demo GIF and its generator script.
+
 ## 0.3.1 - 2026-07-10
 
 ### Fixed
@@ -16,11 +36,11 @@ All notable changes to Let My Agent Sleep are documented here.
 
 ### Added
 
-- Added `lmas_cancel` support across the CLI and OpenCode plugin, including cancellation events and smoke coverage.
+- Hardened the existing `lmas_cancel` CLI and OpenCode plugin support with cancellation events and expanded smoke coverage.
 - Added protocol documentation and packaged-asset checks for the `LMAS_CANCEL v1` event contract.
 - Added `lmas doctor` diagnostics for OpenCode installs, plugin order, OMO continuation configuration, plugin cache state, and live tool exposure.
-- Added GitHub Actions release automation for npm trusted publishing and GitHub release creation.
-- Added `npm run release:check` to enforce local version, npm version, changelog, smoke, site, pack, and patch hygiene checks before pushing release automation.
+- Hardened the existing GitHub Actions release automation for npm trusted publishing and GitHub release creation.
+- Expanded `npm run release:check` to enforce local version, npm version, changelog, smoke, site, pack, and patch hygiene checks before pushing release automation.
 - Added smoke coverage for packaged assets, packed tarball CLI behavior, OpenCode plugin imports, OMO handoff guards, live doctor checks, and install idempotency.
 - Added smoke coverage for GitHub Actions release-state detection, including already-published, missing-version, npm-error, and GitHub-release-error paths.
 - Added cancel process-group cleanup, KILL fallback, and `cancel_surviving_pids` metadata when cancellation cannot fully terminate a process.

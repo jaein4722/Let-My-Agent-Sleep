@@ -11,13 +11,15 @@ if ! node --input-type=module -e 'await import("@opencode-ai/plugin")' >/dev/nul
 fi
 
 node --input-type=module - <<'JS'
-import plugin, { LetMyAgentSleepPlugin } from "./packages/let-my-agent-sleep/src/index.js"
+import { LetMyAgentSleepPlugin } from "./packages/let-my-agent-sleep/src/index.js"
+
+const module = await import("./packages/let-my-agent-sleep/src/index.js")
+const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
+if (functionExports.length !== 1 || functionExports[0][0] !== "LetMyAgentSleepPlugin") {
+  throw new Error(`expected exactly one plugin function export, got: ${functionExports.map(([name]) => name).join(", ")}`)
+}
 
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
-
-if (typeof plugin !== "function") {
-  throw new Error("default export is not a plugin function")
-}
 
 const officialGuardHooks = [
   "event",

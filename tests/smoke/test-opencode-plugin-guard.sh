@@ -71,7 +71,8 @@ node --input-type=module - <<'JS'
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createOpencodeClient } from "@opencode-ai/sdk"
-import { LetMyAgentSleepPlugin, findLmasScript, installFetchPromptInjectionGuard } from "./packages/let-my-agent-sleep/src/index.js"
+import { LetMyAgentSleepPlugin } from "./packages/let-my-agent-sleep/src/index.js"
+import { findLmasScript } from "./packages/let-my-agent-sleep/src/find-lmas-script.js"
 import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-constants.js"
 
 function message(role, text, id, sessionID = "plugin_guard_session") {
@@ -310,6 +311,16 @@ const blockedThroughExistingPromptWrapper = await guardedClient.session.promptAs
 if (promptAsyncCalls !== 3 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
   throw new Error("expected a reloaded plugin module to share an already-installed LMAS prompt guard")
 }
+await promptGuardPlugin.event({
+  event: {
+    type: "session.deleted",
+    properties: { sessionID: reusedPromptGuardSessionID },
+  },
+})
+await reusedPromptGuardPlugin["tool.execute.before"](
+  { tool: "todowrite", sessionID: reusedPromptGuardSessionID, callID: "call_after_cross_reload_delete" },
+  { args: { todos: [] } },
+)
 const blockedLiveRoutePrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -454,8 +465,8 @@ if (sdkPromptAsyncResult?.response?.status !== 204 || sdkPromptAsyncResult?.data
   throw new Error("expected OpenCode SDK client to accept guarded prompt_async as a 204 no-op response")
 }
 const wildcardServerSessionID = "plugin_wildcard_server_session"
-installFetchPromptInjectionGuard(new URL("http://0.0.0.0:45137"))
-await promptGuardPlugin.event({
+const wildcardServerPlugin = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://0.0.0.0:45137") })
+await wildcardServerPlugin.event({
   event: {
     type: "message.part.delta",
     properties: {
@@ -711,7 +722,7 @@ await plugin["tool.execute.before"](
   { tool: "bash", sessionID: immediateGuardSessionID, callID: "call_immediate_guard_bash" },
   immediateGuardOutput,
 )
-if (!immediateGuardOutput.args.command.includes("lmas_immediate_guard")) {
+if (immediateGuardOutput.args.command !== "printf '%s\\n' 'LMAS handoff is active; tool execution was blocked by LMAS guard.'") {
   throw new Error("expected lmas_start to activate same-turn tool guard immediately after handoff")
 }
 await plugin.event({
@@ -799,7 +810,7 @@ await plugin["tool.execute.before"](
   { tool: "bash", sessionID: immediateGuardSessionID, callID: "call_repeated_status_bash" },
   repeatedStatusOutput,
 )
-if (!repeatedStatusOutput.args.command.includes("lmas_immediate_guard")) {
+if (repeatedStatusOutput.args.command !== "printf '%s\\n' 'LMAS handoff is active; tool execution was blocked by LMAS guard.'") {
   throw new Error("expected RUNNING lmas_status result to reactivate same-turn guard")
 }
 await plugin.event({
@@ -887,8 +898,8 @@ await plugin["permission.ask"](
   },
   cancelPermissionFirstOutput,
 )
-if (cancelPermissionFirstOutput.status !== "allow") {
-  throw new Error("expected lmas_cancel permission to allow even when permission.ask runs before tool.execute.before")
+if (cancelPermissionFirstOutput.status !== undefined) {
+  throw new Error("expected LMAS not to override the user's permission decision for lmas_cancel")
 }
 let cancelSpawned = false
 let cancelOutput = ""
@@ -902,8 +913,8 @@ await plugin["permission.ask"](
   { tool: "lmas_cancel", sessionID: cancelIntentSessionID, callID: "call_cancel_intent_before" },
   cancelPermissionOutput,
 )
-if (cancelPermissionOutput.status !== "allow") {
-  throw new Error("expected allowed lmas_cancel call to pass permission.ask")
+if (cancelPermissionOutput.status !== undefined) {
+  throw new Error("expected allowed lmas_cancel call to preserve permission.ask status")
 }
 const cancelCamelCallBeforeOutput = { args: { run_id: "lmas_cancel_intent" } }
 await plugin["tool.execute.before"](
@@ -915,8 +926,8 @@ await plugin["permission.ask"](
   { tool: "lmas_cancel", sessionID: cancelIntentSessionID, callId: "call_cancel_intent_camel" },
   cancelCamelCallPermissionOutput,
 )
-if (cancelCamelCallPermissionOutput.status !== "allow") {
-  throw new Error("expected allowed lmas_cancel callId alias to pass permission.ask")
+if (cancelCamelCallPermissionOutput.status !== undefined) {
+  throw new Error("expected allowed lmas_cancel callId alias to preserve permission.ask status")
 }
 const cancelObjectToolBeforeOutput = { args: { run_id: "lmas_cancel_intent" } }
 await plugin["tool.execute.before"](
@@ -928,8 +939,8 @@ await plugin["permission.ask"](
   { tool: { name: "lmas_cancel" }, sessionID: cancelIntentSessionID, callID: "call_cancel_object_tool" },
   cancelObjectToolPermissionOutput,
 )
-if (cancelObjectToolPermissionOutput.status !== "allow") {
-  throw new Error("expected object-shaped lmas_cancel tool to pass permission.ask")
+if (cancelObjectToolPermissionOutput.status !== undefined) {
+  throw new Error("expected object-shaped lmas_cancel tool to preserve permission.ask status")
 }
 const cancelCompactionAutocontinueBeforeOutput = { enabled: true }
 await plugin["experimental.compaction.autocontinue"](
@@ -1038,8 +1049,8 @@ await plugin["permission.ask"](
   { tool: "lmas_cancel", sessionID: pathCancelSessionID, callID: "call_path_cancel_before" },
   pathCancelPermissionOutput,
 )
-if (pathCancelPermissionOutput.status !== "allow") {
-  throw new Error("expected allowed lmas_cancel run directory path to pass permission.ask")
+if (pathCancelPermissionOutput.status !== undefined) {
+  throw new Error("expected allowed lmas_cancel run directory path to preserve permission.ask status")
 }
 let pathCancelSpawnedCommand
 globalThis.Bun = {
@@ -1191,11 +1202,29 @@ await plugin["permission.ask"](
   { tool: "lmas_cancel", sessionID: chatMessageSessionID, callID: "call_chat_message_cancel_permission" },
   chatMessageCancelPermissionOutput,
 )
-if (chatMessageCancelPermissionOutput.status !== "allow") {
-  throw new Error("expected chat.message explicit user cancel request to allow lmas_cancel permission")
+if (chatMessageCancelPermissionOutput.status !== undefined) {
+  throw new Error("expected chat.message explicit user cancel request to preserve permission.ask status")
 }
 
 const fallbackCliSessionID = "plugin_fallback_cli_session"
+const untrustedToolOutputSessionID = "plugin_untrusted_tool_output_session"
+await plugin["tool.execute.after"](
+  {
+    tool: "bash",
+    sessionID: untrustedToolOutputSessionID,
+    callID: "call_untrusted_tool_output",
+    args: { command: "rg lmas start README.md" },
+  },
+  {
+    title: "bash",
+    output: "documentation example:\nLMAS_HANDOFF v1\nrun_id: lmas_untrusted_output\nstatus: STARTED\n",
+    metadata: {},
+  },
+)
+await plugin["tool.execute.before"](
+  { tool: "todowrite", sessionID: untrustedToolOutputSessionID, callID: "call_after_untrusted_output" },
+  { args: { todos: [] } },
+)
 const fallbackCliEnvOutput = { env: {} }
 await plugin["shell.env"](
   { cwd: fakeWorkspace, sessionID: fallbackCliSessionID, callID: "call_fallback_cli_shell_env" },
@@ -1289,8 +1318,33 @@ await plugin["tool.execute.after"](
     metadata: {},
   },
 )
+let untrustedCompletionBlocked = false
+try {
+  await plugin["tool.execute.before"](
+    { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_after_completion" },
+    { args: { todos: [] } },
+  )
+} catch (error) {
+  untrustedCompletionBlocked = String(error?.message || "").includes("LMAS handoff is active")
+}
+if (!untrustedCompletionBlocked) {
+  throw new Error("expected arbitrary command output containing an LMAS completion record not to change guard state")
+}
+await plugin.event({
+  event: {
+    type: "message.updated",
+    properties: {
+      message: message(
+        "assistant",
+        "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_fallback_cli\nstatus: SUCCEEDED",
+        "fallback_cli_trusted_completion",
+        fallbackCliSessionID,
+      ),
+    },
+  },
+})
 await plugin["tool.execute.before"](
-  { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_after_completion" },
+  { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_after_trusted_completion" },
   { args: { todos: [] } },
 )
 
@@ -1859,8 +1913,8 @@ await plugin["permission.ask"](
   },
   transformCancelPermissionOutput,
 )
-if (transformCancelPermissionOutput.status !== "allow") {
-  throw new Error("expected transform-only explicit user cancel intent to allow lmas_cancel after RUNNING status")
+if (transformCancelPermissionOutput.status !== undefined) {
+  throw new Error("expected transform-only explicit user cancel intent to preserve permission.ask status")
 }
 
 const revokedCancelOutput = {

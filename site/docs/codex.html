@@ -16,7 +16,7 @@
     <p class="lead">LMAS starts the long-running job in tmux, records the handoff, waits outside the agent turn, and resumes the Codex thread when the process finishes.</p>
     <h2>Install</h2>
     <pre><code>npx let-my-agent-sleep install --agent codex</code></pre>
-    <p>Restart Codex after installation. The Codex session must be resumable from the machine where the job is running.</p>
+    <p>Restart Codex after installation. The Codex session must be resumable from the machine where the job is running. An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn appears.</p>
     <h2>What the agent should do</h2>
     <ul>
       <li>Use the installed <code>let-my-agent-sleep</code> skill for commands that would require waiting.</li>

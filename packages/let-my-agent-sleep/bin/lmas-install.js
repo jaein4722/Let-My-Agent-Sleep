@@ -11,15 +11,10 @@ import { omoContinuationHooks } from "../src/omo-constants.js"
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
 const packageName = packageJson.name
-const openCodePluginSpec = `${packageName}@latest`
-const openCodeCacheDependencySpec = ">=0.0.0"
+const openCodePluginSpec = `${packageName}@${packageJson.version}`
 const openCodeSkillName = "let-my-agent-sleep"
 const legacyCodexSkillName = "let-my-agent-sleep-codex"
 const legacyClaudeSkillName = "let-my-agent-sleep-claude"
-const openCodeHiddenCrossAgentSkills = [
-  legacyCodexSkillName,
-  legacyClaudeSkillName,
-]
 const paths = {
   openCodeSkill: join(packageRoot, "skills", "let-my-agent-sleep", "SKILL.md"),
   codexPlugin: join(packageRoot, "codex-plugin", "let-my-agent-sleep"),
@@ -30,7 +25,7 @@ const paths = {
 
 function usage() {
   console.log(`Usage:
-  lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force] [--disable-omo-continuation] [--keep-omo-continuation]
+  lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force]
   lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--directory <path>] [--workspace <id>] [--server-username <name>] [--server-password <password>]
   lmas start [options] -- <command...>
   lmas status [--runs-dir <path>] <run_id|run_dir>
@@ -42,11 +37,6 @@ Options:
   --yes, -y         Use defaults without prompting.
   --dry-run         Print intended writes without changing files.
   --force           Overwrite existing Let My Agent Sleep-managed files without backup.
-  --disable-omo-continuation
-                   Add known OMO continuation hooks to oh-my-openagent disabled_hooks.
-                   By default LMAS leaves OMO continuation hooks unchanged and relies on runtime guards.
-  --keep-omo-continuation
-                   Deprecated no-op. OMO continuation hooks are kept by default.
   --server-url <url>
                    During OpenCode doctor, also verify the live server exposes lmas tools.
   --directory <path>
@@ -83,8 +73,6 @@ function parseArgs(argv) {
     yes: false,
     dryRun: false,
     force: false,
-    disableOmoContinuation: false,
-    keepOmoContinuation: false,
     serverUrl: "",
     directory: "",
     workspace: "",
@@ -109,14 +97,6 @@ function parseArgs(argv) {
     }
     if (arg === "--force") {
       options.force = true
-      continue
-    }
-    if (arg === "--disable-omo-continuation") {
-      options.disableOmoContinuation = true
-      continue
-    }
-    if (arg === "--keep-omo-continuation") {
-      options.keepOmoContinuation = true
       continue
     }
     if (arg === "--server-url") {
@@ -186,10 +166,6 @@ function parseArgs(argv) {
       continue
     }
     throw new Error(`unknown argument: ${arg}`)
-  }
-
-  if (options.disableOmoContinuation && options.keepOmoContinuation) {
-    throw new Error("--disable-omo-continuation and --keep-omo-continuation cannot be used together")
   }
 
   return options
@@ -385,7 +361,7 @@ function copyFileAsset(source, target, options) {
   chmodSync(target, statSync(source).mode & 0o777)
 }
 
-function copyDirAsset(source, target, options) {
+function copyDirAsset(source, target, options, backupRoot) {
   if (sameTreeContent(source, target)) {
     logSkip("copy-dir", `${source} -> ${target}`)
     return
@@ -395,6 +371,8 @@ function copyDirAsset(source, target, options) {
   if (existsSync(target)) {
     if (options.force) {
       rmSync(target, { recursive: true, force: true })
+    } else if (backupRoot) {
+      moveAside(target, backupRoot, options)
     } else {
       const backup = `${target}.bak.${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")}`
       renameSync(target, backup)
@@ -403,13 +381,6 @@ function copyDirAsset(source, target, options) {
   }
   mkdirSync(dirname(target), { recursive: true })
   cpSync(source, target, { recursive: true })
-}
-
-function removePath(target, options) {
-  if (!existsSync(target)) return
-  logWrite(options, "remove", target)
-  if (options.dryRun) return
-  rmSync(target, { recursive: true, force: true })
 }
 
 function readJsonIfExists(target, fallback) {
@@ -827,9 +798,6 @@ function writeJsonConfigWithStringArray(target, config, key, values, options) {
 }
 
 function resolveOpenCodeConfigDir() {
-  const customConfigFile = process.env.OPENCODE_CONFIG_FILE?.trim()
-  if (customConfigFile) return dirname(customConfigFile)
-
   const customConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim()
   if (customConfigDir) return customConfigDir
 
@@ -838,7 +806,8 @@ function resolveOpenCodeConfigDir() {
 }
 
 function resolveOpenCodeConfigPath(configDir) {
-  const customConfigFile = process.env.OPENCODE_CONFIG_FILE?.trim()
+  const customConfigFile = process.env.OPENCODE_CONFIG?.trim()
+    || process.env.OPENCODE_CONFIG_FILE?.trim()
   if (customConfigFile) return customConfigFile
 
   const jsoncPath = join(configDir, "opencode.jsonc")
@@ -870,147 +839,6 @@ function resolveOpenCodeCacheDir() {
   return join(cacheHome, "opencode")
 }
 
-function listLegacyOpenCodePackageCaches(cacheDir) {
-  const packagesDir = join(cacheDir, "packages")
-  if (!existsSync(packagesDir)) return []
-
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => name === packageName || name.startsWith(`${packageName}@`))
-    .map((name) => join(packagesDir, name))
-}
-
-function maybeDisableOmoContinuation(configDir, options, reason) {
-  if (!reason) return
-
-  const omoConfigPath = resolveOmoConfigPath(configDir)
-  const omoConfig = readJsoncIfExists(omoConfigPath, {})
-
-  if (omoConfig.disabled_hooks === undefined) {
-    omoConfig.disabled_hooks = []
-  }
-  if (!Array.isArray(omoConfig.disabled_hooks)) {
-    throw new Error(`${omoConfigPath} has unsupported "disabled_hooks" shape; expected array`)
-  }
-  for (const hookName of omoContinuationHooks) {
-    if (!omoConfig.disabled_hooks.includes(hookName)) {
-      omoConfig.disabled_hooks.push(hookName)
-    }
-  }
-
-  writeJsonConfigWithStringArray(omoConfigPath, omoConfig, "disabled_hooks", omoConfig.disabled_hooks, options)
-  console.log("Oh My OpenAgent continuation configured.")
-  console.log(`  reason: ${reason}`)
-  console.log(`  disabled hooks: ${omoContinuationHooks.join(", ")}`)
-  console.log(`  config: ${omoConfigPath}`)
-}
-
-function maybeDisableOpenCodeShadowSkills(configDir, options, writeOptions = {}) {
-  const omoConfigPath = resolveOmoConfigPath(configDir)
-  const omoConfig = readJsoncIfExists(omoConfigPath, {})
-
-  if (omoConfig.disabled_skills === undefined) {
-    omoConfig.disabled_skills = []
-  }
-  if (!Array.isArray(omoConfig.disabled_skills)) {
-    throw new Error(`${omoConfigPath} has unsupported "disabled_skills" shape; expected array`)
-  }
-  for (const skillName of openCodeHiddenCrossAgentSkills) {
-    if (!omoConfig.disabled_skills.includes(skillName)) {
-      omoConfig.disabled_skills.push(skillName)
-    }
-  }
-
-  const finalOptions = writeOptions.skipBackup ? { ...options, force: true } : options
-  writeJsonConfigWithStringArray(omoConfigPath, omoConfig, "disabled_skills", omoConfig.disabled_skills, finalOptions)
-  console.log("OpenCode cross-agent skill shadowing configured.")
-  console.log(`  hidden skills: ${openCodeHiddenCrossAgentSkills.join(", ")}`)
-  console.log(`  config: ${omoConfigPath}`)
-}
-
-function moveLegacyCrossAgentOpenCodeSkillConflicts(options) {
-  const agentsRoot = join(homedir(), ".agents")
-  const claudeRoot = join(homedir(), ".claude")
-
-  moveAside(
-    join(agentsRoot, "skills", openCodeSkillName),
-    join(agentsRoot, "lmas-backups", "skills"),
-    options,
-  )
-  moveAside(
-    join(agentsRoot, "skills", legacyCodexSkillName),
-    join(agentsRoot, "lmas-backups", "skills"),
-    options,
-  )
-  moveAside(
-    join(claudeRoot, "skills", openCodeSkillName),
-    join(claudeRoot, "lmas-backups", "skills"),
-    options,
-  )
-  moveAside(
-    join(claudeRoot, "skills", legacyClaudeSkillName),
-    join(claudeRoot, "lmas-backups", "skills"),
-    options,
-  )
-  moveMatchingSiblingBackups(join(agentsRoot, "skills"), openCodeSkillName, join(agentsRoot, "lmas-backups", "skills"), options)
-  moveMatchingSiblingBackups(join(agentsRoot, "skills"), legacyCodexSkillName, join(agentsRoot, "lmas-backups", "skills"), options)
-  moveMatchingSiblingBackups(join(claudeRoot, "skills"), openCodeSkillName, join(claudeRoot, "lmas-backups", "skills"), options)
-  moveMatchingSiblingBackups(join(claudeRoot, "skills"), legacyClaudeSkillName, join(claudeRoot, "lmas-backups", "skills"), options)
-}
-
-function updateOpenCodeRootCachePackage(rootPackagePath, options) {
-  const dependencyPattern = new RegExp(`("${packageName}"\\s*:\\s*)"[^"]+"`)
-
-  if (existsSync(rootPackagePath)) {
-    const content = readFileSync(rootPackagePath, "utf8")
-    if (dependencyPattern.test(content)) {
-      writeText(rootPackagePath, content.replace(dependencyPattern, `$1"${openCodeCacheDependencySpec}"`), options)
-      return
-    }
-
-    const rootPackageJson = JSON.parse(content)
-    if (!rootPackageJson.dependencies || typeof rootPackageJson.dependencies !== "object" || Array.isArray(rootPackageJson.dependencies)) {
-      rootPackageJson.dependencies = {}
-    }
-    rootPackageJson.dependencies[packageName] = openCodeCacheDependencySpec
-    writeText(rootPackagePath, `${JSON.stringify(rootPackageJson, null, 2)}\n`, options)
-    return
-  }
-
-  writeText(rootPackagePath, `${JSON.stringify({ dependencies: { [packageName]: openCodeCacheDependencySpec } }, null, 2)}\n`, options)
-}
-
-function refreshOpenCodePluginCache(options) {
-  const cacheDir = resolveOpenCodeCacheDir()
-  const packagesDir = join(cacheDir, "packages")
-  const rootPackagePath = join(cacheDir, "package.json")
-  const stalePackageCaches = new Set([
-    join(packagesDir, packageName),
-    join(packagesDir, openCodePluginSpec),
-  ])
-
-  if (existsSync(packagesDir)) {
-    for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      if (entry.name === packageName || entry.name.startsWith(`${packageName}@`)) {
-        stalePackageCaches.add(join(packagesDir, entry.name))
-      }
-    }
-  }
-
-  updateOpenCodeRootCachePackage(rootPackagePath, options)
-  removePath(join(cacheDir, "bun.lock"), options)
-  removePath(join(cacheDir, "package-lock.json"), options)
-  removePath(join(cacheDir, "node_modules", packageName), options)
-  removePath(join(cacheDir, "node_modules", ".bin", "lmas"), options)
-  removePath(join(cacheDir, "node_modules", ".bin", packageName), options)
-
-  for (const target of stalePackageCaches) {
-    removePath(target, options)
-  }
-}
-
 function getPluginSpecName(plugin) {
   if (typeof plugin === "string") return plugin
   if (Array.isArray(plugin) && typeof plugin[0] === "string") return plugin[0]
@@ -1030,15 +858,12 @@ function isOmoPluginSpec(plugin) {
     || spec?.startsWith("oh-my-opencode@") === true
 }
 
-function reportOmoContinuationPolicy(config, options) {
-  if (options.disableOmoContinuation) return
+function reportOmoContinuationPolicy(config) {
   if (!Array.isArray(config.plugin) || !config.plugin.some(isOmoPluginSpec)) return
 
   console.log("[info] Oh My OpenAgent plugin detected.")
-  console.log("[info] OMO continuation hooks are left enabled by default.")
+  console.log("[info] LMAS does not modify OMO disabled_hooks; existing values are preserved.")
   console.log("[info] LMAS runtime guards block continuation only while an LMAS handoff is active.")
-  console.log("[info] To disable OMO continuation hooks globally, run:")
-  console.log("[info]   lmas install --agent opencode --disable-omo-continuation")
 }
 
 function installOpenCode(options) {
@@ -1055,7 +880,7 @@ function installOpenCode(options) {
     throw new Error(`${configPath} has unsupported "plugin" shape; expected string or array`)
   }
 
-  reportOmoContinuationPolicy(config, options)
+  reportOmoContinuationPolicy(config)
 
   config.plugin = config.plugin.filter((plugin) => !isPackagePluginSpec(plugin, packageName))
   // LMAS must load before continuation plugins so prompt/fetch guards are installed
@@ -1063,14 +888,7 @@ function installOpenCode(options) {
   config.plugin.unshift(openCodePluginSpec)
 
   writeJsonConfigWithStringArray(configPath, config, "plugin", config.plugin, options)
-  const omoDisableReason = options.disableOmoContinuation
-    ? "requested by --disable-omo-continuation"
-    : ""
-  maybeDisableOmoContinuation(configDir, options, omoDisableReason)
-  maybeDisableOpenCodeShadowSkills(configDir, options, { skipBackup: Boolean(omoDisableReason) })
-  moveLegacyCrossAgentOpenCodeSkillConflicts(options)
   copyFileAsset(paths.openCodeSkill, skillTarget, options)
-  refreshOpenCodePluginCache(options)
 
   console.log("OpenCode install configured.")
   console.log(`  plugin: ${openCodePluginSpec}`)
@@ -1174,8 +992,8 @@ async function doctorOpenCode(options) {
   const omoConfigPath = resolveOmoConfigPath(configDir)
   const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
   const cacheDir = resolveOpenCodeCacheDir()
-  const rootPackagePath = join(cacheDir, "package.json")
   const rootNodeModulePackagePath = join(cacheDir, "node_modules", packageName, "package.json")
+  const versionedPackagePath = join(cacheDir, "packages", openCodePluginSpec, "node_modules", packageName, "package.json")
 
   console.log("OpenCode doctor:")
   console.log(`  config: ${configPath}`)
@@ -1224,71 +1042,37 @@ async function doctorOpenCode(options) {
   }
 
   if (!existsSync(omoConfigPath)) {
-    healthy = doctorFail("Oh My OpenAgent config is missing; LMAS cannot confirm legacy cross-agent skill hiding") && healthy
+    doctorOk("Oh My OpenAgent config is absent; LMAS did not create one")
   } else {
     try {
       const omoConfig = readJsoncIfExists(omoConfigPath, {})
       const disabledHooks = Array.isArray(omoConfig.disabled_hooks) ? omoConfig.disabled_hooks : []
-      const missingHooks = omoContinuationHooks.filter((hookName) => !disabledHooks.includes(hookName))
-      if (missingHooks.length > 0) {
-        doctorWarn(`OMO continuation hooks are enabled by default: ${missingHooks.join(", ")}`)
+      const legacyResidue = omoContinuationHooks.filter((hook) => disabledHooks.includes(hook))
+      if (legacyResidue.length > 0) {
+        doctorWarn(`OMO disabled_hooks contains entries that may be LMAS 0.3.0 residue: ${legacyResidue.join(", ")}`)
+        doctorWarn(`LMAS preserved ${omoConfigPath}; review and remove only entries you do not want disabled.`)
       } else {
-        doctorOk(`OMO continuation hooks are globally disabled: ${omoContinuationHooks.join(", ")}`)
-      }
-
-      const disabledSkills = Array.isArray(omoConfig.disabled_skills) ? omoConfig.disabled_skills : []
-      const missingSkills = openCodeHiddenCrossAgentSkills.filter((skillName) => !disabledSkills.includes(skillName))
-      if (missingSkills.length > 0) {
-        healthy = doctorFail(`legacy cross-agent LMAS skills are not hidden from OpenCode: ${missingSkills.join(", ")}`) && healthy
-      } else {
-        doctorOk(`legacy cross-agent LMAS skills are hidden: ${openCodeHiddenCrossAgentSkills.join(", ")}`)
+        doctorOk("OMO disabled_hooks has no known LMAS 0.3.0 continuation-hook residue")
       }
     } catch (error) {
       healthy = doctorFail(`Oh My OpenAgent config could not be parsed: ${error.message}`) && healthy
     }
   }
 
-  if (!existsSync(rootPackagePath)) {
-    healthy = doctorFail("OpenCode plugin cache package.json is missing; run: lmas install --agent opencode") && healthy
+  const resolvedPackagePaths = [rootNodeModulePackagePath, versionedPackagePath].filter(existsSync)
+  if (resolvedPackagePaths.length === 0) {
+    doctorWarn("OpenCode has not resolved this LMAS version in a recognized cache layout; restart OpenCode, then run live doctor")
   } else {
     try {
-      const cachePackage = readJsonIfExists(rootPackagePath, {})
-      const dependency = cachePackage.dependencies?.[packageName]
-      if (!dependency) {
-        healthy = doctorFail(`OpenCode plugin cache package.json does not depend on ${packageName}`) && healthy
-      } else if (dependency !== openCodeCacheDependencySpec) {
-        healthy = doctorFail(`OpenCode plugin cache dependency is stale: ${packageName}@${dependency}; run: lmas install --agent opencode`) && healthy
+      const resolvedVersions = resolvedPackagePaths.map((target) => readJsonIfExists(target, {}).version).filter(Boolean)
+      if (resolvedVersions.includes(packageJson.version)) {
+        doctorOk(`OpenCode resolved package matches this LMAS version: ${packageName}@${packageJson.version}`)
       } else {
-        doctorOk(`OpenCode plugin cache dependency is present: ${packageName}@${dependency}`)
+        healthy = doctorFail(`OpenCode resolved package version is stale: ${resolvedVersions.join(", ") || "unknown"}; expected ${packageJson.version}`) && healthy
       }
     } catch (error) {
-      healthy = doctorFail(`OpenCode plugin cache package.json could not be parsed: ${error.message}`) && healthy
+      healthy = doctorFail(`OpenCode resolved package could not be parsed: ${error.message}`) && healthy
     }
-  }
-
-  const legacyPackageCaches = listLegacyOpenCodePackageCaches(cacheDir)
-  if (legacyPackageCaches.length > 0) {
-    healthy = doctorFail(`legacy OpenCode package cache directories are present: ${legacyPackageCaches.map((target) => basename(target)).join(", ")}; run: lmas install --agent opencode`) && healthy
-  } else {
-    doctorOk("legacy OpenCode package cache directories are absent")
-  }
-
-  if (existsSync(rootNodeModulePackagePath)) {
-    try {
-      const installedPackage = readJsonIfExists(rootNodeModulePackagePath, {})
-      const installedVersion = installedPackage.version
-      if (!installedVersion) {
-        healthy = doctorFail(`OpenCode root node_modules package has no version: ${rootNodeModulePackagePath}; run: lmas install --agent opencode`) && healthy
-      } else if (installedVersion !== packageJson.version) {
-        healthy = doctorFail(`OpenCode root node_modules package is stale: ${packageName}@${installedVersion}; expected ${packageJson.version}; run: lmas install --agent opencode`) && healthy
-      } else {
-        doctorOk(`OpenCode root node_modules package matches this LMAS version: ${packageName}@${installedVersion}`)
-      }
-    } catch (error) {
-      healthy = doctorFail(`OpenCode root node_modules package could not be parsed: ${error.message}`) && healthy
-    }
-  } else {
-    doctorWarn("OpenCode root node_modules package is absent; restart OpenCode after install so it resolves the plugin dependency")
   }
 
   if (options.serverUrl) {
@@ -1373,7 +1157,12 @@ function installCodex(options) {
   const legacyCodexPluginTarget = join(marketplaceDir, "plugins", openCodeSkillName)
   const backupRoot = join(agentsRoot, "lmas-backups")
 
-  copyDirAsset(join(paths.codexPlugin, "skills", openCodeSkillName), codexSkillTarget, options)
+  copyDirAsset(
+    join(paths.codexPlugin, "skills", openCodeSkillName),
+    codexSkillTarget,
+    options,
+    join(codexHome, "lmas-backups", "skills"),
+  )
   moveAside(legacyCodexSkillTarget, join(backupRoot, "skills"), options)
   moveAside(legacyNamedCodexSkillTarget, join(backupRoot, "skills"), options)
   moveAside(legacyCodexPluginTarget, join(backupRoot, "plugins"), options)

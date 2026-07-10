@@ -7,7 +7,7 @@ SERVER_DIR=$(mktemp -d "${TMPDIR:-/tmp}/lmas-doctor-server.XXXXXX")
 SERVER_PID=""
 trap '[ -z "$SERVER_PID" ] || kill "$SERVER_PID" >/dev/null 2>&1 || true; rm -rf "$TMP_HOME" "$SERVER_DIR"' EXIT
 
-unset OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
+unset OPENCODE_CONFIG OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
 export HOME="$TMP_HOME"
 export XDG_CONFIG_HOME="$TMP_HOME/.config"
 export XDG_CACHE_HOME="$TMP_HOME/.cache"
@@ -27,8 +27,8 @@ printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'let-my-agent-sleep is first in the Ope
   printf 'doctor did not verify LMAS-first plugin order\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
-printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'OMO continuation hooks are enabled by default' || {
-  printf 'doctor did not report default OMO continuation policy\n%s\n' "$DOCTOR_OUTPUT" >&2
+printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'Oh My OpenAgent config is absent; LMAS did not create one' || {
+  printf 'doctor did not report non-mutating OMO policy\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
 printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'live OpenCode tool check skipped' || {
@@ -36,35 +36,15 @@ printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'live OpenCode tool check skipped' || {
   exit 1
 }
 
-node --input-type=module - "$TMP_HOME/.cache/opencode/package.json" <<'JS'
-import { readFileSync, writeFileSync } from "node:fs"
-
-const target = process.argv[2]
-const config = JSON.parse(readFileSync(target, "utf8"))
-config.dependencies["let-my-agent-sleep"] = "0.1.5"
-writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`)
-JS
-
-STALE_CACHE_FAIL_OUTPUT="$SERVER_DIR/stale-cache-fail.out"
-if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$STALE_CACHE_FAIL_OUTPUT" 2>&1; then
-  printf 'doctor should fail when OpenCode plugin cache dependency is stale\n' >&2
-  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
-  exit 1
-fi
-
-grep -q 'OpenCode plugin cache dependency is stale' "$STALE_CACHE_FAIL_OUTPUT" || {
-  printf 'doctor stale cache failure did not explain cache dependency problem\n' >&2
-  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
+printf '%s\n' "$DOCTOR_OUTPUT" | grep -q 'has not resolved this LMAS version in a recognized cache layout' || {
+  printf 'doctor should explain that OpenCode resolves its own cache after restart\n%s\n' "$DOCTOR_OUTPUT" >&2
   exit 1
 }
 
-INSTALL_REPAIR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
-printf '%s\n' "$INSTALL_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' || {
-  printf 'opencode reinstall did not complete after stale cache doctor test\n' >&2
-  exit 1
-}
-
-mkdir -p "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep" \
+PACKAGE_VERSION=$(cd "$ROOT" && node -p "require('./packages/let-my-agent-sleep/package.json').version")
+CURRENT_CACHE_PACKAGE="$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep@$PACKAGE_VERSION/node_modules/let-my-agent-sleep/package.json"
+mkdir -p "$(dirname "$CURRENT_CACHE_PACKAGE")" \
+  "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep" \
   "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep@latest" \
   "$TMP_HOME/.cache/opencode/node_modules/let-my-agent-sleep"
 cat > "$TMP_HOME/.cache/opencode/packages/let-my-agent-sleep/package.json" <<'JSON'
@@ -76,37 +56,27 @@ JSON
 cat > "$TMP_HOME/.cache/opencode/node_modules/let-my-agent-sleep/package.json" <<'JSON'
 {"name":"let-my-agent-sleep","version":"0.1.0"}
 JSON
+printf '{"name":"let-my-agent-sleep","version":"%s"}\n' "$PACKAGE_VERSION" > "$CURRENT_CACHE_PACKAGE"
 
-LEGACY_CACHE_FAIL_OUTPUT="$SERVER_DIR/legacy-cache-fail.out"
-if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$LEGACY_CACHE_FAIL_OUTPUT" 2>&1; then
-  printf 'doctor should fail when legacy OpenCode package caches remain\n' >&2
-  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
+CURRENT_CACHE_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes)
+printf '%s\n' "$CURRENT_CACHE_DOCTOR_OUTPUT" | grep -q "OpenCode resolved package matches this LMAS version: let-my-agent-sleep@$PACKAGE_VERSION" || {
+  printf 'doctor did not recognize the current versioned OpenCode package cache\n%s\n' "$CURRENT_CACHE_DOCTOR_OUTPUT" >&2
+  exit 1
+}
+
+printf '{"name":"let-my-agent-sleep","version":"0.1.5"}\n' > "$CURRENT_CACHE_PACKAGE"
+STALE_CACHE_FAIL_OUTPUT="$SERVER_DIR/stale-cache-fail.out"
+if cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes >"$STALE_CACHE_FAIL_OUTPUT" 2>&1; then
+  printf 'doctor should fail when every recognized resolved package is stale\n' >&2
+  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
   exit 1
 fi
-
-grep -q 'legacy OpenCode package cache directories are present' "$LEGACY_CACHE_FAIL_OUTPUT" || {
-  printf 'doctor legacy cache failure did not explain package cache directories\n' >&2
-  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
+grep -q 'OpenCode resolved package version is stale' "$STALE_CACHE_FAIL_OUTPUT" || {
+  printf 'doctor stale cache failure did not explain resolved package mismatch\n' >&2
+  cat "$STALE_CACHE_FAIL_OUTPUT" >&2
   exit 1
 }
-
-grep -q 'OpenCode root node_modules package is stale' "$LEGACY_CACHE_FAIL_OUTPUT" || {
-  printf 'doctor legacy cache failure did not explain stale root node_modules package\n' >&2
-  cat "$LEGACY_CACHE_FAIL_OUTPUT" >&2
-  exit 1
-}
-
-LEGACY_CACHE_REPAIR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
-printf '%s\n' "$LEGACY_CACHE_REPAIR_OUTPUT" | grep -q 'OpenCode install configured' || {
-  printf 'opencode reinstall did not complete after legacy cache doctor test\n' >&2
-  exit 1
-}
-
-POST_LEGACY_REPAIR_DOCTOR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes)
-printf '%s\n' "$POST_LEGACY_REPAIR_DOCTOR_OUTPUT" | grep -q 'Let My Agent Sleep doctor passed' || {
-  printf 'doctor did not pass after legacy cache repair\n%s\n' "$POST_LEGACY_REPAIR_DOCTOR_OUTPUT" >&2
-  exit 1
-}
+printf '{"name":"let-my-agent-sleep","version":"%s"}\n' "$PACKAGE_VERSION" > "$CURRENT_CACHE_PACKAGE"
 
 CODEX_INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --yes)
 printf '%s\n' "$CODEX_INSTALL_OUTPUT" | grep -q 'Codex install configured' || {
@@ -372,6 +342,21 @@ grep -q 'live doctor timed out' "$SLOW_FAIL_OUTPUT" || {
 kill "$SERVER_PID" >/dev/null 2>&1 || true
 wait "$SERVER_PID" >/dev/null 2>&1 || true
 SERVER_PID=""
+
+cat > "$TMP_HOME/.config/opencode/oh-my-openagent.json" <<'JSON'
+{
+  "disabled_hooks": ["todo-continuation-enforcer", "user-custom-hook"],
+  "disabled_skills": ["user-custom-skill"]
+}
+JSON
+OMO_RESIDUE_BEFORE=$(shasum "$TMP_HOME/.config/opencode/oh-my-openagent.json")
+OMO_RESIDUE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent opencode --yes)
+printf '%s\n' "$OMO_RESIDUE_OUTPUT" | grep -q 'may be LMAS 0.3.0 residue: todo-continuation-enforcer' || {
+  printf 'doctor did not warn about possible 0.3.0 OMO residue\n%s\n' "$OMO_RESIDUE_OUTPUT" >&2
+  exit 1
+}
+OMO_RESIDUE_AFTER=$(shasum "$TMP_HOME/.config/opencode/oh-my-openagent.json")
+[ "$OMO_RESIDUE_BEFORE" = "$OMO_RESIDUE_AFTER" ] || { printf 'doctor modified OMO config while reporting residue\n' >&2; exit 1; }
 
 node --input-type=module - "$TMP_HOME/.config/opencode/opencode.jsonc" <<'JS'
 import { readFileSync, writeFileSync } from "node:fs"

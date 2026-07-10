@@ -42,14 +42,15 @@ POST /session/:session_id/prompt_async
 
 The OpenCode npm plugin provides `lmas_start`, `lmas_status`, `lmas_cancel`, and diagnostic `lmas_info`. `lmas_start` sets the session id from the OpenCode tool context.
 
-The OpenCode plugin also installs a runtime handoff guard. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into the same session is treated as a no-op until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. This protects the handoff from loop plugins that try to continue a session because a TODO or plan item is still open. `noReply` internal notifications and LMAS completion prompts are not blocked.
+The OpenCode plugin also installs a runtime handoff guard. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into the same session is treated as a no-op until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action without ending the handoff. This protects the handoff from loop plugins that try to continue a session because a TODO or plan item is still open. `noReply` internal notifications and LMAS completion prompts are not blocked.
 
-The server URL must be the same OpenCode server that owns the session id. When testing with a non-default port, attach the run to that server and pass the same URL to `lmas_start`:
+The server URL must be the same OpenCode server that owns the session id. The plugin uses its current OpenCode server URL automatically. For direct CLI fallback on a non-default port, export the same URL before attaching:
 
 ```bash
 opencode serve --hostname 127.0.0.1 --port 45137 --print-logs
+export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:45137
 opencode run --attach http://127.0.0.1:45137 --dir "$PWD" --format json --agent build \
-  'Use lmas_start with command: ./examples/fake_train.sh sleep 60 and server_url: http://127.0.0.1:45137.'
+  'Use lmas_start with command: ./examples/fake_train.sh sleep 60.'
 ```
 
 An `adapter.log` ending in an adapter failure line means injection failed or timed out. A 404 means the endpoint exists but the target server does not know that session id.
@@ -82,6 +83,8 @@ codex exec resume "$codex_session_id" - < resume_prompt.txt
 
 If the session id or `codex` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
 
+An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn becomes visible.
+
 ## `claude`
 
 Secondary prototype adapter.
@@ -108,10 +111,10 @@ which resumes the most recently used Claude session in the job's `cwd`. If neith
 
 ### Verified live-session behavior
 
-Tested directly against real Claude Code sessions (both a bare CLI/tmux session and the actual Desktop app), targeting an explicit, correct session ID with a matching `cwd`:
+The following are observations from a limited set of real Claude Code sessions (a bare CLI/tmux session and the Desktop app) using an explicit session ID with a matching `cwd`; they are not an upstream compatibility guarantee:
 
-- The append to the session transcript always succeeds — `claude --resume` reliably attaches the completion turn to the session file with the correct parent, whether the target session is dormant or currently open.
+- In those tests, `claude --resume` appended the completion turn to the session transcript whether the target session was dormant or currently open.
 - An already-open, idle interactive session does **not** refresh live. The person watching that window sees nothing new until they restart/reopen it — this matches the `codex` adapter's documented behavior.
 - If the user sends the originating session another message before it is restarted, the live process (unaware of the injected turn, since it never re-reads the file) appends its own next turn from the same stale parent, creating a branch in the transcript tree.
-- This branching does not lose data and does not require picking a winner: reopening/restarting the session merges all branches by timestamp and displays them in correct chronological order. Restart is therefore a reliable recovery path even after a branch occurs.
+- In the tested versions, reopening/restarting displayed both branches by timestamp. Treat `resume_prompt.txt` as the durable recovery artifact if a future Claude Code version behaves differently.
 - There is currently no known way to make the completion appear in an already-open, un-restarted session in real time. Real-time delivery into a live session (without requiring restart) is an open enhancement, not yet solved.

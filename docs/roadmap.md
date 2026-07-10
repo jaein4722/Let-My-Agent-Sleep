@@ -16,7 +16,8 @@ Verified baseline: 17-hour and 12-hour real OpenCode training runs completed the
 
 ## Short-Term Plan
 
-No current short-term release blockers are tracked here. New work should come from live agent validation or concrete user feedback, not speculative expansion.
+- Validate fresh and upgraded 0.3.2 installs in a real OpenCode + Oh My OpenAgent session, including handoff, one-shot status, exact-run cancellation, completion resume, and the read-only 0.3.0 residue warning.
+- Keep the global fetch/client guard replacement, OpenCode SDK upgrade, structured multilingual authorization, and formal repair/uninstall commands out of 0.3.2; each needs a separate compatibility cycle.
 
 ## Completed Hardening
 
@@ -25,7 +26,7 @@ No current short-term release blockers are tracked here. New work should come fr
 - **Observability without polling.** `lmas list` reports elapsed seconds and a command summary. `lmas status` reports started time, elapsed seconds, command, and the last line of `progress.txt` when present. Smoke tests cover the progress contract while keeping the no-poll handoff rule intact.
 - **Secondary completion notification.** `--notify <url>` and `LMAS_NOTIFY_URL` post the generated resume prompt to a webhook/ntfy endpoint after the adapter attempt, without replacing session injection. Smoke tests cover notification delivery even when OpenCode adapter injection fails.
 - **OpenCode continuation guard surface.** Runtime guards now cover the official OpenCode hooks in `@opencode-ai/plugin@1.2.27` that can start, resume, summarize, or observe active handoff state: `chat.message`, `experimental.chat.messages.transform`, `experimental.chat.system.transform`, `experimental.session.compacting`, `tool.execute.before`, `tool.execute.after`, `shell.env`, `command.execute.before`, and `permission.ask`. LMAS also exposes a best-effort `experimental.compaction.autocontinue` compatibility hook for OpenCode builds that call it, but the pinned plugin type surface does not currently list that hook; compaction protection therefore relies on `experimental.session.compacting` context preservation plus downstream message, prompt, command, permission, and tool guards. Smoke tests cover plugin-tool handoff, CLI fallback handoff, CLI fallback status/cancel/completion output, prompt injection, compaction/system context preservation, shell environment injection, explicit user cancel, OMO continuation commands, and the compatibility autocontinue hook. The remaining official hooks in `@opencode-ai/plugin@1.2.27` (`chat.params`, `chat.headers`, `experimental.text.complete`, and `tool.definition`) are not handoff state transition hooks and are intentionally left unused unless a concrete live-agent failure points to them.
-- **Release pitch.** README now includes a lightweight handoff demo GIF, a native-background-task comparison note, and the verified 17-hour/12-hour OpenCode live-run baseline.
+- **Release surface.** README and site assets use the source-backed social card, concise handoff flow, and the verified 17-hour/12-hour OpenCode live-run baseline without a generated demo GIF.
 
 ## Optional Ideas (not planned)
 

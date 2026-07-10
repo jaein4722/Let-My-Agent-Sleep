@@ -35,7 +35,6 @@ ln -s "$PLUGIN_ROOT" "$TMPDIR_ROOT/package/node_modules/@opencode-ai/plugin"
 if ! node --input-type=module - "$TMPDIR_ROOT/package/src/index.js" <<'JS'
 const pluginPath = process.argv[2]
 const module = await import(pluginPath)
-const plugin = module.default
 const { LetMyAgentSleepPlugin } = module
 
 let fetchCalls = 0
@@ -49,8 +48,9 @@ globalThis.fetch = async () => {
 
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
 
-if (typeof plugin !== "function") {
-  throw new Error("default export is not a plugin function")
+const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
+if (functionExports.length !== 1 || functionExports[0][0] !== "LetMyAgentSleepPlugin") {
+  throw new Error(`expected exactly one plugin function export, got: ${functionExports.map(([name]) => name).join(", ")}`)
 }
 
 const officialGuardHooks = [

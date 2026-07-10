@@ -9,7 +9,7 @@ node --input-type=module - <<'JS'
 import { readFileSync } from "node:fs"
 import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-constants.js"
 
-const expectedDisabledHooks = [
+const guardedContinuationHooks = [
   "todo-continuation-enforcer",
   "model-fallback",
   "runtime-fallback",
@@ -22,7 +22,7 @@ const expectedDisabledHooks = [
   "atlas",
 ]
 
-const intentionallyNotDisabledHooks = [
+const intentionallyUnguardedHooks = [
   "start-work",
   "stop-continuation-guard",
   "background-notification",
@@ -31,28 +31,27 @@ const intentionallyNotDisabledHooks = [
 ]
 
 const actual = new Set(omoContinuationHooks)
-for (const hook of expectedDisabledHooks) {
+for (const hook of guardedContinuationHooks) {
   if (!actual.has(hook)) {
-    throw new Error(`OMO continuation hook policy is missing disabled hook: ${hook}`)
+    throw new Error(`OMO continuation guard policy is missing hook: ${hook}`)
   }
 }
 
-for (const hook of intentionallyNotDisabledHooks) {
+for (const hook of intentionallyUnguardedHooks) {
   if (actual.has(hook)) {
-    throw new Error(`OMO continuation hook policy disables too broadly: ${hook}`)
+    throw new Error(`OMO continuation guard policy covers too broadly: ${hook}`)
   }
 }
 
-if (actual.size !== expectedDisabledHooks.length) {
+if (actual.size !== guardedContinuationHooks.length) {
   throw new Error(`OMO continuation hook policy has unexpected hooks: ${omoContinuationHooks.join(", ")}`)
 }
 
 for (const readmePath of ["README.md", "packages/let-my-agent-sleep/README.md"]) {
   const readme = readFileSync(readmePath, "utf8")
   for (const text of [
-    "LMAS leaves Oh My OpenAgent continuation hooks enabled by default",
-    "LMAS does not globally disable OMO continuation features",
-    "--disable-omo-continuation",
+    "LMAS does not modify Oh My OpenAgent `disabled_hooks` or `disabled_skills`",
+    "Existing OMO settings are preserved",
   ]) {
     if (!readme.includes(text)) {
       throw new Error(`${readmePath} does not document default OMO continuation policy: ${text}`)
@@ -62,9 +61,8 @@ for (const readmePath of ["README.md", "packages/let-my-agent-sleep/README.md"])
 
 const opencodeSiteDocs = readFileSync("site/docs/opencode.html", "utf8")
 for (const text of [
-  "LMAS leaves Oh My OpenAgent continuation hooks enabled by default",
-  "LMAS does not globally disable OMO continuation features",
-  "<code>--disable-omo-continuation</code>",
+  "LMAS does not modify Oh My OpenAgent <code>disabled_hooks</code> or <code>disabled_skills</code>",
+  "Existing settings are preserved",
 ]) {
   if (!opencodeSiteDocs.includes(text)) {
     throw new Error(`site/docs/opencode.html does not document default OMO continuation policy: ${text}`)

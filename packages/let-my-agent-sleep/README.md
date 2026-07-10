@@ -35,7 +35,6 @@ job exits -> LMAS_COMPLETION_EVENT v1 -> session resumes or prompt is recorded
 ## Contents
 
 - [Why](#why)
-- [Demo](#demo)
 - [Quick Start](#quick-start)
 - [Agent Support](#agent-support)
 - [OpenCode](#opencode)
@@ -59,16 +58,6 @@ Without LMAS, a long-running job often turns into an expensive agent loop:
 | Cost grows with wall-clock wait time. | Cost is handoff plus completion handling. |
 
 LMAS does not make useful agent work free. It removes the waiting portion: polling turns, repeated context reloads, and artificial continue loops.
-
-## Demo
-
-![LMAS handoff demo](https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif)
-
-The important boundary is the agent turn. LMAS starts the command, records `LMAS_HANDOFF v1`, and the agent stops. When the process exits, LMAS writes `LMAS_COMPLETION_EVENT v1` and resumes a supported session with stdout, stderr, metadata, and artifact paths.
-
-This is different from a plain native background task. Native backgrounding is enough only when it also prevents agent polling, preserves the session handoff, records the recovery prompt, and wakes the same supported session on completion. LMAS standardizes that behavior across OpenCode, Codex, and experimental Claude Code support.
-
-Verified live baseline: real OpenCode runs of 17 hours and 12 hours completed the full handoff -> completion -> session re-entry loop.
 
 ## Quick Start
 
@@ -135,21 +124,15 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
 The OpenCode server that owns the session must still be running when the watched job finishes; otherwise LMAS keeps `resume_prompt.txt` for manual recovery.
 
-For OpenCode installs, LMAS leaves Oh My OpenAgent continuation hooks enabled by default:
+For OpenCode installs, LMAS does not modify Oh My OpenAgent `disabled_hooks` or `disabled_skills`:
 
 ```bash
 npx let-my-agent-sleep install --agent opencode
 ```
 
-LMAS does not globally disable OMO continuation features. Instead, the OpenCode plugin blocks reply-expecting continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
+Existing OMO settings are preserved. `lmas doctor --agent opencode` warns when known continuation hooks may be residue from an LMAS 0.3.0 install, but never removes them automatically. The OpenCode plugin blocks reply-expecting continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
 
-If you explicitly want to disable known OMO continuation hooks globally, opt in with:
-
-```bash
-npx let-my-agent-sleep install --agent opencode --disable-omo-continuation
-```
-
-LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives or the user explicitly asks for status/cancel. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` is a diagnostic tool used by live doctor checks.
+LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action; it does not end the handoff. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` is a diagnostic tool used by live doctor checks.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
@@ -158,6 +141,7 @@ OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 Codex support is available through the installed Let My Agent Sleep skill.
 
 For automatic resume, the Codex session must be resumable from the environment where the job is running.
+An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn becomes visible.
 
 Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
@@ -186,7 +170,9 @@ LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.
 
-`--notify <url>` posts the completion resume prompt to a secondary webhook or ntfy URL after the job exits. It does not replace session resume; it is only an extra notification path. If the URL contains a secret, prefer environment injection and do not put it in prompts or shared logs.
+Direct `lmas start` uses the `noop` adapter unless `--adapter` or `LMAS_ADAPTER` is set. It always writes `resume_prompt.txt`; automatic session resume requires the matching agent adapter.
+
+`--notify <url>` posts the completion resume prompt to a secondary webhook or ntfy URL after the job exits. Only `http://` and `https://` URLs are accepted. It does not replace session resume; it is only an extra notification path. If the URL contains a secret, prefer environment injection and do not put it in prompts or shared logs. Run artifacts can contain commands, local paths, and metadata; LMAS creates them with owner-only permissions, but they should still be treated as sensitive.
 
 HTTP completion paths are bounded: OpenCode adapter calls and `--notify` use `LMAS_HTTP_CONNECT_TIMEOUT` (default `5` seconds) and `LMAS_HTTP_MAX_TIME` (default `30` seconds). A timeout leaves `resume_prompt.txt` available for manual recovery.
 
@@ -209,7 +195,7 @@ Common files:
 - `notify.log` (only when `--notify` or `LMAS_NOTIFY_URL` is set)
 - `progress.txt` (optional, written by your job)
 
-Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata.
+Keep `.lmas/` ignored by git. Do not place secrets in command-line arguments or metadata. LMAS targets Bash, tmux, curl, and standard Unix process tools on macOS and Linux.
 
 `lmas list` includes `elapsed_seconds` and a short command summary. `lmas status <run_id>` includes the command, elapsed time, and the last line of `progress.txt` when that file exists. `FINALIZING` means the process has exited and LMAS is preparing `resume_prompt.txt` plus `completion_event.txt`; it is still a stop-and-wait state, not permission to poll. Status checks are for explicit user requests only; agents must still stop after `LMAS_HANDOFF v1` and must not poll.
 

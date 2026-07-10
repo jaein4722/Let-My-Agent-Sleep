@@ -68,4 +68,4 @@ export LMAS_OPENCODE_SERVER_URL=http://127.0.0.1:4096
 
 The tool supplies `LMAS_OPENCODE_SESSION_ID` from the current OpenCode tool context.
 
-When running against a non-default server, pass `server_url` to `lmas_start`. The URL must point to the same OpenCode server that owns the current session id; otherwise completion injection will fail with 404 and `resume_prompt.txt` will be left as fallback.
+The OpenCode plugin supplies its current server URL to `lmas_start`; do not accept a model-provided server or notification URL. For a direct CLI fallback on a non-default server, the user or host environment must set `LMAS_OPENCODE_SERVER_URL` to the server that owns the session id. Otherwise completion injection fails and `resume_prompt.txt` remains the fallback.

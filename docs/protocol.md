@@ -41,6 +41,8 @@ Fields:
 - `artifacts_dir`
 - `finished_at`
 
+`TIMEOUT` is reserved for protocol compatibility. LMAS does not schedule or enforce job timeouts.
+
 ## `LMAS_CANCEL v1`
 
 Printed by `lmas cancel <run_id>` after a user explicitly asks LMAS to stop a handoffed run.
@@ -118,6 +120,8 @@ It reports:
 - `notify_log` when secondary notification is configured and has run
 - `resume_prompt` when available
 - `progress` and `progress_path` when `progress.txt` exists
+
+The status surface may recognize reserved `TIMEOUT` records, but LMAS does not emit them on its own.
 
 Jobs may append lightweight progress lines to `<run_dir>/progress.txt`, such as `step=1200 loss=0.43`. LMAS never reads this file during handoff waiting. It is surfaced only when the user explicitly asks for status.
 

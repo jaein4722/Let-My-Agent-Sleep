@@ -181,12 +181,6 @@ def main() -> int:
         for url in extra:
             errors.append(f"{sitemap}: unexpected URL {url}")
 
-    demo = SITE / "demo.gif"
-    if not demo.exists():
-        errors.append(f"{demo}: missing README demo GIF")
-    elif demo.stat().st_size < 10_000:
-        errors.append(f"{demo}: unexpectedly small demo GIF ({demo.stat().st_size} bytes)")
-
     social = SITE / "social-card.svg"
     if not social.exists():
         errors.append(f"{social}: missing SVG social card source")

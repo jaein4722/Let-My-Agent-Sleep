@@ -336,4 +336,30 @@ grep -q '^/slow-notify$' "$SLOW_NOTIFY_REQUEST_LOG" || { printf 'unexpected slow
 grep -q '^status: SUCCEEDED$' "$SLOW_NOTIFY_RUN_DIR/completion_event.txt" || { printf 'slow notify timeout should not change completion status\n' >&2; exit 1; }
 grep -Eq 'timed out|notify failed' "$SLOW_NOTIFY_RUN_DIR/notify.log" || { printf 'slow notify timeout was not recorded\n' >&2; exit 1; }
 
+INVALID_NOTIFY_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh start --notify=unexpected -- /bin/true 2>&1)
+INVALID_NOTIFY_STATUS=$?
+if [ "$INVALID_NOTIFY_STATUS" -eq 0 ]; then
+  printf 'unknown --notify=value syntax should not be accepted\n' >&2
+  exit 1
+fi
+printf '%s\n' "$INVALID_NOTIFY_OUTPUT" | grep -q 'unknown option' || { printf 'invalid notify option did not fail safely\n' >&2; exit 1; }
+
+UNSAFE_NOTIFY_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" ./packages/let-my-agent-sleep/bin/lmas.sh start --notify '--config=secret' -- /bin/true)
+UNSAFE_NOTIFY_RUN_ID=$(printf '%s\n' "$UNSAFE_NOTIFY_OUTPUT" | awk '/^run_id:/ { print $2 }')
+UNSAFE_NOTIFY_RUN_DIR="$RUNS_DIR/$UNSAFE_NOTIFY_RUN_ID"
+for _ in $(seq 1 20); do
+  [ -f "$UNSAFE_NOTIFY_RUN_DIR/notify.log" ] && break
+  sleep 0.1
+done
+grep -q 'URL must use http:// or https://' "$UNSAFE_NOTIFY_RUN_DIR/notify.log" || { printf 'option-shaped notify URL was not rejected before curl\n' >&2; exit 1; }
+
+INVALID_SERVER_OUTPUT=$(cd "$ROOT" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_OPENCODE_SESSION_ID=session-invalid LMAS_OPENCODE_SERVER_URL='--config=secret' ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter opencode -- /bin/true)
+INVALID_SERVER_RUN_ID=$(printf '%s\n' "$INVALID_SERVER_OUTPUT" | awk '/^run_id:/ { print $2 }')
+INVALID_SERVER_RUN_DIR="$RUNS_DIR/$INVALID_SERVER_RUN_ID"
+for _ in $(seq 1 20); do
+  [ -f "$INVALID_SERVER_RUN_DIR/adapter.log" ] && break
+  sleep 0.1
+done
+grep -q 'server URL must use http:// or https://' "$INVALID_SERVER_RUN_DIR/adapter.log" || { printf 'invalid OpenCode server URL was not rejected before curl\n' >&2; exit 1; }
+
 printf 'ok opencode adapter: %s\n' "$RUN_ID"

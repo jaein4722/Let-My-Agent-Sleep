@@ -35,7 +35,6 @@ PACKAGE_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/package.json"
 grep -Eq "^## $PACKAGE_VERSION - [0-9]{4}-[0-9]{2}-[0-9]{2}$" "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md missing dated %s entry\n' "$PACKAGE_VERSION" >&2; exit 1; }
 ! grep -q 'Unreleased' "$PKG/CHANGELOG.md" || { printf 'packed tarball CHANGELOG.md still contains Unreleased\n' >&2; exit 1; }
 grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PKG/README.md" || { printf 'packed tarball README.md missing absolute PNG social card URL\n' >&2; exit 1; }
-grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif' "$PKG/README.md" || { printf 'packed tarball README.md missing absolute demo GIF URL\n' >&2; exit 1; }
 cmp -s "$ROOT/LICENSE" "$PKG/LICENSE" || { printf 'packed tarball LICENSE differs from root LICENSE\n' >&2; exit 1; }
 
 OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-ai/plugin']" "$PKG/package.json")

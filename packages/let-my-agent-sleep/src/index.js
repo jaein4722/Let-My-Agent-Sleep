@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { tool } from "@opencode-ai/plugin"
@@ -16,16 +16,25 @@ import {
   updateSessionGuardFromText,
 } from "./omo-guard.js"
 import { omoContinuationHooks } from "./omo-constants.js"
+import { findLmasScript } from "./find-lmas-script.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
-const sessionGuards = new Map()
-const eventTextBuffers = new Map()
-const allowedCancelCallIds = new Set()
+const sessionGuardsSymbol = Symbol.for("let-my-agent-sleep.opencode.session-guards")
+const eventTextBuffersSymbol = Symbol.for("let-my-agent-sleep.opencode.event-text-buffers")
+const sessionGuards = globalThis[sessionGuardsSymbol] instanceof Map
+  ? globalThis[sessionGuardsSymbol]
+  : new Map()
+const eventTextBuffers = globalThis[eventTextBuffersSymbol] instanceof Map
+  ? globalThis[eventTextBuffersSymbol]
+  : new Map()
+globalThis[sessionGuardsSymbol] = sessionGuards
+globalThis[eventTextBuffersSymbol] = eventTextBuffers
 const promptGuardSymbol = Symbol.for("let-my-agent-sleep.opencode.prompt-guard")
 const promptGuardSessions = new WeakSet()
 const injectionGuardSymbol = Symbol.for("let-my-agent-sleep.opencode.injection-guard")
 const injectionGuardRegistrySymbol = Symbol.for("let-my-agent-sleep.opencode.injection-guard.registry")
+let injectionGuardGeneration
 
 const injectionGuardHandler = {
   get(sessionID) {
@@ -38,9 +47,12 @@ const injectionGuardHandler = {
       updatedAt: Date.now(),
     })
   },
+  entries() {
+    return sessionGuards.entries()
+  },
 }
 
-export function applyOmoContinuationGuard(output, sessionID) {
+function applyOmoContinuationGuard(output, sessionID) {
   return applyOmoContinuationGuardToOutput(output, sessionGuards, Date.now(), sessionID)
 }
 
@@ -163,13 +175,15 @@ function getFetchRequestUrl(input) {
 
 function getInjectionGuardRegistry() {
   const existing = globalThis[injectionGuardRegistrySymbol]
-  if (existing?.origins instanceof Set && existing?.handlers instanceof Set) {
+  if (existing?.origins instanceof Set) {
+    if (typeof existing.nextGeneration !== "number") existing.nextGeneration = 0
     return existing
   }
 
   const registry = {
     origins: new Set(),
-    handlers: new Set(),
+    currentHandler: undefined,
+    nextGeneration: 0,
   }
   try {
     Object.defineProperty(globalThis, injectionGuardRegistrySymbol, {
@@ -185,6 +199,25 @@ function getInjectionGuardRegistry() {
     }
   }
   return registry
+}
+
+function registerInjectionGuardHandler() {
+  const registry = getInjectionGuardRegistry()
+  if (injectionGuardGeneration === undefined) {
+    injectionGuardGeneration = ++registry.nextGeneration
+  }
+  if (!registry.currentHandler || injectionGuardGeneration >= registry.currentHandler.generation) {
+    const previousHandler = registry.currentHandler?.handler
+    if (previousHandler && previousHandler !== injectionGuardHandler) {
+      for (const [sessionID, guard] of previousHandler.entries?.() || []) {
+        if (!sessionGuards.has(sessionID)) sessionGuards.set(sessionID, { ...guard })
+      }
+    }
+    registry.currentHandler = {
+      generation: injectionGuardGeneration,
+      handler: injectionGuardHandler,
+    }
+  }
 }
 
 function rememberFetchGuardOrigin(serverUrl) {
@@ -223,11 +256,9 @@ function getPromptSessionIDFromUrl(url) {
 function getInjectionGuardForSession(sessionID) {
   if (!sessionID) return undefined
   const registry = getInjectionGuardRegistry()
-  for (const handler of registry.handlers) {
-    const guard = handler.get?.(sessionID)
-    if (guard) return { handler, guard }
-  }
-  return undefined
+  const handler = registry.currentHandler?.handler
+  const guard = handler?.get?.(sessionID)
+  return guard ? { handler, guard } : undefined
 }
 
 async function readFetchBodyText(input, init) {
@@ -243,9 +274,9 @@ async function readFetchBodyText(input, init) {
   return ""
 }
 
-export function installFetchPromptInjectionGuard(serverUrl) {
+function installFetchPromptInjectionGuard(serverUrl) {
   rememberFetchGuardOrigin(serverUrl)
-  getInjectionGuardRegistry().handlers.add(injectionGuardHandler)
+  registerInjectionGuardHandler()
   const fetchImpl = globalThis.fetch
   if (typeof fetchImpl !== "function" || fetchImpl[injectionGuardSymbol]) return false
 
@@ -289,9 +320,9 @@ export function installFetchPromptInjectionGuard(serverUrl) {
   return true
 }
 
-export function installPromptInjectionGuard(client) {
+function installPromptInjectionGuard(client) {
   const session = client?.session
-  getInjectionGuardRegistry().handlers.add(injectionGuardHandler)
+  registerInjectionGuardHandler()
   if (!session || session[promptGuardSymbol] || promptGuardSessions.has(session)) return false
 
   let installed = false
@@ -379,6 +410,13 @@ function argsLookLikeLmasStatus(existingArgs) {
     || /\blmas\.sh\s+status\b/.test(command)
 }
 
+function argsLookLikeLmasCommand(existingArgs, subcommand) {
+  const command = String(existingArgs?.command || existingArgs?.cmd || existingArgs?.script || "").trim()
+  if (!command) return false
+  const escaped = subcommand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`^(?:lmas|let-my-agent-sleep|(?:bash\\s+)?(?:\\S*/)?lmas\\.sh)\\s+${escaped}(?:\\s|$)`).test(command)
+}
+
 function collectPermissionText(value, chunks = []) {
   if (value === undefined || value === null) return chunks
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -404,18 +442,6 @@ function permissionLooksLikeCancelTool(input) {
     input?.metadata,
   ]).join(" ")
   return isCancelTool(text) || /\blmas_cancel\b/i.test(text)
-}
-
-function callKey(sessionID, callID) {
-  if (!sessionID || !callID) return undefined
-  return `${sessionID}:${callID}`
-}
-
-function getCallID(input) {
-  return input?.callID
-    || input?.callId
-    || input?.tool?.callID
-    || input?.tool?.callId
 }
 
 function replaceArgsInPlace(output, args) {
@@ -448,30 +474,22 @@ function updateSessionGuardFromToolOutput(input, output) {
   const sessionID = getRuntimeSessionID(input)
   const text = typeof output?.output === "string" ? output.output : ""
   if (!sessionID || text.length === 0) return
-  updateSessionGuardFromText(sessionGuards, sessionID, text, Date.now(), {
-    allowHandoff: true,
-    allowCancel: true,
-    omoTurn: text.includes("LMAS_HANDOFF v1") ? true : undefined,
-  })
-  updateSessionGuardFromStatusText(sessionGuards, sessionID, text)
-  updateSessionGuardFromCancelText(sessionGuards, sessionID, text)
-}
+  const toolName = normalizeToolName(input?.tool)
+  const args = input?.args || input?.arguments || input?.metadata?.args
+  const isStart = toolName === "lmas_start" || toolName.endsWith(".lmas_start") || argsLookLikeLmasCommand(args, "start")
+  const isStatus = toolName === "lmas_status" || toolName.endsWith(".lmas_status") || argsLookLikeLmasCommand(args, "status")
+  const isCancel = toolName === "lmas_cancel" || toolName.endsWith(".lmas_cancel") || argsLookLikeLmasCommand(args, "cancel")
 
-export function findLmasScript(cwd, context) {
-  const roots = [
-    process.env.LMAS_ROOT,
-    packageRoot,
-    context.directory,
-    context.worktree,
-    cwd,
-  ].filter((value) => value && value !== "/")
-
-  for (const root of roots) {
-    const candidate = join(root, "bin", "lmas.sh")
-    if (existsSync(candidate)) return candidate
+  if (isStart) {
+    updateSessionGuardFromText(sessionGuards, sessionID, text, Date.now(), {
+      allowHandoff: true,
+      allowCompletion: false,
+      allowCancel: false,
+      omoTurn: text.includes("LMAS_HANDOFF v1") ? true : undefined,
+    })
   }
-
-  throw new Error(`could not locate bin/lmas.sh; checked roots: ${roots.join(", ")}`)
+  if (isStatus) updateSessionGuardFromStatusText(sessionGuards, sessionID, text)
+  if (isCancel) updateSessionGuardFromCancelText(sessionGuards, sessionID, text)
 }
 
 function createStartTool(defaultServerUrl) {
@@ -483,8 +501,6 @@ function createStartTool(defaultServerUrl) {
       cwd: tool.schema.string().optional().describe("Working directory. Defaults to the current session directory."),
       artifacts_dir: tool.schema.string().optional().describe("Artifact directory to report in LMAS events."),
       metadata: tool.schema.record(tool.schema.string(), tool.schema.string()).optional().describe("Additional metadata to persist with this run."),
-      server_url: tool.schema.string().optional().describe("OpenCode server URL. Defaults to this plugin's current OpenCode server URL."),
-      notify_url: tool.schema.string().optional().describe("Optional URL that receives the completion resume prompt as a secondary notification."),
     },
     async execute(args, context) {
       const sessionID = getRuntimeSessionID(context)
@@ -493,7 +509,7 @@ function createStartTool(defaultServerUrl) {
 
       const cwd = args.cwd || context.directory || context.worktree || process.cwd()
       const script = findLmasScript(cwd, context)
-      const serverUrl = args.server_url || process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
+      const serverUrl = process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
       const env = {
         ...process.env,
         LMAS_OPENCODE_SESSION_ID: sessionID,
@@ -514,10 +530,6 @@ function createStartTool(defaultServerUrl) {
 
       if (args.artifacts_dir) {
         command.push("--artifacts-dir", args.artifacts_dir)
-      }
-
-      if (args.notify_url) {
-        command.push("--notify", args.notify_url)
       }
 
       if (args.metadata) {
@@ -614,16 +626,15 @@ function createCancelTool(defaultServerUrl) {
       runs_dir: tool.schema.string().optional().describe("Run directory root. Defaults to LMAS_RUNS_DIR or .lmas/runs."),
       cwd: tool.schema.string().optional().describe("Working directory. Defaults to the current session directory."),
       reason: tool.schema.string().optional().describe("Cancellation reason to persist in metadata."),
-      server_url: tool.schema.string().optional().describe("OpenCode server URL. Defaults to this plugin's current OpenCode server URL."),
     },
     async execute(args, context) {
       const sessionID = getRuntimeSessionID(context)
-      const guard = getSessionOmoGuard(sessionID)
+      const guard = getSessionActiveHandoff(sessionID)
       if (guard && !guardAllowsCancel(guard, args.run_id)) return createBlockedToolMessage(guard.runIds)
 
       const cwd = args.cwd || context.directory || context.worktree || process.cwd()
       const script = findLmasScript(cwd, context)
-      const serverUrl = args.server_url || process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
+      const serverUrl = process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
       const env = {
         ...process.env,
         LMAS_OPENCODE_SESSION_ID: sessionID,
@@ -745,13 +756,12 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
         }
         throw new Error(action.message)
       }
+      if (activeGuard && isCancelTool(input.tool)) {
+        if (guardAllowsCancel(activeGuard, output.args?.run_id)) return
+        throw new Error(createBlockedToolMessage(activeGuard.runIds))
+      }
       const guard = getSessionOmoGuard(sessionID)
       if (!guard) return
-      if (isCancelTool(input.tool) && guardAllowsCancel(guard, output.args?.run_id)) {
-        const key = callKey(sessionID, getCallID(input))
-        if (key) allowedCancelCallIds.add(key)
-        return
-      }
 
       const action = createGuardedToolAction(input.tool, output.args, guard.runIds)
       if (action.type === "args") {
@@ -792,23 +802,8 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       const sessionID = getRuntimeSessionID(input)
       const guard = getSessionOmoGuard(sessionID)
-      if (!guard) {
-        const activeGuard = getSessionActiveHandoff(sessionID)
-        if (activeGuard?.allowCancel && permissionLooksLikeCancelTool(input)) {
-          output.status = "allow"
-        }
-        return
-      }
-      const key = callKey(sessionID, getCallID(input))
-      if (key && allowedCancelCallIds.has(key)) {
-        allowedCancelCallIds.delete(key)
-        output.status = "allow"
-        return
-      }
-      if (guard.allowCancel && permissionLooksLikeCancelTool(input)) {
-        output.status = "allow"
-        return
-      }
+      if (!guard) return
+      if (guard.allowCancel && permissionLooksLikeCancelTool(input)) return
 
       output.status = "deny"
     },
@@ -820,5 +815,3 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     },
   }
 }
-
-export default LetMyAgentSleepPlugin

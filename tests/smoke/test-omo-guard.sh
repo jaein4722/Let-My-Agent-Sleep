@@ -8,6 +8,7 @@ cd "$ROOT" || exit 1
 node --input-type=module - <<'JS'
 import {
   GUARD_TTL_MS,
+  MAX_EVENT_TEXT_BUFFERS,
   applyOmoContinuationGuard,
   clearSessionGuard,
   createGuardedToolAction,
@@ -1828,6 +1829,66 @@ if (!partRoleOnlyOutput.messages[2].parts[0].text.includes("lmas_part_role_only"
 }
 if (!getActiveOmoGuard(partRoleOnlyGuards, "ses_part_role_only_transform", 8351)) {
   throw new Error("expected transform part-level role-only user continuation to set active guard")
+}
+
+const splitProtocolGuards = new Map()
+const splitProtocolBuffers = new Map()
+updateSessionGuardFromEvent(splitProtocolGuards, splitProtocolBuffers, {
+  type: "message.part.delta",
+  properties: { sessionID: "ses_split_protocol", partID: "part_split_protocol", delta: "LMAS_HANDOFF v1\n" },
+}, 8400)
+if (splitProtocolGuards.get("ses_split_protocol")?.active) {
+  throw new Error("incomplete handoff marker should not activate a guard")
+}
+updateSessionGuardFromEvent(splitProtocolGuards, splitProtocolBuffers, {
+  type: "message.part.delta",
+  properties: { sessionID: "ses_split_protocol", partID: "part_split_protocol", delta: "run_id: lmas_split_protocol\nstatus: STARTED" },
+}, 8401)
+if (!splitProtocolGuards.get("ses_split_protocol")?.runIds.includes("lmas_split_protocol")) {
+  throw new Error("expected marker/run_id split across deltas to activate the guard")
+}
+
+const unsafeRunGuards = new Map()
+updateSessionGuardFromText(
+  unsafeRunGuards,
+  "ses_unsafe_run",
+  "LMAS_HANDOFF v1\nrun_id: lmas_$(printf${IFS}PWNED)\nstatus: STARTED",
+  8410,
+)
+if (unsafeRunGuards.get("ses_unsafe_run")?.active) {
+  throw new Error("unsafe run_id should not activate the guard")
+}
+const unsafeBashArgs = createGuardedToolArgs("bash", { command: "true" }, ["lmas_$(printf${IFS}PWNED)"])
+if (unsafeBashArgs.command.includes("$(") || unsafeBashArgs.command.includes("PWNED")) {
+  throw new Error("guarded Bash no-op must not interpolate run ids")
+}
+
+const boundedBuffers = new Map()
+for (let index = 0; index < MAX_EVENT_TEXT_BUFFERS + 20; index += 1) {
+  updateSessionGuardFromEvent(new Map(), boundedBuffers, {
+    type: "message.part.delta",
+    properties: { sessionID: "ses_bounded", partID: `part_${index}`, delta: "ordinary delta" },
+  }, 8420 + index)
+}
+if (boundedBuffers.size > MAX_EVENT_TEXT_BUFFERS) {
+  throw new Error("event text buffers exceeded their global bound")
+}
+updateSessionGuardFromEvent(new Map(), boundedBuffers, {
+  type: "session.deleted",
+  properties: { sessionID: "ses_bounded" },
+}, 8500)
+if (boundedBuffers.size !== 0) {
+  throw new Error("session deletion should clear all buffered deltas for the session")
+}
+
+const stopIntentGuards = new Map()
+updateSessionGuardFromText(stopIntentGuards, "ses_stop_intent", "LMAS_HANDOFF v1\nrun_id: lmas_stop_intent\nstatus: STARTED", 8510)
+updateSessionGuardFromEvent(stopIntentGuards, new Map(), {
+  type: "message.updated",
+  properties: { message: message("user", "Stop it now.", "stop_intent", "ses_stop_intent") },
+}, 8511)
+if (stopIntentGuards.get("ses_stop_intent")?.allowCancel !== true) {
+  throw new Error("explicit stop intent should authorize cancellation")
 }
 
 console.log("ok omo guard")

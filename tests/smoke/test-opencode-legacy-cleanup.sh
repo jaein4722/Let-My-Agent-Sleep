@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-opencode-legacy-home.XXXXXX")
 trap 'rm -rf "$TMP_HOME"' EXIT
 
-unset OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
+unset OPENCODE_CONFIG OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
 export HOME="$TMP_HOME"
 export XDG_CONFIG_HOME="$TMP_HOME/.config"
 export XDG_CACHE_HOME="$TMP_HOME/.cache"
@@ -38,33 +38,19 @@ for path in \
   "$TMP_HOME/.claude/skills/let-my-agent-sleep-claude" \
   "$TMP_HOME/.claude/skills/let-my-agent-sleep-claude.bak.20260701T000000Z"
 do
-  if [ -e "$path" ]; then
-    printf 'legacy cross-agent skill still exists after opencode-only install: %s\n' "$path" >&2
-    exit 1
-  fi
-done
-
-for path in \
-  "$TMP_HOME/.agents/lmas-backups/skills/let-my-agent-sleep."* \
-  "$TMP_HOME/.agents/lmas-backups/skills/let-my-agent-sleep-codex."* \
-  "$TMP_HOME/.agents/lmas-backups/skills/let-my-agent-sleep-codex.bak.20260701T000000Z."* \
-  "$TMP_HOME/.claude/lmas-backups/skills/let-my-agent-sleep."* \
-  "$TMP_HOME/.claude/lmas-backups/skills/let-my-agent-sleep-claude."* \
-  "$TMP_HOME/.claude/lmas-backups/skills/let-my-agent-sleep-claude.bak.20260701T000000Z."*
-do
   if [ ! -e "$path" ]; then
-    printf 'legacy cross-agent skill was not backed up: %s\n' "$path" >&2
+    printf 'opencode-only install moved another agent\x27s skill: %s\n' "$path" >&2
     exit 1
   fi
 done
 
-grep -q '"let-my-agent-sleep-codex"' "$TMP_HOME/.config/opencode/oh-my-openagent.json" || {
-  printf 'opencode install did not add legacy codex skill to OMO disabled_skills\n' >&2
+if [ -e "$TMP_HOME/.agents/lmas-backups" ] || [ -e "$TMP_HOME/.claude/lmas-backups" ]; then
+  printf 'opencode-only install created cross-agent backup directories\n' >&2
   exit 1
-}
-grep -q '"let-my-agent-sleep-claude"' "$TMP_HOME/.config/opencode/oh-my-openagent.json" || {
-  printf 'opencode install did not add legacy claude skill to OMO disabled_skills\n' >&2
+fi
+if [ -e "$TMP_HOME/.config/opencode/oh-my-openagent.json" ]; then
+  printf 'opencode-only install created an OMO config\n' >&2
   exit 1
-}
+fi
 
-printf 'ok opencode legacy cleanup\n'
+printf 'ok opencode cross-agent preservation\n'

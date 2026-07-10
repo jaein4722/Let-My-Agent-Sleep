@@ -65,8 +65,8 @@ function assertRootReadmeSiteAsset(relativePath, minBytes) {
 
 assert(pkg.name === "let-my-agent-sleep", "unexpected package name")
 assert(pkg.homepage === "https://jaein4722.github.io/Let-My-Agent-Sleep/", "package homepage should point to the public landing page")
-assert(pkg.description.includes("Start long-running agent jobs"), "package description should explain the user-facing value")
-assert(pkg.description.includes("OpenCode") && pkg.description.includes("Codex") && pkg.description.includes("Claude Code"), "package description should name supported agents")
+assert(pkg.description.includes("Start long-running jobs") && pkg.description.includes("stop polling"), "package description should explain the user-facing value")
+assert(pkg.description.includes("OpenCode") && pkg.description.includes("Codex") && pkg.description.includes("experimental Claude Code"), "package description should distinguish supported and experimental agents")
 assert(pkg.repository?.url === "git+https://github.com/jaein4722/Let-My-Agent-Sleep.git", "repository URL drifted")
 assert(pkg.bugs?.url === "https://github.com/jaein4722/Let-My-Agent-Sleep/issues", "bugs URL drifted")
 assert(pkg.license === "MIT", "license drifted")
@@ -91,11 +91,9 @@ assert(
 )
 assert(fs.readFileSync(rootLicensePath, "utf8") === fs.readFileSync(packageLicensePath, "utf8"), "package LICENSE differs from root LICENSE")
 assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png", 10_000)
-assertReadmeUrlBackedBySiteAsset("npm README", readme, "https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif", 10_000)
 assertReadmePublicUrlsBackedBySite("npm README", readme)
 assertReadmePublicUrlsBackedBySite("root README", rootReadme)
 assertRootReadmeSiteAsset("site/social-card.png", 10_000)
-assertRootReadmeSiteAsset("site/demo.gif", 10_000)
 
 console.log(`ok package metadata: ${pkg.version}`)
 JS

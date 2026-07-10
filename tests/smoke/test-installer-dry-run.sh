@@ -3,19 +3,7 @@ set -u
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 MOCK_BIN=$(mktemp -d "${TMPDIR:-/tmp}/lmas-detected-bin.XXXXXX")
-TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-installer-dry-home.XXXXXX")
-trap 'rm -rf "$MOCK_BIN" "$TMP_HOME"' EXIT
-EXPECTED_OMO_HOOKS=$(cd "$ROOT" && node --input-type=module -e 'import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-constants.js"; console.log(omoContinuationHooks.join(" "))')
-
-assert_output_mentions_omo_hooks() {
-  output=$1
-  for hook in $EXPECTED_OMO_HOOKS; do
-    printf '%s\n' "$output" | grep -q "$hook" || {
-      printf 'omo continuation dry-run missing disabled hook output: %s\n' "$hook" >&2
-      exit 1
-    }
-  done
-}
+trap 'rm -rf "$MOCK_BIN"' EXIT
 
 for command in opencode codex claude; do
   cat > "$MOCK_BIN/$command" <<'SH'
@@ -32,24 +20,38 @@ SH
 done
 
 OPENCODE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --dry-run --yes)
-OMO_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --disable-omo-continuation --dry-run --yes)
 CODEX_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --dry-run --yes)
 CLAUDE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --dry-run --yes)
 DETECTED_OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
 DOCTOR_ERROR_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent bogus --yes 2>&1)
 DOCTOR_ERROR_STATUS=$?
+DISABLE_FLAG_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --disable-omo-continuation --dry-run --yes 2>&1)
+DISABLE_FLAG_STATUS=$?
+KEEP_FLAG_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --keep-omo-continuation --dry-run --yes 2>&1)
+KEEP_FLAG_STATUS=$?
+PACKAGE_VERSION=$(cd "$ROOT" && node -p "require('./packages/let-my-agent-sleep/package.json').version")
 
-printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'plugin: let-my-agent-sleep@latest' || { printf 'opencode dry-run missing plugin config\n' >&2; exit 1; }
+printf '%s\n' "$OPENCODE_OUTPUT" | grep -q "plugin: let-my-agent-sleep@$PACKAGE_VERSION" || { printf 'opencode dry-run missing exact plugin config\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/skills/let-my-agent-sleep/SKILL.md' || { printf 'opencode dry-run missing skill target\n' >&2; exit 1; }
-printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.cache/opencode/package.json' || { printf 'opencode dry-run missing root plugin cache target\n' >&2; exit 1; }
+if printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.cache/opencode/package.json'; then
+  printf 'opencode dry-run should leave the OpenCode-managed plugin cache untouched\n' >&2
+  exit 1
+fi
 if printf '%s\n' "$OPENCODE_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured'; then
   printf 'opencode dry-run should not disable OMO continuation hooks by default\n' >&2
   exit 1
 fi
-assert_output_mentions_omo_hooks "$OMO_OUTPUT"
-printf '%s\n' "$OMO_OUTPUT" | grep -q 'reason: requested by --disable-omo-continuation' || { printf 'explicit OMO continuation dry-run missing disable reason\n' >&2; exit 1; }
-printf '%s\n' "$OMO_OUTPUT" | grep -q 'oh-my-openagent.json' || { printf 'omo continuation dry-run missing omo config target\n' >&2; exit 1; }
+if [ "$DISABLE_FLAG_STATUS" -eq 0 ]; then
+  printf 'removed --disable-omo-continuation flag should fail\n' >&2
+  exit 1
+fi
+printf '%s\n' "$DISABLE_FLAG_OUTPUT" | grep -q 'unknown argument: --disable-omo-continuation' || { printf 'removed --disable-omo-continuation flag should report unknown argument\n' >&2; exit 1; }
+if [ "$KEEP_FLAG_STATUS" -eq 0 ]; then
+  printf 'removed --keep-omo-continuation flag should fail\n' >&2
+  exit 1
+fi
+printf '%s\n' "$KEEP_FLAG_OUTPUT" | grep -q 'unknown argument: --keep-omo-continuation' || { printf 'removed --keep-omo-continuation flag should report unknown argument\n' >&2; exit 1; }
 printf '%s\n' "$CODEX_OUTPUT" | grep -q '.codex/skills/let-my-agent-sleep' || { printf 'codex dry-run missing skill target\n' >&2; exit 1; }
 printf '%s\n' "$CODEX_OUTPUT" | grep -q 'plugin: not installed' || { printf 'codex dry-run should avoid plugin install\n' >&2; exit 1; }
 printf '%s\n' "$CLAUDE_OUTPUT" | grep -q '.claude/commands/let-my-agent-sleep.md' || { printf 'claude dry-run missing command target\n' >&2; exit 1; }

@@ -110,6 +110,7 @@ assert_release_state() {
   output_file=$1
   expected_publish=$2
   expected_release=$3
+  expected_tag_exists=$4
 
   grep -q "^version=$LOCAL_VERSION$" "$output_file" || {
     printf 'detect release state output missing version=%s\n' "$LOCAL_VERSION" >&2
@@ -131,6 +132,11 @@ assert_release_state() {
     cat "$output_file" >&2
     exit 1
   }
+  grep -q "^tag_exists=$expected_tag_exists$" "$output_file" || {
+    printf 'detect release state output has wrong tag_exists value\n' >&2
+    cat "$output_file" >&2
+    exit 1
+  }
 }
 
 run_detect_release_state() {
@@ -138,10 +144,17 @@ run_detect_release_state() {
   gh_state=$2
   output_file=$3
   script=$4
+  tag_state=$5
+  npm_git_head=${6:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+  ref_name=${7:-master}
 
   : > "$output_file"
+  LMAS_TEST_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    LMAS_TEST_NPM_GIT_HEAD="$npm_git_head" \
+    LMAS_TEST_TAG_STATE="$tag_state" \
   LMAS_TEST_NPM_STATE="$npm_state" \
     LMAS_TEST_GH_STATE="$gh_state" \
+    GITHUB_REF_NAME="$ref_name" \
     GITHUB_OUTPUT="$output_file" \
     PATH="$MOCK_BIN:$PATH" \
     GH_TOKEN=test-token \
@@ -178,6 +191,10 @@ required = [
     'npm: "11.5.1"',
     "npm --version",
     "npm publish --workspace let-my-agent-sleep",
+    'if [ "$GITHUB_REF_NAME" != "master" ]',
+    "npm view \"let-my-agent-sleep@${version}\" gitHead",
+    'git rev-list -n 1 "$tag"',
+    "--verify-tag",
 ]
 
 for text in required:
@@ -220,6 +237,10 @@ mkdir -p "$MOCK_BIN"
 
 cat > "$MOCK_BIN/npm" <<'SH'
 #!/usr/bin/env sh
+if [ "$1" = "view" ] && [ "$3" = "gitHead" ]; then
+  printf '%s\n' "$LMAS_TEST_NPM_GIT_HEAD"
+  exit 0
+fi
 if [ "$1" = "view" ] && [ "$3" = "version" ]; then
   case "$LMAS_TEST_NPM_STATE" in
     published)
@@ -241,6 +262,24 @@ printf 'unexpected npm invocation: %s\n' "$*" >&2
 exit 98
 SH
 chmod +x "$MOCK_BIN/npm"
+
+cat > "$MOCK_BIN/git" <<'SH'
+#!/usr/bin/env sh
+if [ "$1" = "rev-parse" ] && [ "$2" = "HEAD" ]; then
+  printf '%s\n' "$LMAS_TEST_HEAD_SHA"
+  exit 0
+fi
+if [ "$1" = "rev-list" ] && [ "$2" = "-n" ] && [ "$3" = "1" ]; then
+  case "$LMAS_TEST_TAG_STATE" in
+    exact) printf '%s\n' "$LMAS_TEST_HEAD_SHA"; exit 0 ;;
+    wrong) printf '%040d\n' 1; exit 0 ;;
+    missing) exit 1 ;;
+  esac
+fi
+printf 'unexpected git invocation: %s\n' "$*" >&2
+exit 98
+SH
+chmod +x "$MOCK_BIN/git"
 
 cat > "$MOCK_BIN/gh" <<'SH'
 #!/usr/bin/env sh
@@ -265,15 +304,36 @@ SH
 chmod +x "$MOCK_BIN/gh"
 
 DETECT_ALREADY_DONE_OUTPUT="$TMPDIR_ROOT/detect-already-done.out"
-LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state published exists "$DETECT_ALREADY_DONE_OUTPUT" "$DETECT_SCRIPT"
-assert_release_state "$DETECT_ALREADY_DONE_OUTPUT" false false
+LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state published exists "$DETECT_ALREADY_DONE_OUTPUT" "$DETECT_SCRIPT" exact
+assert_release_state "$DETECT_ALREADY_DONE_OUTPUT" false false true
 
 DETECT_NEEDED_OUTPUT="$TMPDIR_ROOT/detect-needed.out"
-LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state missing missing "$DETECT_NEEDED_OUTPUT" "$DETECT_SCRIPT"
-assert_release_state "$DETECT_NEEDED_OUTPUT" true true
+LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state missing missing "$DETECT_NEEDED_OUTPUT" "$DETECT_SCRIPT" missing
+assert_release_state "$DETECT_NEEDED_OUTPUT" true true false
+
+DETECT_WRONG_TAG_OUTPUT="$TMPDIR_ROOT/detect-wrong-tag.out"
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state missing missing "$DETECT_WRONG_TAG_OUTPUT" "$DETECT_SCRIPT" wrong 2>&1; then
+  printf 'detect release state should fail when the release tag points to another commit\n' >&2
+  exit 1
+fi
+grep -q 'not current HEAD' "$DETECT_WRONG_TAG_OUTPUT" || { printf 'wrong-tag failure did not explain commit mismatch\n' >&2; cat "$DETECT_WRONG_TAG_OUTPUT" >&2; exit 1; }
+
+DETECT_WRONG_NPM_HEAD_OUTPUT="$TMPDIR_ROOT/detect-wrong-npm-head.out"
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state published missing "$DETECT_WRONG_NPM_HEAD_OUTPUT" "$DETECT_SCRIPT" missing bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 2>&1; then
+  printf 'detect release state should fail when npm gitHead differs from current commit\n' >&2
+  exit 1
+fi
+grep -q 'not current HEAD' "$DETECT_WRONG_NPM_HEAD_OUTPUT" || { printf 'wrong npm gitHead failure did not explain commit mismatch\n' >&2; cat "$DETECT_WRONG_NPM_HEAD_OUTPUT" >&2; exit 1; }
+
+DETECT_WRONG_BRANCH_OUTPUT="$TMPDIR_ROOT/detect-wrong-branch.out"
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state missing missing "$DETECT_WRONG_BRANCH_OUTPUT" "$DETECT_SCRIPT" missing aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa feature 2>&1; then
+  printf 'detect release state should fail outside master\n' >&2
+  exit 1
+fi
+grep -q 'must run from master' "$DETECT_WRONG_BRANCH_OUTPUT" || { printf 'wrong-branch failure did not explain branch policy\n' >&2; cat "$DETECT_WRONG_BRANCH_OUTPUT" >&2; exit 1; }
 
 DETECT_NPM_ERROR_OUTPUT="$TMPDIR_ROOT/detect-npm-error.out"
-if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state error exists "$DETECT_NPM_ERROR_OUTPUT" "$DETECT_SCRIPT" 2>&1; then
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state error exists "$DETECT_NPM_ERROR_OUTPUT" "$DETECT_SCRIPT" exact 2>&1; then
   printf 'detect release state should fail on unexpected npm errors\n' >&2
   cat "$DETECT_NPM_ERROR_OUTPUT" >&2
   exit 1
@@ -285,7 +345,7 @@ grep -q 'E500' "$DETECT_NPM_ERROR_OUTPUT" || {
 }
 
 DETECT_GH_ERROR_OUTPUT="$TMPDIR_ROOT/detect-gh-error.out"
-if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state published error "$DETECT_GH_ERROR_OUTPUT" "$DETECT_SCRIPT" 2>&1; then
+if LMAS_TEST_NPM_VERSION="$LOCAL_VERSION" run_detect_release_state published error "$DETECT_GH_ERROR_OUTPUT" "$DETECT_SCRIPT" exact 2>&1; then
   printf 'detect release state should fail on unexpected gh errors\n' >&2
   cat "$DETECT_GH_ERROR_OUTPUT" >&2
   exit 1

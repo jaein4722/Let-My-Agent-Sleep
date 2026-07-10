@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -u
+umask 077
 
 SCRIPT_NAME=${0##*/}
 SCRIPT_PATH=$0
@@ -178,7 +179,7 @@ write_handoff() {
 }
 
 write_completion_event() {
-  local run_dir run_id status exit_code cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at
+  local run_dir run_id status exit_code cwd command_text stdout_path stderr_path metadata_path artifacts_dir finished_at stage_file
   run_dir=$1
   run_id=$2
   status=$3
@@ -191,6 +192,7 @@ write_completion_event() {
   artifacts_dir=${10}
   finished_at=${11}
 
+  stage_file="$run_dir/.completion_event.txt.tmp.$$"
   {
     printf 'LMAS_COMPLETION_EVENT v1\n'
     write_line_field run_id "$run_id"
@@ -203,16 +205,18 @@ write_completion_event() {
     write_line_field metadata "$metadata_path"
     write_line_field artifacts_dir "$artifacts_dir"
     write_line_field finished_at "$finished_at"
-  } > "$run_dir/.completion_event.txt"
+  } > "$stage_file"
+  mv "$stage_file" "$run_dir/.completion_event.txt"
 }
 
 write_resume_prompt() {
-  local run_dir event_file
+  local run_dir event_file prompt_stage
   run_dir=$1
   event_file="$run_dir/completion_event.txt"
   if [ -f "$run_dir/.completion_event.txt" ]; then
     event_file="$run_dir/.completion_event.txt"
   fi
+  prompt_stage="$run_dir/.resume_prompt.txt.tmp.$$"
   {
     printf 'A previously handoffed Let My Agent Sleep job has finished.\n\n'
     cat "$event_file"
@@ -221,7 +225,8 @@ write_resume_prompt() {
     printf '2. Inspect metadata only if the command/result context is unclear.\n'
     printf '3. Summarize the result and metrics/checkpoints if present.\n'
     printf '4. Continue the original task from this completed job state.\n'
-  } > "$run_dir/resume_prompt.txt"
+  } > "$prompt_stage"
+  mv "$prompt_stage" "$run_dir/resume_prompt.txt"
   if [ -f "$run_dir/.completion_event.txt" ]; then
     mv "$run_dir/.completion_event.txt" "$run_dir/completion_event.txt"
   fi
@@ -242,27 +247,31 @@ run_opencode_adapter() {
     printf 'opencode adapter skipped: LMAS_OPENCODE_SESSION_ID is empty\n' > "$run_dir/adapter.log"
     return 0
   fi
+  case "$server_url" in
+    http://*|https://*) ;;
+    *) printf 'opencode adapter skipped: server URL must use http:// or https://\n' > "$run_dir/adapter.log"; return 0 ;;
+  esac
 
   escaped=$(json_string_from_file "$prompt_file")
   payload=$(printf '{"parts":[{"type":"text","text":%s}]}' "$escaped")
   endpoint="${server_url%/}/session/$session_id/prompt_async"
 
   if [ -n "$password" ]; then
-    curl -fsS -X POST "$endpoint" \
+    curl -fsS -X POST \
       --connect-timeout "$connect_timeout" \
       --max-time "$max_time" \
       -u "$username:$password" \
       -H 'content-type: application/json' \
-      --data "$payload" > "$run_dir/adapter.log" 2>&1 || {
+      --data "$payload" -- "$endpoint" > "$run_dir/adapter.log" 2>&1 || {
         printf '\nopencode adapter failed for %s\n' "$endpoint" >> "$run_dir/adapter.log"
         return 0
       }
   else
-    curl -fsS -X POST "$endpoint" \
+    curl -fsS -X POST \
       --connect-timeout "$connect_timeout" \
       --max-time "$max_time" \
       -H 'content-type: application/json' \
-      --data "$payload" > "$run_dir/adapter.log" 2>&1 || {
+      --data "$payload" -- "$endpoint" > "$run_dir/adapter.log" 2>&1 || {
         printf '\nopencode adapter failed for %s\n' "$endpoint" >> "$run_dir/adapter.log"
         return 0
       }
@@ -367,17 +376,21 @@ run_notification() {
   if [ -z "$notify_url" ]; then
     return 0
   fi
+  case "$notify_url" in
+    http://*|https://*) ;;
+    *) printf 'notify skipped: URL must use http:// or https://\n' > "$run_dir/notify.log"; return 0 ;;
+  esac
 
   if ! command -v curl >/dev/null 2>&1; then
     printf 'notify skipped: curl command not found\n' > "$run_dir/notify.log"
     return 0
   fi
 
-  curl -fsS -X POST "$notify_url" \
+  curl -fsS -X POST \
     --connect-timeout "$connect_timeout" \
     --max-time "$max_time" \
     -H 'content-type: text/plain; charset=utf-8' \
-    --data-binary @"$prompt_file" > "$run_dir/notify.log" 2>&1 || {
+    --data-binary @"$prompt_file" -- "$notify_url" > "$run_dir/notify.log" 2>&1 || {
       printf '\nnotify failed\n' >> "$run_dir/notify.log"
       return 0
     }
@@ -450,7 +463,7 @@ terminate_pids() {
 }
 
 launch_watcher_tmux() {
-  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir session command_line log_path tmux_socket
+  local run_dir run_id adapter cwd command_text stdout_path stderr_path metadata_path artifacts_dir session command_line log_path tmux_socket uid
   run_dir=$1
   run_id=$2
   adapter=$3
@@ -464,8 +477,8 @@ launch_watcher_tmux() {
 
   command -v tmux >/dev/null 2>&1 || die "tmux launcher requested but tmux is not available"
   session="$run_id"
-  mkdir -p "$cwd/.lmas/tmux" || die "failed to create tmux socket directory: $cwd/.lmas/tmux"
-  tmux_socket=".lmas/tmux/${run_id}.sock"
+  uid=$(id -u 2>/dev/null || printf '0')
+  tmux_socket="${LMAS_TMUX_SOCKET_DIR:-/tmp}/lmas-tmux-${uid}-$$-${RANDOM:-0}.sock"
   printf '%s\n' "$tmux_socket" > "$run_dir/tmux_socket.txt"
   command_line=$(quote_command "$SCRIPT_PATH" __watch "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" -- "$@")
   log_path=$(shell_quote "$run_dir/watcher.log")
@@ -485,6 +498,11 @@ watch_command() {
   metadata_path=$8
   artifacts_dir=$9
   shift 9
+
+  while [ ! -f "$run_dir/.handoff_ready" ]; do
+    [ ! -f "$run_dir/.handoff_abort" ] || exit 125
+    sleep 0.05
+  done
 
   set +e
   (
@@ -630,7 +648,12 @@ start_command() {
 
   watcher_id=$(launch_watcher_tmux "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$@") || die "failed to start tmux watcher"
 
-  write_handoff "$run_dir" "$run_id" STARTED "$cwd" "$command_text" "$watcher_id" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$resume_instruction" "$started_at"
+  if ! write_handoff "$run_dir" "$run_id" STARTED "$cwd" "$command_text" "$watcher_id" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" "$resume_instruction" "$started_at"; then
+    : > "$run_dir/.handoff_abort"
+    stop_watcher "$watcher_id" "$run_dir" >/dev/null 2>&1 || true
+    die "failed to write handoff for run: $run_id"
+  fi
+  : > "$run_dir/.handoff_ready"
   cat "$run_dir/handoff.txt"
 }
 
@@ -743,9 +766,10 @@ watcher_alive() {
       else
         tmux_socket=".lmas/tmux/${session}.sock"
       fi
-      cwd_for_socket=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null)
-      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
-      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" has-session -t "$session" >/dev/null 2>&1 )
+      case "$tmux_socket" in
+        /*) tmux -S "$tmux_socket" has-session -t "$session" >/dev/null 2>&1 ;;
+        *) cwd_for_socket=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null); [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd); ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" has-session -t "$session" >/dev/null 2>&1 ) ;;
+      esac
       ;;
     *[!0-9]*)
       return 1
@@ -771,9 +795,10 @@ stop_watcher() {
       else
         tmux_socket=".lmas/tmux/${session}.sock"
       fi
-      cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd)
-      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
-      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" kill-session -t "$session" >/dev/null 2>&1 )
+      case "$tmux_socket" in
+        /*) tmux -S "$tmux_socket" kill-session -t "$session" >/dev/null 2>&1 ;;
+        *) cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd); [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd); ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" kill-session -t "$session" >/dev/null 2>&1 ) ;;
+      esac
       ;;
     *[!0-9]*)
       return 1
@@ -799,9 +824,10 @@ watcher_root_pid() {
       else
         tmux_socket=".lmas/tmux/${session}.sock"
       fi
-      cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd)
-      [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd)
-      ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" display-message -p -t "$session" '#{pane_pid}' 2>/dev/null )
+      case "$tmux_socket" in
+        /*) tmux -S "$tmux_socket" display-message -p -t "$session" '#{pane_pid}' 2>/dev/null ;;
+        *) cwd_for_socket=$(read_metadata_field "$run_dir/metadata.txt" cwd); [ -n "$cwd_for_socket" ] || cwd_for_socket=$(pwd); ( cd "$cwd_for_socket" && tmux -S "$tmux_socket" display-message -p -t "$session" '#{pane_pid}' 2>/dev/null ) ;;
+      esac
       ;;
     *[!0-9]*)
       return 1
@@ -818,6 +844,7 @@ cancel_command() {
 
   runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
   reason="user requested cancellation"
+  surviving_pids=
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1004,6 +1031,10 @@ cancel_command() {
     write_line_field run_dir "$run_dir"
     write_line_field completion_event "$run_dir/completion_event.txt"
     write_line_field resume_prompt "$run_dir/resume_prompt.txt"
+    if [ -n "$surviving_pids" ]; then
+      write_line_field warning "some processes survived cancellation"
+      write_line_field surviving_pids "$surviving_pids"
+    fi
   }
 }
 

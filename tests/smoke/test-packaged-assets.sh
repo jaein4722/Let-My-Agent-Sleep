@@ -61,9 +61,6 @@ expected = root_readme.read_text().replace(
 ).replace(
     '<h1>Let My Agent Sleep</h1>',
     '<h1>let-my-agent-sleep</h1>',
-).replace(
-    '![LMAS handoff demo](site/demo.gif)',
-    '![LMAS handoff demo](https://jaein4722.github.io/Let-My-Agent-Sleep/demo.gif)',
 )
 actual = package_readme.read_text()
 

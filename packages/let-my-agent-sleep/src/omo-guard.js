@@ -8,6 +8,8 @@ const LMAS_CANCEL = "LMAS_CANCEL v1"
 const LMAS_COMPLETION = "LMAS_COMPLETION_EVENT v1"
 export const GUARD_TTL_MS = 10 * 60 * 1000
 export const MAX_EVENT_TEXT_BUFFER = 16384
+export const MAX_EVENT_TEXT_BUFFERS = 128
+const SAFE_RUN_ID = /^lmas_[A-Za-z0-9][A-Za-z0-9._+-]{0,199}$/
 
 export function collectTextFromPart(part) {
   const chunks = []
@@ -130,18 +132,25 @@ function getEventTextBufferKey(event, sessionID) {
 export function appendEventTextBuffer(eventTextBuffers, bufferKey, text) {
   const existing = eventTextBuffers.get(bufferKey) || ""
   const next = `${existing}${text}`.slice(-MAX_EVENT_TEXT_BUFFER)
+  if (!eventTextBuffers.has(bufferKey) && eventTextBuffers.size >= MAX_EVENT_TEXT_BUFFERS) {
+    eventTextBuffers.delete(eventTextBuffers.keys().next().value)
+  }
   eventTextBuffers.set(bufferKey, next)
   return next
 }
 
 function extractRunIds(text) {
   const runIds = []
-  const pattern = /^run_id:\s*(\S+)/gm
+  const pattern = /^run_id:\s*([^\s]+)\s*$/gm
   let match
   while ((match = pattern.exec(text)) !== null) {
-    runIds.push(match[1])
+    if (SAFE_RUN_ID.test(match[1])) runIds.push(match[1])
   }
   return runIds
+}
+
+function hasCompleteProtocolRecord(text, marker) {
+  return text.includes(marker) && extractRunIds(text).length > 0
 }
 
 function isFinalizingCancelText(text) {
@@ -233,7 +242,7 @@ function isOmoContinuationEvent(event, text) {
 function hasExplicitCancelIntent(text) {
   if (typeof text !== "string" || text.trim().length === 0) return false
   const normalized = text.toLowerCase()
-  const englishCancelWord = "(?:cancel|abort|terminate|kill)"
+  const englishCancelWord = "(?:cancel|abort|terminate|kill|stop)"
   const englishNegation = new RegExp(
     `\\b(?:do\\s+not|don't|dont|never|not|no\\s+need\\s+to|without)\\s+(?:\\w+\\s+){0,4}${englishCancelWord}\\b`,
     "i",
@@ -265,9 +274,9 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
   const allowHandoff = options.allowHandoff ?? true
   const allowCompletion = options.allowCompletion ?? true
   const allowCancel = options.allowCancel ?? true
-  const hasAllowedHandoff = allowHandoff && text.includes(LMAS_HANDOFF)
-  const hasAllowedCompletion = allowCompletion && text.includes(LMAS_COMPLETION)
-  const hasAllowedCancel = allowCancel && text.includes(LMAS_CANCEL)
+  const hasAllowedHandoff = allowHandoff && hasCompleteProtocolRecord(text, LMAS_HANDOFF)
+  const hasAllowedCompletion = allowCompletion && hasCompleteProtocolRecord(text, LMAS_COMPLETION)
+  const hasAllowedCancel = allowCancel && hasCompleteProtocolRecord(text, LMAS_CANCEL)
 
   if (!hasAllowedHandoff && !hasAllowedCompletion && !hasAllowedCancel) {
     return sessionGuards.get(sessionID)
@@ -296,8 +305,8 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
   const next = {
     active: runIds.length > 0,
     omoTurn: options.omoTurn ?? existing.omoTurn,
-    allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
-    allowStatus: runIds.length > 0 ? existing.allowStatus === true : false,
+    allowCancel: runIds.length > 0 && !hasAllowedHandoff ? existing.allowCancel === true : false,
+    allowStatus: runIds.length > 0 && !hasAllowedHandoff ? existing.allowStatus === true : false,
     runIds,
     updatedAt: now,
   }
@@ -404,7 +413,12 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
   }
 
   const text = getTextFromEvent(event)
-  if (!sessionID || !text) return undefined
+  if (!sessionID) return undefined
+
+  if (event?.type === "message.part.updated" || event?.type === "message.updated") {
+    eventTextBuffers.delete(getEventTextBufferKey(event, sessionID))
+  }
+  if (!text) return sessionGuards.get(sessionID)
 
   const role = getRoleFromEvent(event)
   const allowHandoff = role !== "user"
@@ -421,10 +435,10 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
       { allowHandoff, allowCancel },
     )
     if (
-      bufferedText.includes(LMAS_HANDOFF)
-      || bufferedText.includes(LMAS_STATUS)
-      || bufferedText.includes(LMAS_COMPLETION)
-      || bufferedText.includes(LMAS_CANCEL)
+      hasCompleteProtocolRecord(bufferedText, LMAS_HANDOFF)
+      || hasCompleteProtocolRecord(bufferedText, LMAS_STATUS)
+      || hasCompleteProtocolRecord(bufferedText, LMAS_COMPLETION)
+      || hasCompleteProtocolRecord(bufferedText, LMAS_CANCEL)
     ) {
       eventTextBuffers.delete(bufferKey)
     }
@@ -466,7 +480,6 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
     return next
   }
 
-  eventTextBuffers.set(sessionID, text.slice(-MAX_EVENT_TEXT_BUFFER))
   const message = event?.properties?.message
   const lmasState = updateSessionGuardFromText(sessionGuards, sessionID, text, now, { allowHandoff, allowCancel })
   if (text.includes(LMAS_COMPLETION) || text.includes(LMAS_CANCEL)) {
@@ -704,13 +717,12 @@ function normalizeToolName(toolName) {
 }
 
 export function createGuardedToolArgs(toolName, existingArgs, runIds) {
-  const message = createBlockedToolMessage(runIds)
   const normalizedToolName = normalizeToolName(toolName)
 
   if (normalizedToolName === "bash") {
     return {
       ...(existingArgs || {}),
-      command: `printf '%s\\n' ${JSON.stringify(message)}`,
+      command: "printf '%s\\n' 'LMAS handoff is active; tool execution was blocked by LMAS guard.'",
       description: "LMAS guard no-op while handoff is active",
       timeout: 10000,
     }
