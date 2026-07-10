@@ -54,6 +54,18 @@ for (const readmePath of ["README.md", "packages/let-my-agent-sleep/README.md"])
     throw new Error(`${readmePath} does not match OMO continuation hook policy`)
   }
 }
+
+const opencodeSiteDocs = readFileSync("site/docs/opencode.html", "utf8")
+for (const hook of expectedDisabledHooks) {
+  if (!opencodeSiteDocs.includes(`<code>${hook}</code>`)) {
+    throw new Error(`site/docs/opencode.html does not mention disabled OMO hook: ${hook}`)
+  }
+}
+for (const hook of intentionallyNotDisabledHooks) {
+  if (opencodeSiteDocs.includes(`<code>${hook}</code>`)) {
+    throw new Error(`site/docs/opencode.html documents a hook that should not be disabled: ${hook}`)
+  }
+}
 JS
 
 printf 'ok omo hook policy\n'
