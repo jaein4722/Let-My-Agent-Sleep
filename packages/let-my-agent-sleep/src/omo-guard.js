@@ -22,16 +22,23 @@ export function collectTextFromMessage(message) {
 
 function getSessionIDFromMessage(message) {
   return message?.info?.sessionID
+    || message?.info?.sessionId
     || (message?.parts || []).find((part) => part?.sessionID)?.sessionID
+    || (message?.parts || []).find((part) => part?.sessionId)?.sessionId
 }
 
 export function getSessionIDFromEvent(event) {
   return event?.properties?.sessionID
+    || event?.properties?.sessionId
     || event?.properties?.part?.sessionID
+    || event?.properties?.part?.sessionId
     || event?.properties?.info?.sessionID
+    || event?.properties?.info?.sessionId
     || event?.properties?.info?.id
     || event?.properties?.message?.info?.sessionID
+    || event?.properties?.message?.info?.sessionId
     || (event?.properties?.message?.parts || []).find((part) => part?.sessionID)?.sessionID
+    || (event?.properties?.message?.parts || []).find((part) => part?.sessionId)?.sessionId
 }
 
 export function getSessionIDFromPromptInput(input) {

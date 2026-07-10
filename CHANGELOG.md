@@ -51,6 +51,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - OpenCode runtime continuation guards now cover the same known OMO continuation command names that the installer disables.
 - The OpenCode runtime guard now no-ops reply-expecting prompt injection into a session with an active `LMAS_HANDOFF v1`, while still allowing `noReply` notifications and `LMAS_COMPLETION_EVENT v1`.
 - The OpenCode runtime guard now disables compaction autocontinue while an `LMAS_HANDOFF v1` is active.
+- OpenCode runtime guards now recognize camelCase `sessionId` fields in event and message payloads.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
 - Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.

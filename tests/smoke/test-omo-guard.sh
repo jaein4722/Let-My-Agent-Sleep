@@ -1395,6 +1395,53 @@ if (!getActiveOmoGuard(messageUpdatedInfoGuards, "ses_message_updated_info", 815
   throw new Error("expected SDK-shaped message.updated without parts not to clear active OMO guard")
 }
 
+const camelSessionGuards = new Map()
+const camelSessionBuffers = new Map()
+updateSessionGuardFromEvent(camelSessionGuards, camelSessionBuffers, {
+  type: "message.updated",
+  properties: {
+    message: {
+      info: {
+        id: "camel_session_handoff",
+        sessionId: "ses_camel_message_updated",
+        role: "assistant",
+      },
+      parts: [{
+        id: "camel_session_handoff_part",
+        sessionId: "ses_camel_message_updated",
+        type: "text",
+        text: "LMAS_HANDOFF v1\nrun_id: lmas_camel_message_updated\nstatus: STARTED",
+      }],
+    },
+  },
+}, 8160)
+const camelSessionOutput = {
+  messages: [
+    {
+      info: { id: "camel_session_continue", sessionId: "ses_camel_message_updated", role: "user" },
+      parts: [{
+        id: "camel_session_continue_part",
+        sessionId: "ses_camel_message_updated",
+        type: "text",
+        text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+        synthetic: true,
+        metadata: { compaction_continue: true },
+      }],
+    },
+  ],
+}
+applyOmoContinuationGuard(camelSessionOutput, camelSessionGuards, 8161)
+if (!camelSessionOutput.messages[0].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected camelCase sessionId message.updated event to activate guard")
+}
+updateSessionGuardFromEvent(camelSessionGuards, camelSessionBuffers, {
+  type: "session.deleted",
+  properties: { info: { sessionId: "ses_camel_message_updated" } },
+}, 8162)
+if (getActiveOmoGuard(camelSessionGuards, "ses_camel_message_updated", 8163)) {
+  throw new Error("expected session.deleted info.sessionId to clear guard")
+}
+
 const messageCompletionGuards = new Map()
 const messageCompletionBuffers = new Map()
 updateSessionGuardFromText(
@@ -1483,6 +1530,39 @@ if (!partOnlySessionOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTI
 }
 if (!getActiveOmoGuard(partOnlySessionGuards, "ses_part_only_transform", 8311)) {
   throw new Error("expected transform part-only session id to set active guard")
+}
+
+const camelPartOnlySessionGuards = new Map()
+const camelPartOnlySessionOutput = {
+  messages: [
+    {
+      info: { id: "camel_part_only_handoff", role: "assistant" },
+      parts: [{
+        id: "camel_part_only_handoff_part",
+        sessionId: "ses_camel_part_only_transform",
+        type: "text",
+        text: "LMAS_HANDOFF v1\nrun_id: lmas_camel_part_only_session\nstatus: STARTED",
+      }],
+    },
+    {
+      info: { id: "camel_part_only_omo", role: "user" },
+      parts: [{
+        id: "camel_part_only_omo_part",
+        sessionId: "ses_camel_part_only_transform",
+        type: "text",
+        text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+        synthetic: true,
+        metadata: { compaction_continue: true },
+      }],
+    },
+  ],
+}
+applyOmoContinuationGuard(camelPartOnlySessionOutput, camelPartOnlySessionGuards, 8320)
+if (!camelPartOnlySessionOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected transform camelCase part-only session id to neutralize OMO continuation")
+}
+if (!getActiveOmoGuard(camelPartOnlySessionGuards, "ses_camel_part_only_transform", 8321)) {
+  throw new Error("expected transform camelCase part-only session id to set active guard")
 }
 
 console.log("ok omo guard")
