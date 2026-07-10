@@ -5,6 +5,11 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-opencode-legacy-home.XXXXXX")
 trap 'rm -rf "$TMP_HOME"' EXIT
 
+unset OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
+export HOME="$TMP_HOME"
+export XDG_CONFIG_HOME="$TMP_HOME/.config"
+export XDG_CACHE_HOME="$TMP_HOME/.cache"
+
 mkdir -p "$TMP_HOME/.agents/skills/let-my-agent-sleep"
 mkdir -p "$TMP_HOME/.agents/skills/let-my-agent-sleep-codex"
 mkdir -p "$TMP_HOME/.agents/skills/let-my-agent-sleep-codex.bak.20260701T000000Z"
