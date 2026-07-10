@@ -133,6 +133,7 @@ OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin
 - `lmas_info`
 
 If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
+The OpenCode server that owns the session must still be running when the watched job finishes; otherwise LMAS keeps `resume_prompt.txt` for manual recovery.
 
 For OpenCode installs, LMAS writes an Oh My OpenAgent config entry that disables known OMO continuation hooks:
 
@@ -230,7 +231,7 @@ No. LMAS wraps the command the agent was already going to run.
 
 ### Does it require a daemon?
 
-No. LMAS uses `tmux` and plain files. There is no database, cloud scheduler, or project-specific callback.
+LMAS itself does not run a daemon. It uses `tmux` and plain files, with no database, cloud scheduler, or project-specific callback. OpenCode completion injection still requires the OpenCode server/session that owns the run to be alive when the job finishes; if it is not, LMAS leaves `resume_prompt.txt` for manual recovery.
 
 ### What happens if a job fails?
 
