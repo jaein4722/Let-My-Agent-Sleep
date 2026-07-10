@@ -41,6 +41,7 @@ All notable changes to Let My Agent Sleep are documented here.
 ### Changed
 
 - OpenCode installs now load `let-my-agent-sleep@latest` before continuation plugins and disable a broader set of known Oh My OpenAgent continuation hooks by default.
+- OpenCode installs now disable OMO `model-fallback` and `runtime-fallback` continuation hooks by default in addition to the loop-oriented hooks.
 - OpenCode installs now also disable OMO's `unstable-agent-babysitter` continuation hook by default while leaving `background-notification` available for no-reply notifications.
 - OpenCode runtime continuation guards now cover the same known OMO continuation command names that the installer disables.
 - The OpenCode runtime guard now no-ops reply-expecting prompt injection into a session with an active `LMAS_HANDOFF v1`, while still allowing `noReply` notifications and `LMAS_COMPLETION_EVENT v1`.
