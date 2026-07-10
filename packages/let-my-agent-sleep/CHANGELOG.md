@@ -2,7 +2,7 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
-## 0.2.7 - 2026-07-10
+## 0.3.0 - 2026-07-10
 
 ### Added
 
