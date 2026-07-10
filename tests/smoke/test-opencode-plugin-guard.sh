@@ -838,6 +838,19 @@ await plugin["permission.ask"](
 if (cancelCamelCallPermissionOutput.status !== "allow") {
   throw new Error("expected allowed lmas_cancel callId alias to pass permission.ask")
 }
+const cancelObjectToolBeforeOutput = { args: { run_id: "lmas_cancel_intent" } }
+await plugin["tool.execute.before"](
+  { tool: { name: "lmas_cancel" }, sessionID: cancelIntentSessionID, callID: "call_cancel_object_tool" },
+  cancelObjectToolBeforeOutput,
+)
+const cancelObjectToolPermissionOutput = {}
+await plugin["permission.ask"](
+  { tool: { name: "lmas_cancel" }, sessionID: cancelIntentSessionID, callID: "call_cancel_object_tool" },
+  cancelObjectToolPermissionOutput,
+)
+if (cancelObjectToolPermissionOutput.status !== "allow") {
+  throw new Error("expected object-shaped lmas_cancel tool to pass permission.ask")
+}
 const cancelCompactionAutocontinueBeforeOutput = { enabled: true }
 await plugin["experimental.compaction.autocontinue"](
   { sessionID: cancelIntentSessionID, agent: "sisyphus" },
@@ -1171,6 +1184,15 @@ await plugin["tool.execute.before"](
 )
 if (!mcpBashOutput.args.command.includes("LMAS handoff is active")) {
   throw new Error("expected plugin tool hook to no-op mcp_bash while guard is active")
+}
+
+const objectBashOutput = { args: { command: "cat stdout.log", timeout: 60000 } }
+await plugin["tool.execute.before"](
+  { tool: { name: "bash" }, sessionID, callID: "call_object_bash" },
+  objectBashOutput,
+)
+if (!objectBashOutput.args.command.includes("LMAS handoff is active")) {
+  throw new Error("expected plugin tool hook to no-op object-shaped bash while guard is active")
 }
 
 let blocked = false

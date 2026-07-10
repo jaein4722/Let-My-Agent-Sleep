@@ -657,8 +657,21 @@ export function createBlockedToolMessage(runIds) {
   return `LMAS handoff is active (${runList}); tool execution was blocked by LMAS guard. Stop this turn and wait for LMAS_COMPLETION_EVENT v1.`
 }
 
+function getToolName(toolRef) {
+  if (typeof toolRef === "string") return toolRef
+  if (!toolRef || typeof toolRef !== "object") return ""
+  return toolRef.name
+    || toolRef.id
+    || toolRef.tool
+    || toolRef.toolName
+    || toolRef.command
+    || toolRef.metadata?.name
+    || toolRef.metadata?.tool
+    || ""
+}
+
 function normalizeToolName(toolName) {
-  return String(toolName || "").trim().replace(/^mcp_/i, "").toLowerCase()
+  return String(getToolName(toolName) || "").trim().replace(/^mcp_/i, "").toLowerCase()
 }
 
 export function createGuardedToolArgs(toolName, existingArgs, runIds) {

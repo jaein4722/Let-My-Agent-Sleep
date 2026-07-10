@@ -313,8 +313,21 @@ function guardAllowsCancel(guard, runRef) {
   return (guard.runIds || []).some((runId) => value === runId || value.endsWith(`/${runId}`))
 }
 
+function getToolName(toolRef) {
+  if (typeof toolRef === "string") return toolRef
+  if (!toolRef || typeof toolRef !== "object") return ""
+  return toolRef.name
+    || toolRef.id
+    || toolRef.tool
+    || toolRef.toolName
+    || toolRef.command
+    || toolRef.metadata?.name
+    || toolRef.metadata?.tool
+    || ""
+}
+
 function normalizeToolName(toolName) {
-  return String(toolName || "").trim().replace(/^mcp_/i, "").toLowerCase()
+  return String(getToolName(toolName) || "").trim().replace(/^mcp_/i, "").toLowerCase()
 }
 
 function isCancelTool(toolName) {
