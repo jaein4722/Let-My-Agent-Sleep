@@ -57,6 +57,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - OpenCode runtime guards now recognize top-level role fields in event and message payloads.
 - OpenCode cancellation permission handshakes now recognize camelCase `callId` fields.
 - OpenCode runtime guards now normalize object-shaped tool identifiers for cancellation and guarded tool no-ops.
+- OpenCode plugin tools and runtime hooks now recognize camelCase `sessionId` fields in hook inputs and tool contexts.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
 - Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.

@@ -54,6 +54,14 @@ function getSessionActiveHandoff(sessionID) {
   return guard?.active ? guard : undefined
 }
 
+function getRuntimeSessionID(input) {
+  return input?.sessionID
+    || input?.sessionId
+    || input?.session?.id
+    || input?.context?.sessionID
+    || input?.context?.sessionId
+}
+
 function createPromptGuardResponse(sessionID, runIds) {
   return {
     data: {
@@ -420,7 +428,8 @@ function createStartTool(defaultServerUrl) {
       notify_url: tool.schema.string().optional().describe("Optional URL that receives the completion resume prompt as a secondary notification."),
     },
     async execute(args, context) {
-      const guard = getSessionOmoGuard(context.sessionID)
+      const sessionID = getRuntimeSessionID(context)
+      const guard = getSessionOmoGuard(sessionID)
       if (guard) return createBlockedToolMessage(guard.runIds)
 
       const cwd = args.cwd || context.directory || context.worktree || process.cwd()
@@ -428,7 +437,7 @@ function createStartTool(defaultServerUrl) {
       const serverUrl = args.server_url || process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
       const env = {
         ...process.env,
-        LMAS_OPENCODE_SESSION_ID: context.sessionID,
+        LMAS_OPENCODE_SESSION_ID: sessionID,
         LMAS_OPENCODE_SERVER_URL: serverUrl,
       }
 
@@ -477,7 +486,7 @@ function createStartTool(defaultServerUrl) {
       }
 
       const result = stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
-      updateSessionGuardFromText(sessionGuards, context.sessionID, result, Date.now(), {
+      updateSessionGuardFromText(sessionGuards, sessionID, result, Date.now(), {
         allowHandoff: true,
         omoTurn: true,
       })
@@ -496,7 +505,8 @@ function createStatusTool() {
       cwd: tool.schema.string().optional().describe("Working directory. Defaults to the current session directory."),
     },
     async execute(args, context) {
-      const guard = getSessionOmoGuard(context.sessionID)
+      const sessionID = getRuntimeSessionID(context)
+      const guard = getSessionOmoGuard(sessionID)
       if (guard) return createBlockedToolMessage(guard.runIds)
 
       const cwd = args.cwd || context.directory || context.worktree || process.cwd()
@@ -525,7 +535,7 @@ function createStatusTool() {
       }
 
       const result = stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
-      updateSessionGuardFromStatusText(sessionGuards, context.sessionID, result)
+      updateSessionGuardFromStatusText(sessionGuards, sessionID, result)
       return result
     },
   })
@@ -543,7 +553,8 @@ function createCancelTool(defaultServerUrl) {
       server_url: tool.schema.string().optional().describe("OpenCode server URL. Defaults to this plugin's current OpenCode server URL."),
     },
     async execute(args, context) {
-      const guard = getSessionOmoGuard(context.sessionID)
+      const sessionID = getRuntimeSessionID(context)
+      const guard = getSessionOmoGuard(sessionID)
       if (guard && !guardAllowsCancel(guard, args.run_id)) return createBlockedToolMessage(guard.runIds)
 
       const cwd = args.cwd || context.directory || context.worktree || process.cwd()
@@ -551,7 +562,7 @@ function createCancelTool(defaultServerUrl) {
       const serverUrl = args.server_url || process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
       const env = {
         ...process.env,
-        LMAS_OPENCODE_SESSION_ID: context.sessionID,
+        LMAS_OPENCODE_SESSION_ID: sessionID,
         LMAS_OPENCODE_SERVER_URL: serverUrl,
       }
       const command = ["bash", script, "cancel"]
@@ -582,7 +593,7 @@ function createCancelTool(defaultServerUrl) {
       }
 
       const result = stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
-      updateSessionGuardFromCancelText(sessionGuards, context.sessionID, result)
+      updateSessionGuardFromCancelText(sessionGuards, sessionID, result)
       return result
     },
   })
@@ -594,13 +605,14 @@ function createInfoTool(defaultServerUrl) {
       "Return Let My Agent Sleep OpenCode plugin diagnostic information. Use for install/debug checks, not for polling active runs.",
     args: {},
     async execute(_args, context) {
+      const sessionID = getRuntimeSessionID(context)
       return [
         "LMAS_INFO v1",
         `name: ${packageJson.name}`,
         `version: ${packageJson.version}`,
         "adapter: opencode",
         `server_url: ${process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl}`,
-        `session_id: ${context.sessionID || ""}`,
+        `session_id: ${sessionID || ""}`,
         `guarded_sessions: ${sessionGuards.size}`,
       ].join("\n")
     },
@@ -630,20 +642,21 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     },
     "experimental.chat.messages.transform": (input, output) => {
       ensureFetchGuard()
-      applyOmoContinuationGuard(output, input?.sessionID)
+      applyOmoContinuationGuard(output, getRuntimeSessionID(input))
     },
     "experimental.compaction.autocontinue": async (input, output) => {
       ensureFetchGuard()
-      const guard = getSessionActiveHandoff(input?.sessionID)
+      const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
       if (!guard) return
       output.enabled = false
     },
     "tool.execute.before": async (input, output) => {
       ensureFetchGuard()
-      const guard = getSessionOmoGuard(input.sessionID)
+      const sessionID = getRuntimeSessionID(input)
+      const guard = getSessionOmoGuard(sessionID)
       if (!guard) return
       if (isCancelTool(input.tool) && guardAllowsCancel(guard, output.args?.run_id)) {
-        const key = callKey(input.sessionID, getCallID(input))
+        const key = callKey(sessionID, getCallID(input))
         if (key) allowedCancelCallIds.add(key)
         return
       }
@@ -657,22 +670,24 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     },
     "command.execute.before": async (input, output) => {
       ensureFetchGuard()
-      let guard = getSessionOmoGuard(input.sessionID)
+      const sessionID = getRuntimeSessionID(input)
+      let guard = getSessionOmoGuard(sessionID)
       if (!guard) {
-        const activeGuard = getSessionActiveHandoff(input.sessionID)
+        const activeGuard = getSessionActiveHandoff(sessionID)
         const internalCommand = isReplyExpectingInternalPromptInput({
           body: { parts: output.parts || [] },
         })
         if (!activeGuard || (!internalCommand && !isOmoContinuationCommand(input.command))) return
         guard = activeGuard
       }
-      output.parts = [createCommandGuardPart(input.sessionID, guard.runIds)]
+      output.parts = [createCommandGuardPart(sessionID, guard.runIds)]
     },
     "permission.ask": async (input, output) => {
       ensureFetchGuard()
-      const guard = getSessionOmoGuard(input.sessionID)
+      const sessionID = getRuntimeSessionID(input)
+      const guard = getSessionOmoGuard(sessionID)
       if (!guard) return
-      const key = callKey(input.sessionID, getCallID(input))
+      const key = callKey(sessionID, getCallID(input))
       if (key && allowedCancelCallIds.has(key)) {
         allowedCancelCallIds.delete(key)
         output.status = "allow"

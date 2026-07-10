@@ -657,7 +657,7 @@ const immediateGuardSessionID = "plugin_immediate_guard_session"
 try {
   await plugin.tool.lmas_start.execute(
     { command: "sleep 60" },
-    { sessionID: immediateGuardSessionID, directory: fakeWorkspace, worktree: fakeWorkspace },
+    { sessionId: immediateGuardSessionID, directory: fakeWorkspace, worktree: fakeWorkspace },
   )
 } finally {
   delete process.env.LMAS_ROOT
@@ -1152,6 +1152,23 @@ if (!noSessionOutput.messages[0].parts[0].text.includes("[LMAS GUARD: ACTIVE HAN
   throw new Error("expected plugin transform hook to use input.sessionID fallback")
 }
 
+const camelSessionNoSessionOutput = {
+  messages: [{
+    info: { id: "omo_camel_session_no_session_id", role: "user" },
+    parts: [{
+      id: "omo_camel_session_no_session_id_part",
+      type: "text",
+      text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      synthetic: true,
+      metadata: { compaction_continue: true },
+    }],
+  }],
+}
+await plugin["experimental.chat.messages.transform"]({ sessionId: sessionID }, camelSessionNoSessionOutput)
+if (!camelSessionNoSessionOutput.messages[0].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected plugin transform hook to use input.sessionId fallback")
+}
+
 const bashArgs = { command: "cat stdout.log", timeout: 60000 }
 const bashOutput = { args: bashArgs }
 await plugin["tool.execute.before"](
@@ -1195,6 +1212,15 @@ if (!objectBashOutput.args.command.includes("LMAS handoff is active")) {
   throw new Error("expected plugin tool hook to no-op object-shaped bash while guard is active")
 }
 
+const camelSessionBashOutput = { args: { command: "cat stdout.log", timeout: 60000 } }
+await plugin["tool.execute.before"](
+  { tool: "bash", sessionId: sessionID, callID: "call_camel_session_bash" },
+  camelSessionBashOutput,
+)
+if (!camelSessionBashOutput.args.command.includes("LMAS handoff is active")) {
+  throw new Error("expected plugin tool hook to no-op bash with camelCase session id")
+}
+
 let blocked = false
 try {
   await plugin["tool.execute.before"](
@@ -1217,6 +1243,24 @@ if (permissionOutput.status !== "deny") {
   throw new Error("expected plugin permission hook to deny while guard is active")
 }
 
+const camelSessionPermissionOutput = {}
+await plugin["permission.ask"](
+  { tool: "bash", sessionId: sessionID, callID: "call_camel_session_permission" },
+  camelSessionPermissionOutput,
+)
+if (camelSessionPermissionOutput.status !== "deny") {
+  throw new Error("expected plugin permission hook to deny with camelCase session id")
+}
+
+const camelSessionAutocontinueOutput = { enabled: true }
+await plugin["experimental.compaction.autocontinue"](
+  { sessionId: sessionID, agent: "sisyphus" },
+  camelSessionAutocontinueOutput,
+)
+if (camelSessionAutocontinueOutput.enabled !== false) {
+  throw new Error("expected plugin compaction autocontinue hook to disable with camelCase session id")
+}
+
 const commandOutput = {
   parts: [{
     type: "text",
@@ -1233,6 +1277,24 @@ if (
   || commandOutput.parts[0].metadata?.lmas_guard !== true
 ) {
   throw new Error("expected plugin command hook to neutralize slash commands while guard is active")
+}
+
+const camelSessionCommandOutput = {
+  parts: [{
+    type: "text",
+    text: "/start-work should not execute during LMAS handoff",
+  }],
+}
+await plugin["command.execute.before"](
+  { command: "start-work", arguments: "", sessionId: sessionID },
+  camelSessionCommandOutput,
+)
+if (
+  camelSessionCommandOutput.parts.length !== 1
+  || !camelSessionCommandOutput.parts[0].text.includes("LMAS handoff is active")
+  || camelSessionCommandOutput.parts[0].metadata?.lmas_guard !== true
+) {
+  throw new Error("expected plugin command hook to neutralize slash commands with camelCase session id")
 }
 
 await plugin.event({
