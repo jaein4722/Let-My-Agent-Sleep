@@ -1155,6 +1155,83 @@ if (chatMessageCancelPermissionOutput.status !== "allow") {
   throw new Error("expected chat.message explicit user cancel request to allow lmas_cancel permission")
 }
 
+const fallbackCliSessionID = "plugin_fallback_cli_session"
+await plugin["tool.execute.after"](
+  {
+    tool: "bash",
+    sessionID: fallbackCliSessionID,
+    callID: "call_fallback_cli_start",
+    args: { command: "lmas start --adapter opencode -- sleep 60" },
+  },
+  {
+    title: "bash",
+    output: "LMAS_HANDOFF v1\nrun_id: lmas_fallback_cli\nstatus: STARTED\n",
+    metadata: {},
+  },
+)
+let fallbackCliBlocked = false
+try {
+  await plugin["tool.execute.before"](
+    { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_todowrite" },
+    { args: { todos: [] } },
+  )
+} catch (error) {
+  fallbackCliBlocked = String(error?.message || "").includes("LMAS handoff is active")
+}
+if (!fallbackCliBlocked) {
+  throw new Error("expected tool.execute.after LMAS_HANDOFF output to activate guard for CLI fallback")
+}
+await plugin.event({
+  event: {
+    type: "message.updated",
+    properties: {
+      message: message("user", "Please check status once.", "fallback_cli_real_user_status", fallbackCliSessionID),
+    },
+  },
+})
+await plugin["tool.execute.after"](
+  {
+    tool: "bash",
+    sessionID: fallbackCliSessionID,
+    callID: "call_fallback_cli_status",
+    args: { command: "lmas status lmas_fallback_cli" },
+  },
+  {
+    title: "bash",
+    output: "LMAS_STATUS v1\nrun_id: lmas_fallback_cli\nstatus: RUNNING\n",
+    metadata: {},
+  },
+)
+let fallbackCliStatusBlocked = false
+try {
+  await plugin["tool.execute.before"](
+    { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_after_status" },
+    { args: { todos: [] } },
+  )
+} catch (error) {
+  fallbackCliStatusBlocked = String(error?.message || "").includes("LMAS handoff is active")
+}
+if (!fallbackCliStatusBlocked) {
+  throw new Error("expected tool.execute.after LMAS_STATUS RUNNING output to reactivate guard for CLI fallback")
+}
+await plugin["tool.execute.after"](
+  {
+    tool: "bash",
+    sessionID: fallbackCliSessionID,
+    callID: "call_fallback_cli_completion",
+    args: { command: "cat .lmas/runs/lmas_fallback_cli/resume_prompt.txt" },
+  },
+  {
+    title: "bash",
+    output: "LMAS_COMPLETION_EVENT v1\nrun_id: lmas_fallback_cli\nstatus: SUCCEEDED\n",
+    metadata: {},
+  },
+)
+await plugin["tool.execute.before"](
+  { tool: "todowrite", sessionID: fallbackCliSessionID, callID: "call_fallback_cli_after_completion" },
+  { args: { todos: [] } },
+)
+
 const output = {
   messages: [
     message(

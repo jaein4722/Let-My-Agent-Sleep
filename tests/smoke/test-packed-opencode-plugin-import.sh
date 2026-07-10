@@ -61,6 +61,7 @@ for (const hookName of [
   "experimental.compaction.autocontinue",
   "experimental.session.compacting",
   "tool.execute.before",
+  "tool.execute.after",
   "command.execute.before",
   "permission.ask",
 ]) {

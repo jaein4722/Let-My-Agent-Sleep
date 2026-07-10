@@ -422,6 +422,18 @@ function updateSessionGuardFromChatMessage(input, output) {
   })
 }
 
+function updateSessionGuardFromToolOutput(input, output) {
+  const sessionID = getRuntimeSessionID(input)
+  const text = typeof output?.output === "string" ? output.output : ""
+  if (!sessionID || text.length === 0) return
+  updateSessionGuardFromText(sessionGuards, sessionID, text, Date.now(), {
+    allowHandoff: true,
+    allowCancel: true,
+    omoTurn: text.includes("LMAS_HANDOFF v1") ? true : undefined,
+  })
+  updateSessionGuardFromStatusText(sessionGuards, sessionID, text)
+}
+
 export function findLmasScript(cwd, context) {
   const roots = [
     process.env.LMAS_ROOT,
@@ -709,6 +721,10 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
         return
       }
       throw new Error(action.message)
+    },
+    "tool.execute.after": async (input, output) => {
+      ensureFetchGuard()
+      updateSessionGuardFromToolOutput(input, output)
     },
     "command.execute.before": async (input, output) => {
       ensureFetchGuard()
