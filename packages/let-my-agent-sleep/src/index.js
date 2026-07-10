@@ -726,6 +726,16 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       ensureFetchGuard()
       updateSessionGuardFromToolOutput(input, output)
     },
+    "shell.env": async (input, output) => {
+      ensureFetchGuard()
+      const sessionID = getRuntimeSessionID(input)
+      if (!sessionID) return
+      if (!output.env || typeof output.env !== "object" || Array.isArray(output.env)) output.env = {}
+      output.env.LMAS_OPENCODE_SESSION_ID = sessionID
+      if (!output.env.LMAS_OPENCODE_SERVER_URL) {
+        output.env.LMAS_OPENCODE_SERVER_URL = process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl
+      }
+    },
     "command.execute.before": async (input, output) => {
       ensureFetchGuard()
       const sessionID = getRuntimeSessionID(input)

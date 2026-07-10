@@ -62,6 +62,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - OpenCode `chat.message` hooks now update LMAS handoff, continuation, and explicit cancel state before subsequent tool or permission hooks run.
 - OpenCode system prompt transforms now preserve active LMAS handoff state when a model call still proceeds during a handoff.
 - OpenCode `tool.execute.after` hooks now learn LMAS handoff, status, completion, and cancel state from CLI fallback tool output.
+- OpenCode `shell.env` hooks now inject `LMAS_OPENCODE_SESSION_ID` and default `LMAS_OPENCODE_SERVER_URL` so CLI fallback runs can resume the same OpenCode session.
 - OpenCode auth handling now uses the same username/password behavior in the adapter and doctor checks.
 - Release CI now uses `npm ci`, Node 24, full smoke tests, pack dry runs, and patch hygiene checks over the pushed or PR change range.
 - Release CI now checks site docs before publishing and uses the same `npm run pack` path as local release checks.

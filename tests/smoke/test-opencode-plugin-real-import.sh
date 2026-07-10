@@ -28,6 +28,7 @@ for (const hookName of [
   "experimental.session.compacting",
   "tool.execute.before",
   "tool.execute.after",
+  "shell.env",
   "command.execute.before",
   "permission.ask",
 ]) {

@@ -1156,6 +1156,28 @@ if (chatMessageCancelPermissionOutput.status !== "allow") {
 }
 
 const fallbackCliSessionID = "plugin_fallback_cli_session"
+const fallbackCliEnvOutput = { env: {} }
+await plugin["shell.env"](
+  { cwd: fakeWorkspace, sessionID: fallbackCliSessionID, callID: "call_fallback_cli_shell_env" },
+  fallbackCliEnvOutput,
+)
+if (
+  fallbackCliEnvOutput.env.LMAS_OPENCODE_SESSION_ID !== fallbackCliSessionID
+  || fallbackCliEnvOutput.env.LMAS_OPENCODE_SERVER_URL !== "http://127.0.0.1:4096"
+) {
+  throw new Error("expected shell.env to inject OpenCode session/server env for LMAS CLI fallback")
+}
+const fallbackCliExistingEnvOutput = { env: { LMAS_OPENCODE_SERVER_URL: "http://127.0.0.1:4999" } }
+await plugin["shell.env"](
+  { cwd: fakeWorkspace, sessionID: fallbackCliSessionID, callID: "call_fallback_cli_shell_existing_env" },
+  fallbackCliExistingEnvOutput,
+)
+if (
+  fallbackCliExistingEnvOutput.env.LMAS_OPENCODE_SESSION_ID !== fallbackCliSessionID
+  || fallbackCliExistingEnvOutput.env.LMAS_OPENCODE_SERVER_URL !== "http://127.0.0.1:4999"
+) {
+  throw new Error("expected shell.env to preserve explicit OpenCode server env while setting session id")
+}
 await plugin["tool.execute.after"](
   {
     tool: "bash",
