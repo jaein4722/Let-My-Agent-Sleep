@@ -518,7 +518,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
         activeRuns.delete(runId)
       }
     }
-    if (text.includes(LMAS_CANCEL)) {
+    if (text.includes(LMAS_CANCEL) && !isFinalizingCancelText(text)) {
       for (const runId of extractRunIds(text)) {
         cancelledRunIds.push(runId)
         activeRuns.delete(runId)

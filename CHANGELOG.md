@@ -80,6 +80,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed status/list handling so staged `.completion_event.txt` files remain `FINALIZING` until the public completion event is published.
 - Fixed OpenCode guard handling so `FINALIZING` status keeps continuation tools blocked like `RUNNING`.
 - Fixed `lmas cancel` output so finalizing runs include the documented explanatory message.
+- Fixed OpenCode history guard handling so finalizing `LMAS_CANCEL` events do not clear active handoffs before the completion event is published.
 - Fixed cancellation finalizing order so duplicate cancel/status calls preserve `CANCELLED` while the public completion event is still being prepared.
 - Fixed OpenCode guard handling so finalizing `LMAS_CANCEL v1` results do not unblock continuation before the completion event is published.
 

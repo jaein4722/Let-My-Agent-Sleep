@@ -1085,6 +1085,38 @@ if (!getActiveOmoGuard(finalizingCancelGuards, "ses_finalizing_cancel", 7059)?.r
   throw new Error("expected event-visible finalizing LMAS_CANCEL to keep guard active")
 }
 
+const finalizingCancelHistoryOutput = {
+  messages: [
+    message(
+      "assistant",
+      "LMAS_HANDOFF v1\nrun_id: lmas_finalizing_cancel_history\nstatus: STARTED",
+      "finalizing_cancel_history_handoff",
+      "ses_finalizing_cancel_history",
+    ),
+    message(
+      "assistant",
+      "LMAS_CANCEL v1\nrun_id: lmas_finalizing_cancel_history\nstatus: ALREADY_COMPLETED\nexisting_status: CANCELLED\nmessage: job has already exited; completion event is finalizing\n",
+      "finalizing_cancel_history_cancel",
+      "ses_finalizing_cancel_history",
+    ),
+    message(
+      "user",
+      "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+      "finalizing_cancel_history_continue",
+      "ses_finalizing_cancel_history",
+    ),
+  ],
+}
+finalizingCancelHistoryOutput.messages[2].parts[0].synthetic = true
+finalizingCancelHistoryOutput.messages[2].parts[0].metadata = { compaction_continue: true }
+const finalizingCancelHistoryState = applyOmoContinuationGuard(finalizingCancelHistoryOutput, new Map(), 7060)
+if (!finalizingCancelHistoryState.active || !finalizingCancelHistoryState.activeRunIds.includes("lmas_finalizing_cancel_history")) {
+  throw new Error("expected history-visible finalizing LMAS_CANCEL to keep handoff active")
+}
+if (!finalizingCancelHistoryOutput.messages[2].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("expected history-visible finalizing LMAS_CANCEL to keep OMO continuation neutralized")
+}
+
 const cancelIntentGuards = new Map()
 const cancelIntentBuffers = new Map()
 updateSessionGuardFromText(
