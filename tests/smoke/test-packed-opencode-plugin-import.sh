@@ -56,6 +56,7 @@ if (typeof plugin !== "function") {
 for (const hookName of [
   "event",
   "experimental.chat.messages.transform",
+  "experimental.compaction.autocontinue",
   "tool.execute.before",
   "permission.ask",
 ]) {
@@ -127,6 +128,16 @@ if (blockedMarkerlessPrompt.status !== 204 || blockedMarkerlessPrompt.headers.ge
 
 if (fetchCalls !== 0) {
   throw new Error("packed plugin markerless prompt injection reached underlying fetch")
+}
+
+const compactionAutocontinueOutput = { enabled: true }
+await hooks["experimental.compaction.autocontinue"](
+  { sessionID: "ses_packed_import", agent: "sisyphus" },
+  compactionAutocontinueOutput,
+)
+
+if (compactionAutocontinueOutput.enabled !== false) {
+  throw new Error("packed plugin did not disable compaction autocontinue during active handoff")
 }
 
 const args = { command: "cat stdout.log", timeout: 60000 }

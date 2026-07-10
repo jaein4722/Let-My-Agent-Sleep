@@ -22,6 +22,7 @@ if (typeof plugin !== "function") {
 for (const hookName of [
   "event",
   "experimental.chat.messages.transform",
+  "experimental.compaction.autocontinue",
   "tool.execute.before",
   "permission.ask",
 ]) {
