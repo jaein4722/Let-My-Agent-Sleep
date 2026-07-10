@@ -54,6 +54,16 @@ function getSessionActiveHandoff(sessionID) {
   return guard?.active ? guard : undefined
 }
 
+function markGuardedPollingAttempt(sessionID, guard) {
+  if (!sessionID || !guard) return
+  sessionGuards.set(sessionID, {
+    ...guard,
+    omoTurn: true,
+    allowStatus: false,
+    updatedAt: Date.now(),
+  })
+}
+
 function getRuntimeSessionID(input) {
   return input?.sessionID
     || input?.sessionId
@@ -352,9 +362,21 @@ function isCancelTool(toolName) {
   return normalized === "lmas_cancel" || normalized.endsWith(".lmas_cancel")
 }
 
+function isStatusTool(toolName) {
+  const normalized = normalizeToolName(toolName)
+  return normalized === "lmas_status" || normalized.endsWith(".lmas_status")
+}
+
 function isOmoContinuationCommand(command) {
   const normalized = normalizeToolName(command)
   return normalized === "start-work" || omoContinuationHooks.includes(normalized)
+}
+
+function argsLookLikeLmasStatus(existingArgs) {
+  const command = String(existingArgs?.command || existingArgs?.cmd || existingArgs?.script || "")
+  if (!command) return false
+  return /\b(lmas|let-my-agent-sleep)\s+status\b/.test(command)
+    || /\blmas\.sh\s+status\b/.test(command)
 }
 
 function collectPermissionText(value, chunks = []) {
@@ -543,6 +565,11 @@ function createStatusTool() {
     },
     async execute(args, context) {
       const sessionID = getRuntimeSessionID(context)
+      const activeGuard = getSessionActiveHandoff(sessionID)
+      if (activeGuard && !activeGuard.allowStatus) {
+        markGuardedPollingAttempt(sessionID, activeGuard)
+        return createBlockedToolMessage(activeGuard.runIds)
+      }
       const guard = getSessionOmoGuard(sessionID)
       if (guard) return createBlockedToolMessage(guard.runIds)
 
@@ -708,6 +735,16 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     "tool.execute.before": async (input, output) => {
       ensureFetchGuard()
       const sessionID = getRuntimeSessionID(input)
+      const activeGuard = getSessionActiveHandoff(sessionID)
+      if (activeGuard && !activeGuard.allowStatus && (isStatusTool(input.tool) || argsLookLikeLmasStatus(output.args))) {
+        markGuardedPollingAttempt(sessionID, activeGuard)
+        const action = createGuardedToolAction(input.tool, output.args, activeGuard.runIds)
+        if (action.type === "args") {
+          replaceArgsInPlace(output, action.args)
+          return
+        }
+        throw new Error(action.message)
+      }
       const guard = getSessionOmoGuard(sessionID)
       if (!guard) return
       if (isCancelTool(input.tool) && guardAllowsCancel(guard, output.args?.run_id)) {

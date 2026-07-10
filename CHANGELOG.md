@@ -97,6 +97,7 @@ All notable changes to Let My Agent Sleep are documented here.
 - Fixed cancellation finalizing order so duplicate cancel/status calls preserve `CANCELLED` while the public completion event is still being prepared.
 - Fixed OpenCode guard handling so finalizing `LMAS_CANCEL v1` results do not unblock continuation before the completion event is published.
 - Fixed OpenCode guard handling so user-pasted `LMAS_CANCEL v1` logs do not clear active handoffs.
+- Fixed OpenCode `lmas_status` guard handling so active handoffs only allow status checks after an explicit user status request; non-status user follow-ups cannot accidentally reopen polling.
 
 ## 0.2.6 and earlier
 

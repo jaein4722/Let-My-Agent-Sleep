@@ -294,6 +294,36 @@ if (activeGuards.get("ses_test")?.allowCancel === true) {
   throw new Error("expected later real user non-cancel text to clear prior transform-path cancel permission")
 }
 
+const statusIntentOutput = {
+  messages: [
+    message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_status_intent\nstatus: STARTED", "status_intent_handoff", "ses_status_intent"),
+    message("user", "Please check the LMAS status now.", "status_intent_user", "ses_status_intent"),
+  ],
+}
+const statusIntentGuards = new Map()
+const statusIntentState = applyOmoContinuationGuard(statusIntentOutput, statusIntentGuards, 1107)
+if (!statusIntentState.latestUserHasStatusIntent) {
+  throw new Error("expected transform path to detect explicit user status intent")
+}
+if (statusIntentGuards.get("ses_status_intent")?.allowStatus !== true) {
+  throw new Error("expected explicit user status intent to allow one status check")
+}
+
+const noStatusIntentOutput = {
+  messages: [
+    message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_no_status_intent\nstatus: STARTED", "no_status_intent_handoff", "ses_no_status_intent"),
+    message("user", "Thanks. Leave the LMAS job running.", "no_status_intent_user", "ses_no_status_intent"),
+  ],
+}
+const noStatusIntentGuards = new Map()
+const noStatusIntentState = applyOmoContinuationGuard(noStatusIntentOutput, noStatusIntentGuards, 1108)
+if (noStatusIntentState.latestUserHasStatusIntent) {
+  throw new Error("did not expect non-status real user text to allow status checks")
+}
+if (noStatusIntentGuards.get("ses_no_status_intent")?.allowStatus === true) {
+  throw new Error("did not expect non-status real user text to set allowStatus")
+}
+
 const negatedCancelOutput = {
   messages: [
     message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_negated_cancel\nstatus: STARTED", "negated_cancel_handoff", "ses_negated_cancel"),

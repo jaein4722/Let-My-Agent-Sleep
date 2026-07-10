@@ -718,6 +718,46 @@ await plugin.event({
   event: {
     type: "message.updated",
     properties: {
+      message: message("user", "Thanks. Leave the LMAS job running.", "immediate_guard_real_user_no_status", immediateGuardSessionID),
+    },
+  },
+})
+let nonStatusSpawned = false
+globalThis.Bun = {
+  spawn() {
+    nonStatusSpawned = true
+    return {
+      stdout: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("LMAS_STATUS v1\nrun_id: lmas_immediate_guard\nstatus: RUNNING\n"))
+          controller.close()
+        },
+      }),
+      stderr: new ReadableStream({
+        start(controller) {
+          controller.close()
+        },
+      }),
+      exited: Promise.resolve(0),
+    }
+  },
+}
+let nonStatusResult = ""
+try {
+  nonStatusResult = await plugin.tool.lmas_status.execute(
+    { run_id: "lmas_immediate_guard" },
+    { sessionID: immediateGuardSessionID, directory: fakeWorkspace, worktree: fakeWorkspace },
+  )
+} finally {
+  restoreBun()
+}
+if (nonStatusSpawned || !nonStatusResult.includes("LMAS handoff is active")) {
+  throw new Error("expected lmas_status to be blocked after non-status real user follow-up")
+}
+await plugin.event({
+  event: {
+    type: "message.updated",
+    properties: {
       message: message("user", "Please check the LMAS status now.", "immediate_guard_real_user_status", immediateGuardSessionID),
     },
   },

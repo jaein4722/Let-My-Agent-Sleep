@@ -245,6 +245,21 @@ function hasExplicitCancelIntent(text) {
     || /취소|중단|종료/.test(text)
 }
 
+function hasExplicitStatusIntent(text) {
+  if (typeof text !== "string" || text.trim().length === 0) return false
+  const normalized = text.toLowerCase()
+  const englishNegation = /\b(?:do\s+not|don't|dont|never|no\s+need\s+to|without)\s+(?:\w+\s+){0,4}(?:status|check|inspect)\b/i
+  const koreanNegation = /확인하지\s*(마|말|마세요|말아|않)|상태\s*(확인)?\s*(금지|하지\s*마)/
+  if (englishNegation.test(normalized) || koreanNegation.test(text)) return false
+
+  const englishStatus = /\b(status|progress|check|inspect|what'?s\s+up|how\s+is|how's)\b/i
+  const englishSubject = /\b(lmas|run|job|handoff|training|evaluation|eval|experiment|process)\b/i
+  const koreanStatus = /(상태|진행|확인|어떻게|됐|되었|끝났|완료)/
+  const koreanSubject = /(lmas|작업|학습|평가|실험|프로세스|런|잡)/
+  return (englishStatus.test(normalized) && englishSubject.test(normalized))
+    || (koreanStatus.test(text) && koreanSubject.test(text))
+}
+
 export function updateSessionGuardFromText(sessionGuards, sessionID, text, now = Date.now(), options = {}) {
   if (!sessionID || typeof text !== "string" || text.length === 0) return undefined
   const allowHandoff = options.allowHandoff ?? true
@@ -282,6 +297,7 @@ export function updateSessionGuardFromText(sessionGuards, sessionID, text, now =
     active: runIds.length > 0,
     omoTurn: options.omoTurn ?? existing.omoTurn,
     allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
+    allowStatus: runIds.length > 0 ? existing.allowStatus === true : false,
     runIds,
     updatedAt: now,
   }
@@ -310,6 +326,7 @@ export function updateSessionGuardFromStatusText(sessionGuards, sessionID, text,
       active: runIds.length > 0,
       omoTurn: runIds.length > 0,
       allowCancel: existing.allowCancel === true,
+      allowStatus: false,
       runIds,
       updatedAt: now,
     }
@@ -325,6 +342,7 @@ export function updateSessionGuardFromStatusText(sessionGuards, sessionID, text,
     active: runIds.length > 0,
     omoTurn: runIds.length > 0 ? existing.omoTurn : false,
     allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
+    allowStatus: false,
     runIds,
     updatedAt: now,
   }
@@ -353,6 +371,7 @@ export function updateSessionGuardFromCancelText(sessionGuards, sessionID, text,
       active: runIds.length > 0,
       omoTurn: runIds.length > 0,
       allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
+      allowStatus: false,
       runIds,
       updatedAt: now,
     }
@@ -365,6 +384,7 @@ export function updateSessionGuardFromCancelText(sessionGuards, sessionID, text,
     active: runIds.length > 0,
     omoTurn: runIds.length > 0 ? existing.omoTurn : false,
     allowCancel: runIds.length > 0 ? existing.allowCancel === true : false,
+    allowStatus: false,
     runIds,
     updatedAt: now,
   }
@@ -423,6 +443,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
         ...existing,
         omoTurn: false,
         allowCancel: hasExplicitCancelIntent(bufferedText),
+        allowStatus: hasExplicitStatusIntent(bufferedText),
         updatedAt: now,
       }
       sessionGuards.set(sessionID, unguarded)
@@ -436,6 +457,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
           runIds: [],
         }),
         allowCancel: true,
+        allowStatus: false,
         updatedAt: now,
       }
       sessionGuards.set(sessionID, cancelIntent)
@@ -466,6 +488,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
           runIds: [],
         }),
         allowCancel: true,
+        allowStatus: false,
         updatedAt: now,
       }
       sessionGuards.set(sessionID, cancelIntent)
@@ -489,6 +512,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
       ...existing,
       omoTurn: false,
       allowCancel: hasExplicitCancelIntent(text),
+      allowStatus: hasExplicitStatusIntent(text),
       updatedAt: now,
     }
     sessionGuards.set(sessionID, next)
@@ -564,6 +588,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
     cancelledRunIds: unique(cancelledRunIds),
     firstActiveIndex,
     latestUserHasCancelIntent: hasExplicitCancelIntent(collectTextFromMessage(latestUserMessage)),
+    latestUserHasStatusIntent: hasExplicitStatusIntent(collectTextFromMessage(latestUserMessage)),
     latestUserIsOmoContinuation,
     latestUserIsRealUser: Boolean(latestUserMessage) && !latestUserIsOmoContinuation,
     sessionID: getSessionIDFromMessage(latestUserMessage)
@@ -597,10 +622,14 @@ export function applyOmoContinuationGuard(output, sessionGuards, now = Date.now(
   const allowCancel = state.latestUserIsRealUser
     ? state.latestUserHasCancelIntent
     : existingGuard?.allowCancel === true
+  const allowStatus = state.latestUserIsRealUser
+    ? state.latestUserHasStatusIntent
+    : existingGuard?.allowStatus === true
   sessionGuards.set(state.sessionID, {
     active: effectiveActive,
     omoTurn: effectiveActive && state.latestUserIsOmoContinuation,
     allowCancel: effectiveActive && allowCancel,
+    allowStatus: effectiveActive && allowStatus,
     runIds: effectiveRunIds,
     updatedAt: now,
   })
