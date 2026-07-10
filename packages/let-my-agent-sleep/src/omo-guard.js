@@ -29,6 +29,13 @@ function getSessionIDFromMessage(message) {
     || (message?.parts || []).find((part) => part?.sessionId)?.sessionId
 }
 
+function getRoleFromMessage(message) {
+  return message?.info?.role
+    || message?.role
+    || (message?.parts || []).find((part) => part?.role)?.role
+    || (message?.parts || []).find((part) => part?.info?.role)?.info?.role
+}
+
 export function getSessionIDFromEvent(event) {
   return event?.properties?.sessionID
     || event?.properties?.sessionId
@@ -94,7 +101,7 @@ export function shouldBlockPromptInputDuringActiveHandoff(input) {
 }
 
 export function getRoleFromEvent(event) {
-  return event?.properties?.message?.info?.role
+  return getRoleFromMessage(event?.properties?.message)
     || event?.properties?.part?.role
     || event?.properties?.part?.info?.role
     || event?.properties?.role
@@ -492,7 +499,7 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
 }
 
 export function isOmoTodoContinuationMessage(message) {
-  if (message?.info?.role !== "user") return false
+  if (getRoleFromMessage(message) !== "user") return false
   const hasInternalPart = messageHasSyntheticOrInternalPart(message)
   const text = collectTextFromMessage(message)
   if (!hasInternalPart) return looksLikeOmoContinuationDirectiveText(text)
@@ -523,7 +530,8 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
 
   messages.forEach((message, index) => {
     const text = collectTextFromMessage(message)
-    if (message?.info?.role !== "user" && text.includes(LMAS_HANDOFF)) {
+    const role = getRoleFromMessage(message)
+    if (role !== "user" && text.includes(LMAS_HANDOFF)) {
       for (const runId of extractRunIds(text)) {
         activeRuns.set(runId, index)
       }
@@ -534,7 +542,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
         activeRuns.delete(runId)
       }
     }
-    if (message?.info?.role !== "user" && text.includes(LMAS_CANCEL) && !isFinalizingCancelText(text)) {
+    if (role !== "user" && text.includes(LMAS_CANCEL) && !isFinalizingCancelText(text)) {
       for (const runId of extractRunIds(text)) {
         cancelledRunIds.push(runId)
         activeRuns.delete(runId)
@@ -546,7 +554,7 @@ export function analyzeLmasHandoffState(messages, fallbackSessionID) {
   const firstActiveIndex = activeRuns.size > 0
     ? Math.min(...activeRuns.values())
     : -1
-  const latestUserMessage = [...messages].reverse().find((message) => message?.info?.role === "user")
+  const latestUserMessage = [...messages].reverse().find((message) => getRoleFromMessage(message) === "user")
   const latestUserIsOmoContinuation = isOmoTodoContinuationMessage(latestUserMessage)
 
   return {
