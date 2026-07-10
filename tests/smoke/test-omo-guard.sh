@@ -1755,5 +1755,50 @@ if (!getActiveOmoGuard(topLevelRoleOnlyGuards, "ses_top_level_role_only_transfor
   throw new Error("expected transform top-level role-only user continuation to set active guard")
 }
 
+const partRoleOnlyGuards = new Map()
+const partRoleOnlyOutput = {
+  messages: [
+    {
+      sessionId: "ses_part_role_only_transform",
+      info: { id: "part_role_only_handoff" },
+      parts: [{
+        id: "part_role_only_handoff_part",
+        role: "assistant",
+        type: "text",
+        text: "LMAS_HANDOFF v1\nrun_id: lmas_part_role_only\nstatus: STARTED",
+      }],
+    },
+    {
+      sessionId: "ses_part_role_only_transform",
+      info: { id: "part_role_only_cancel_paste" },
+      parts: [{
+        id: "part_role_only_cancel_paste_part",
+        role: "user",
+        type: "text",
+        text: "I pasted this old cancel log:\nLMAS_CANCEL v1\nrun_id: lmas_part_role_only\nstatus: CANCELLED",
+      }],
+    },
+    {
+      sessionId: "ses_part_role_only_transform",
+      info: { id: "part_role_only_omo" },
+      parts: [{
+        id: "part_role_only_omo_part",
+        role: "user",
+        type: "text",
+        text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
+        synthetic: true,
+        metadata: { compaction_continue: true },
+      }],
+    },
+  ],
+}
+applyOmoContinuationGuard(partRoleOnlyOutput, partRoleOnlyGuards, 8350)
+if (!partRoleOnlyOutput.messages[2].parts[0].text.includes("lmas_part_role_only")) {
+  throw new Error("expected transform part-level role-only messages to preserve active guard")
+}
+if (!getActiveOmoGuard(partRoleOnlyGuards, "ses_part_role_only_transform", 8351)) {
+  throw new Error("expected transform part-level role-only user continuation to set active guard")
+}
+
 console.log("ok omo guard")
 JS
