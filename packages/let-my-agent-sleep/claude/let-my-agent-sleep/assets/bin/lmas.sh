@@ -897,8 +897,10 @@ cancel_command() {
 
   child_pid=
   child_tree_pids=
+  child_group_pids=
   watcher_pid=
   watcher_tree_pids=
+  watcher_group_pids=
   killed_pids=
   watcher_pid=$(watcher_root_pid "$pid_or_job_id" "$run_dir" || true)
   case "$watcher_pid" in

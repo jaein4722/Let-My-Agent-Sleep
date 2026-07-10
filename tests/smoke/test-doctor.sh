@@ -7,6 +7,11 @@ SERVER_DIR=$(mktemp -d "${TMPDIR:-/tmp}/lmas-doctor-server.XXXXXX")
 SERVER_PID=""
 trap '[ -z "$SERVER_PID" ] || kill "$SERVER_PID" >/dev/null 2>&1 || true; rm -rf "$TMP_HOME" "$SERVER_DIR"' EXIT
 
+unset OPENCODE_CONFIG_FILE OPENCODE_CONFIG_DIR OPENCODE_CACHE_DIR
+export HOME="$TMP_HOME"
+export XDG_CONFIG_HOME="$TMP_HOME/.config"
+export XDG_CACHE_HOME="$TMP_HOME/.cache"
+
 INSTALL_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'OpenCode install configured' || {
   printf 'opencode install did not complete before doctor test\n' >&2
