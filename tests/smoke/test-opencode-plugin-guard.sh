@@ -339,6 +339,33 @@ await expectGuardedFetchResponse(blockedLiveRouteMarkerlessPrompt, "live-route m
 if (fetchCalls !== 0) {
   throw new Error("expected live-route markerless reply-expecting prompt to be no-oped before fetch")
 }
+const blockedLiveRouteModelFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    agent: "sisyphus",
+    model: { providerID: "test", modelID: "fallback" },
+    parts: [{ type: "text", text: "continue" }],
+  }),
+})
+await expectGuardedFetchResponse(blockedLiveRouteModelFallbackPrompt, "live-route OMO model-fallback shaped prompt")
+if (fetchCalls !== 0) {
+  throw new Error("expected live-route OMO model-fallback shaped prompt to be no-oped before fetch")
+}
+const blockedLiveRouteRuntimeFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    messageID: "retry_message",
+    system: "retry with another model",
+    tools: { bash: true },
+    parts: [{ type: "text", text: "Retry the previous user request." }],
+  }),
+})
+await expectGuardedFetchResponse(blockedLiveRouteRuntimeFallbackPrompt, "live-route OMO runtime-fallback shaped prompt")
+if (fetchCalls !== 0) {
+  throw new Error("expected live-route OMO runtime-fallback shaped prompt to be no-oped before fetch")
+}
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
