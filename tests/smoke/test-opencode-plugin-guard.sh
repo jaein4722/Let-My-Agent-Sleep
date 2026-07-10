@@ -803,6 +803,14 @@ await plugin["permission.ask"](
 if (cancelPermissionOutput.status !== "allow") {
   throw new Error("expected allowed lmas_cancel call to pass permission.ask")
 }
+const cancelCompactionAutocontinueBeforeOutput = { enabled: true }
+await plugin["experimental.compaction.autocontinue"](
+  { sessionID: cancelIntentSessionID, agent: "sisyphus" },
+  cancelCompactionAutocontinueBeforeOutput,
+)
+if (cancelCompactionAutocontinueBeforeOutput.enabled !== false) {
+  throw new Error("expected active LMAS handoff to disable compaction autocontinue before cancel")
+}
 globalThis.Bun = {
   spawn() {
     cancelSpawned = true
@@ -832,6 +840,14 @@ try {
 }
 if (!cancelSpawned) {
   throw new Error(`expected explicit user cancel intent to allow lmas_cancel after RUNNING status, got: ${cancelOutput}`)
+}
+const cancelCompactionAutocontinueAfterOutput = { enabled: true }
+await plugin["experimental.compaction.autocontinue"](
+  { sessionID: cancelIntentSessionID, agent: "sisyphus" },
+  cancelCompactionAutocontinueAfterOutput,
+)
+if (cancelCompactionAutocontinueAfterOutput.enabled !== true) {
+  throw new Error("did not expect compaction autocontinue to stay disabled after LMAS_CANCEL clears the handoff")
 }
 await plugin["tool.execute.before"](
   { tool: "todowrite", sessionID: cancelIntentSessionID, callID: "call_after_cancel_todowrite" },
