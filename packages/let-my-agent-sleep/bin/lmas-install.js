@@ -269,7 +269,7 @@ function logSkip(action, target) {
 
 function backupIfNeeded(target, options) {
   if (!existsSync(target) || options.force || options.dryRun) return
-  const backup = `${target}.bak.${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")}`
+  const backup = uniquePath(`${target}.bak.${timestamp()}`)
   renameSync(target, backup)
   console.log(`[backup] ${target} -> ${backup}`)
 }
@@ -278,9 +278,18 @@ function timestamp() {
   return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z")
 }
 
+function uniquePath(target) {
+  if (!existsSync(target)) return target
+  for (let index = 1; index < 1000; index += 1) {
+    const candidate = `${target}.${index}`
+    if (!existsSync(candidate)) return candidate
+  }
+  throw new Error(`could not find unique backup path for ${target}`)
+}
+
 function moveAside(target, backupRoot, options) {
   if (!existsSync(target)) return
-  const backup = join(backupRoot, `${basename(target)}.${timestamp()}`)
+  const backup = uniquePath(join(backupRoot, `${basename(target)}.${timestamp()}`))
   const prefix = options.dryRun ? "[dry-run]" : "[write]"
   console.log(`${prefix} move-aside: ${target} -> ${backup}`)
   if (options.dryRun) return
