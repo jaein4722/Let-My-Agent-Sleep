@@ -26,6 +26,7 @@ PKG="$EXTRACT_DIR/package"
 [ -x "$PKG/bin/lmas-install.js" ] || { printf 'packed tarball lmas-install.js is not executable\n' >&2; exit 1; }
 [ -x "$PKG/bin/lmas.sh" ] || { printf 'packed tarball lmas.sh is not executable\n' >&2; exit 1; }
 [ -f "$PKG/src/index.js" ] || { printf 'packed tarball missing OpenCode plugin entry\n' >&2; exit 1; }
+[ -f "$PKG/src/tui.js" ] || { printf 'packed tarball missing OpenCode TUI plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
 [ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
 [ -f "$PKG/README.md" ] || { printf 'packed tarball missing README.md\n' >&2; exit 1; }
@@ -46,6 +47,17 @@ OPENCODE_PLUGIN_DEP=$(node -p "require(process.argv[1]).dependencies['@opencode-
 CODEX_PLUGIN_VERSION=$(node -p "require(process.argv[1]).version" "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json")
 [ "$CODEX_PLUGIN_VERSION" = "$PACKAGE_VERSION" ] || {
   printf 'packed tarball Codex plugin manifest version %s does not match package version %s\n' "$CODEX_PLUGIN_VERSION" "$PACKAGE_VERSION" >&2
+  exit 1
+}
+
+OPENCODE_SERVER_EXPORT=$(node -p "require(process.argv[1]).exports['./server']" "$PKG/package.json")
+OPENCODE_TUI_EXPORT=$(node -p "require(process.argv[1]).exports['./tui']" "$PKG/package.json")
+[ "$OPENCODE_SERVER_EXPORT" = "./src/index.js" ] || {
+  printf 'packed tarball missing ./server export, got %s\n' "$OPENCODE_SERVER_EXPORT" >&2
+  exit 1
+}
+[ "$OPENCODE_TUI_EXPORT" = "./src/tui.js" ] || {
+  printf 'packed tarball missing ./tui export, got %s\n' "$OPENCODE_TUI_EXPORT" >&2
   exit 1
 }
 
@@ -78,6 +90,11 @@ printf '%s\n' "$HELP_OUTPUT" | grep -q -- '--workspace <id>' || {
 INSTALL_OUTPUT=$(cd / && HOME="$INSTALL_HOME" node "$PKG/bin/lmas-install.js" install --agent all --dry-run --yes 2>&1)
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'OpenCode install configured' || {
   printf 'packed tarball install dry-run did not configure OpenCode\n' >&2
+  printf '%s\n' "$INSTALL_OUTPUT" >&2
+  exit 1
+}
+printf '%s\n' "$INSTALL_OUTPUT" | grep -q '.config/opencode/tui.jsonc' || {
+  printf 'packed tarball install dry-run missing OpenCode TUI config target\n' >&2
   printf '%s\n' "$INSTALL_OUTPUT" >&2
   exit 1
 }

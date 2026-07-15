@@ -812,5 +812,4 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
 }
 
 export const server = LetMyAgentSleepPlugin
-export { LetMyAgentSleepTuiPlugin, tui } from "./tui.js"
-export default LetMyAgentSleepPlugin
+export default { server }

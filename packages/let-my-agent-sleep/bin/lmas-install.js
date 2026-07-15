@@ -849,6 +849,28 @@ function resolveOpenCodeConfigPath(configDir) {
   return jsoncPath
 }
 
+function resolveOpenCodeTuiConfigPath(configDir) {
+  const jsoncPath = join(configDir, "tui.jsonc")
+  const jsonPath = join(configDir, "tui.json")
+  const candidates = [jsoncPath, jsonPath].filter((candidate) => existsSync(candidate))
+
+  for (const candidate of candidates) {
+    const config = readJsoncMaybe(candidate)
+    if (config?.plugin !== undefined && normalizePluginList(config.plugin).some((plugin) => isPackagePluginSpec(plugin, packageName))) {
+      return candidate
+    }
+  }
+
+  for (const candidate of candidates) {
+    const config = readJsoncMaybe(candidate)
+    if (normalizePluginList(config?.plugin).length > 0) return candidate
+  }
+
+  if (existsSync(jsoncPath)) return jsoncPath
+  if (existsSync(jsonPath)) return jsonPath
+  return jsoncPath
+}
+
 function resolveOmoConfigPath(configDir) {
   const candidates = [
     join(configDir, "oh-my-openagent.jsonc"),
@@ -904,10 +926,7 @@ function reportOmoContinuationPolicy(config) {
   console.log("[info] LMAS runtime guards block continuation only while an LMAS handoff is active.")
 }
 
-function installOpenCode(options) {
-  const configDir = resolveOpenCodeConfigDir()
-  const configPath = resolveOpenCodeConfigPath(configDir)
-  const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
+function configureOpenCodePluginList(configPath, options) {
   const config = readJsoncIfExists(configPath, {})
 
   if (config.plugin === undefined) {
@@ -926,10 +945,23 @@ function installOpenCode(options) {
   config.plugin.unshift(openCodePluginSpec)
 
   writeJsonConfigWithStringArray(configPath, config, "plugin", config.plugin, options)
+  return config
+}
+
+function installOpenCode(options) {
+  const configDir = resolveOpenCodeConfigDir()
+  const configPath = resolveOpenCodeConfigPath(configDir)
+  const tuiConfigPath = resolveOpenCodeTuiConfigPath(configDir)
+  const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
+
+  configureOpenCodePluginList(configPath, options)
+  configureOpenCodePluginList(tuiConfigPath, options)
   copyFileAsset(paths.openCodeSkill, skillTarget, options)
 
   console.log("OpenCode install configured.")
   console.log(`  plugin: ${openCodePluginSpec}`)
+  console.log(`  config: ${configPath}`)
+  console.log(`  tui config: ${tuiConfigPath}`)
   console.log(`  skill: ${skillTarget}`)
   console.log(`  plugin cache: ${resolveOpenCodeCacheDir()}`)
 }
@@ -1027,6 +1059,7 @@ async function doctorOpenCode(options) {
   let healthy = true
   const configDir = resolveOpenCodeConfigDir()
   const configPath = resolveOpenCodeConfigPath(configDir)
+  const tuiConfigPath = resolveOpenCodeTuiConfigPath(configDir)
   const omoConfigPath = resolveOmoConfigPath(configDir)
   const skillTarget = join(configDir, "skills", openCodeSkillName, "SKILL.md")
   const cacheDir = resolveOpenCodeCacheDir()
@@ -1035,6 +1068,7 @@ async function doctorOpenCode(options) {
 
   console.log("OpenCode doctor:")
   console.log(`  config: ${configPath}`)
+  console.log(`  tui config: ${tuiConfigPath}`)
   console.log(`  omo config: ${omoConfigPath}`)
   console.log(`  skill: ${skillTarget}`)
   console.log(`  plugin cache: ${cacheDir}`)
@@ -1070,6 +1104,30 @@ async function doctorOpenCode(options) {
       }
     } catch (error) {
       healthy = doctorFail(`OpenCode config could not be parsed: ${error.message}`) && healthy
+    }
+  }
+
+  if (!existsSync(tuiConfigPath)) {
+    healthy = doctorFail("OpenCode TUI config is missing; run: lmas install --agent opencode") && healthy
+  } else {
+    try {
+      const tuiConfig = readJsoncIfExists(tuiConfigPath, {})
+      const plugins = Array.isArray(tuiConfig.plugin)
+        ? tuiConfig.plugin
+        : typeof tuiConfig.plugin === "string"
+          ? [tuiConfig.plugin]
+          : []
+      const lmasIndex = plugins.findIndex((plugin) => isPackagePluginSpec(plugin, packageName))
+
+      if (lmasIndex === -1) {
+        healthy = doctorFail(`OpenCode TUI plugin list does not include ${openCodePluginSpec}`) && healthy
+      } else if (lmasIndex !== 0) {
+        healthy = doctorFail(`${packageName} is not first in the OpenCode TUI plugin list; reinstall with: lmas install --agent opencode`) && healthy
+      } else {
+        doctorOk(`${packageName} is first in the OpenCode TUI plugin list`)
+      }
+    } catch (error) {
+      healthy = doctorFail(`OpenCode TUI config could not be parsed: ${error.message}`) && healthy
     }
   }
 

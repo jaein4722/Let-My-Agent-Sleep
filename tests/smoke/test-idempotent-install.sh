@@ -253,8 +253,11 @@ printf '%s\n' "$THIRD_OUTPUT" | grep -q '\[write\] move-aside:' || { printf 'leg
 printf '%s\n' "$MODE_FIRST_OUTPUT" | grep -q 'Let My Agent Sleep install complete' || { printf 'mode fixture install did not complete\n' >&2; exit 1; }
 printf '%s\n' "$MODE_SECOND_OUTPUT" | grep -q '\[write\] copy-dir:' || { printf 'mode repair install did not recopy same-content directory with changed modes\n' >&2; exit 1; }
 printf '%s\n' "$XDG_OUTPUT" | grep -Fq "$EXPECTED_XDG_CONFIG_HOME/opencode/opencode.jsonc" || { printf 'xdg opencode install did not use XDG_CONFIG_HOME config path\n' >&2; exit 1; }
+printf '%s\n' "$XDG_OUTPUT" | grep -Fq "$EXPECTED_XDG_CONFIG_HOME/opencode/tui.jsonc" || { printf 'xdg opencode install did not use XDG_CONFIG_HOME TUI config path\n' >&2; exit 1; }
 printf '%s\n' "$CUSTOM_CONFIG_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_DIR/opencode.jsonc" || { printf 'custom opencode install did not use OPENCODE_CONFIG_DIR config path\n' >&2; exit 1; }
+printf '%s\n' "$CUSTOM_CONFIG_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_DIR/tui.jsonc" || { printf 'custom opencode install did not use OPENCODE_CONFIG_DIR TUI config path\n' >&2; exit 1; }
 printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" || { printf 'custom opencode install did not use OPENCODE_CONFIG path\n' >&2; exit 1; }
+printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/assets/tui.jsonc" || { printf 'custom OPENCODE_CONFIG install did not use OPENCODE_CONFIG_DIR TUI path\n' >&2; exit 1; }
 printf '%s\n' "$CUSTOM_CONFIG_FILE_OUTPUT" | grep -Fq "$EXPECTED_CUSTOM_CONFIG_FILE_DIR/assets/skills/let-my-agent-sleep/SKILL.md" || { printf 'custom opencode install did not use OPENCODE_CONFIG_DIR asset path\n' >&2; exit 1; }
 printf '%s\n' "$JSONC_OUTPUT" | grep -q 'opencode.jsonc' || { printf 'opencode jsonc config was not used\n' >&2; exit 1; }
 printf '%s\n' "$COMMENT_ONLY_JSONC_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'comment-only opencode jsonc install did not complete\n' >&2; exit 1; }
@@ -273,9 +276,17 @@ if [ ! -f "$TMP_HOME/.config/opencode/opencode.jsonc" ]; then
   printf 'fresh opencode install did not create opencode.jsonc\n' >&2
   exit 1
 fi
+if [ ! -f "$TMP_HOME/.config/opencode/tui.jsonc" ]; then
+  printf 'fresh opencode install did not create tui.jsonc\n' >&2
+  exit 1
+fi
 
 if [ -f "$TMP_HOME/.config/opencode/opencode.json" ]; then
   printf 'fresh opencode install should not create opencode.json\n' >&2
+  exit 1
+fi
+if [ -f "$TMP_HOME/.config/opencode/tui.json" ]; then
+  printf 'fresh opencode install should not create tui.json\n' >&2
   exit 1
 fi
 
@@ -283,9 +294,17 @@ if [ ! -f "$TMP_XDG_CONFIG_HOME/opencode/opencode.jsonc" ]; then
   printf 'xdg opencode install did not create config under XDG_CONFIG_HOME\n' >&2
   exit 1
 fi
+if [ ! -f "$TMP_XDG_CONFIG_HOME/opencode/tui.jsonc" ]; then
+  printf 'xdg opencode install did not create TUI config under XDG_CONFIG_HOME\n' >&2
+  exit 1
+fi
 
 if [ -e "$TMP_XDG_HOME/.config/opencode/opencode.jsonc" ]; then
   printf 'xdg opencode install incorrectly wrote under HOME .config\n' >&2
+  exit 1
+fi
+if [ -e "$TMP_XDG_HOME/.config/opencode/tui.jsonc" ]; then
+  printf 'xdg opencode install incorrectly wrote TUI config under HOME .config\n' >&2
   exit 1
 fi
 [ -f "$TMP_XDG_HOME/.agents/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'opencode-only install moved a Codex-owned skill\n' >&2; exit 1; }
@@ -303,6 +322,10 @@ if [ ! -f "$TMP_CUSTOM_CONFIG_DIR/opencode.jsonc" ]; then
   printf 'custom opencode install did not create config under OPENCODE_CONFIG_DIR\n' >&2
   exit 1
 fi
+if [ ! -f "$TMP_CUSTOM_CONFIG_DIR/tui.jsonc" ]; then
+  printf 'custom opencode install did not create TUI config under OPENCODE_CONFIG_DIR\n' >&2
+  exit 1
+fi
 
 if [ -e "$TMP_CUSTOM_CONFIG_DIR/oh-my-openagent.json" ]; then
   printf 'custom opencode install should not create OMO config\n' >&2
@@ -311,6 +334,10 @@ fi
 
 if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/custom-opencode.jsonc" ]; then
   printf 'custom opencode install did not create OPENCODE_CONFIG target\n' >&2
+  exit 1
+fi
+if [ ! -f "$TMP_CUSTOM_CONFIG_FILE_DIR/assets/tui.jsonc" ]; then
+  printf 'custom OPENCODE_CONFIG install did not create TUI config under OPENCODE_CONFIG_DIR\n' >&2
   exit 1
 fi
 
@@ -328,6 +355,10 @@ if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/opencode.jsonc" ]; then
   printf 'custom opencode install incorrectly wrote under HOME .config\n' >&2
   exit 1
 fi
+if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/tui.jsonc" ]; then
+  printf 'custom opencode install incorrectly wrote TUI config under HOME .config\n' >&2
+  exit 1
+fi
 
 if [ -e "$TMP_CUSTOM_CONFIG_HOME/.config/opencode/oh-my-openagent.json" ]; then
   printf 'custom opencode install incorrectly created OMO config under HOME .config\n' >&2
@@ -336,6 +367,10 @@ fi
 
 if [ -e "$TMP_CUSTOM_CONFIG_FILE_HOME/.config/opencode/opencode.jsonc" ]; then
   printf 'custom OPENCODE_CONFIG install incorrectly wrote under HOME .config\n' >&2
+  exit 1
+fi
+if [ -e "$TMP_CUSTOM_CONFIG_FILE_HOME/.config/opencode/tui.jsonc" ]; then
+  printf 'custom OPENCODE_CONFIG install incorrectly wrote TUI config under HOME .config\n' >&2
   exit 1
 fi
 
@@ -399,6 +434,10 @@ fi
 
 if ! grep -q "\"let-my-agent-sleep@$PACKAGE_VERSION\"" "$TMP_HOME/.config/opencode/opencode.jsonc"; then
   printf 'fresh opencode config missing exact plugin entry\n' >&2
+  exit 1
+fi
+if ! grep -q "\"let-my-agent-sleep@$PACKAGE_VERSION\"" "$TMP_HOME/.config/opencode/tui.jsonc"; then
+  printf 'fresh opencode TUI config missing exact plugin entry\n' >&2
   exit 1
 fi
 

@@ -34,6 +34,7 @@ PACKAGE_VERSION=$(cd "$ROOT" && node -p "require('./packages/let-my-agent-sleep/
 
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q "plugin: let-my-agent-sleep@$PACKAGE_VERSION" || { printf 'opencode dry-run missing exact plugin config\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/opencode.jsonc' || { printf 'opencode dry-run should target opencode.jsonc\n' >&2; exit 1; }
+printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/tui.jsonc' || { printf 'opencode dry-run should target tui.jsonc\n' >&2; exit 1; }
 printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.config/opencode/skills/let-my-agent-sleep/SKILL.md' || { printf 'opencode dry-run missing skill target\n' >&2; exit 1; }
 if printf '%s\n' "$OPENCODE_OUTPUT" | grep -q '.cache/opencode/package.json'; then
   printf 'opencode dry-run should leave the OpenCode-managed plugin cache untouched\n' >&2

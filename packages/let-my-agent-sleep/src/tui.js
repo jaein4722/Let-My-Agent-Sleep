@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
+import { jsx } from "@opentui/solid/jsx-runtime"
 import { analyzeLmasHandoffState } from "./omo-guard.js"
 import {
   describeSessionState,
@@ -86,13 +87,21 @@ export function createLmasSidebarText(api, sessionID) {
 }
 
 export const LetMyAgentSleepTuiPlugin = async (api) => {
+  if (!api?.slots?.register) return
+
   const renderSidebar = (input = {}) => {
     const sessionID = input.session_id || input.sessionID
-    return createLmasSidebarText(api, sessionID)
+    return jsx("box", {
+      flexDirection: "column",
+      paddingLeft: 1,
+      paddingRight: 1,
+      children: jsx("text", {
+        children: createLmasSidebarText(api, sessionID),
+      }),
+    })
   }
 
-  const unregister = api.slots.register({
-    id: "let-my-agent-sleep-sidebar",
+  const slotId = api.slots.register({
     order: 100,
     slots: {
       sidebar_content(_context, input = {}) {
@@ -102,9 +111,11 @@ export const LetMyAgentSleepTuiPlugin = async (api) => {
   })
 
   api.lifecycle?.onDispose?.(() => {
-    if (typeof unregister === "function") unregister()
+    // OpenCode owns slot cleanup for registered TUI plugins. Keep the generated
+    // slot id referenced so plugin load diagnostics can expose registration.
+    void slotId
   })
 }
 
 export const tui = LetMyAgentSleepTuiPlugin
-export default LetMyAgentSleepTuiPlugin
+export default { tui }

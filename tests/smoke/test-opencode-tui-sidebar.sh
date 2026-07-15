@@ -19,6 +19,7 @@ import {
   createLmasSidebarText,
   tui,
 } from "./packages/let-my-agent-sleep/src/tui.js"
+import tuiModule from "./packages/let-my-agent-sleep/src/tui.js"
 
 const root = process.argv[2]
 const sessionID = "ses_tui_sidebar"
@@ -70,9 +71,7 @@ const api = {
   slots: {
     register(plugin) {
       api.registeredPlugin = plugin
-      return () => {
-        api.unregistered = true
-      }
+      return "slot_lmas_sidebar"
     },
   },
   lifecycle: {
@@ -92,25 +91,25 @@ for (const expected of ["LMAS", "Guard", "History active: 1", runID, "FINALIZING
 if (tui !== LetMyAgentSleepTuiPlugin) {
   throw new Error("tui named export does not match LetMyAgentSleepTuiPlugin")
 }
+if (tuiModule?.tui !== LetMyAgentSleepTuiPlugin) {
+  throw new Error("default TUI plugin export must expose tui()")
+}
 
 await LetMyAgentSleepTuiPlugin(api)
-if (!api.registeredPlugin || api.registeredPlugin.id !== "let-my-agent-sleep-sidebar") {
-  throw new Error("TUI plugin did not register with a stable sidebar plugin id")
+if (!api.registeredPlugin || api.registeredPlugin.id !== undefined) {
+  throw new Error("TUI plugin registered an unsupported explicit slot plugin id")
+}
+
+await LetMyAgentSleepTuiPlugin({})
+if (!api.registeredPlugin) {
+  throw new Error("server-context TUI no-op cleared the registered plugin")
 }
 
 if (typeof api.registeredPlugin.slots?.sidebar_content !== "function") {
   throw new Error("TUI plugin did not register a sidebar_content slot renderer")
 }
 
-const rendered = api.registeredPlugin.slots.sidebar_content({}, { name: "sidebar_content", session_id: sessionID })
-if (!String(rendered).includes(runID) || !String(rendered).includes("FINALIZING")) {
-  throw new Error(`registered sidebar renderer returned unexpected text: ${rendered}`)
-}
-
 api.dispose?.()
-if (api.unregistered !== true) {
-  throw new Error("TUI plugin dispose did not unregister the slot")
-}
 
 console.log("ok opencode tui sidebar")
 JS

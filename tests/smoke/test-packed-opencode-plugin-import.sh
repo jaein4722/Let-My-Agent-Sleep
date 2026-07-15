@@ -49,10 +49,18 @@ globalThis.fetch = async () => {
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
 
 const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
-for (const expected of ["LetMyAgentSleepPlugin", "server", "LetMyAgentSleepTuiPlugin", "tui", "default"]) {
+for (const expected of ["LetMyAgentSleepPlugin", "server"]) {
   if (typeof module[expected] !== "function") {
     throw new Error(`missing packed plugin function export: ${expected}`)
   }
+}
+for (const unexpected of ["LetMyAgentSleepTuiPlugin", "tui"]) {
+  if (unexpected in module) {
+    throw new Error(`packed server entrypoint should not export TUI function: ${unexpected}`)
+  }
+}
+if (module.default?.server !== module.server) {
+  throw new Error("packed default OpenCode plugin export must expose server()")
 }
 
 const officialGuardHooks = [

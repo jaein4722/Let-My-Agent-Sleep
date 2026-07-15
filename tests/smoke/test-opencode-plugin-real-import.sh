@@ -15,10 +15,18 @@ import { LetMyAgentSleepPlugin } from "./packages/let-my-agent-sleep/src/index.j
 
 const module = await import("./packages/let-my-agent-sleep/src/index.js")
 const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
-for (const expected of ["LetMyAgentSleepPlugin", "server", "LetMyAgentSleepTuiPlugin", "tui", "default"]) {
+for (const expected of ["LetMyAgentSleepPlugin", "server"]) {
   if (typeof module[expected] !== "function") {
     throw new Error(`missing plugin function export: ${expected}`)
   }
+}
+for (const unexpected of ["LetMyAgentSleepTuiPlugin", "tui"]) {
+  if (unexpected in module) {
+    throw new Error(`server entrypoint should not export TUI function: ${unexpected}`)
+  }
+}
+if (module.default?.server !== module.server) {
+  throw new Error("default OpenCode plugin export must expose server()")
 }
 
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })

@@ -2,6 +2,15 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.3.5 - 2026-07-15
+
+### Fixed
+
+- Fixed the OpenCode TUI entrypoint so server plugin loading no longer executes TUI slot code in a non-TUI context.
+- Fixed the LMAS sidebar renderer to return OpenTUI `<box><text>` content instead of raw text, preventing active OpenCode sessions from crashing with an orphan text error.
+- Added OpenTUI Solid runtime dependencies required by the packaged TUI plugin.
+- Updated OpenCode install and doctor checks to configure and verify both server and TUI plugin lists.
+
 ## 0.3.4 - 2026-07-15
 
 ### Fixed
