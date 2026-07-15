@@ -3,7 +3,8 @@ set -u
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 MOCK_BIN=$(mktemp -d "${TMPDIR:-/tmp}/lmas-detected-bin.XXXXXX")
-trap 'rm -rf "$MOCK_BIN"' EXIT
+TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-dry-run-home.XXXXXX")
+trap 'rm -rf "$MOCK_BIN" "$TMP_HOME"' EXIT
 
 for command in opencode codex claude; do
   cat > "$MOCK_BIN/$command" <<'SH'
@@ -19,15 +20,15 @@ SH
   chmod +x "$MOCK_BIN/$command"
 done
 
-OPENCODE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --dry-run --yes)
-CODEX_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --dry-run --yes)
-CLAUDE_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --dry-run --yes)
-DETECTED_OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
-DOCTOR_ERROR_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent bogus --yes 2>&1)
+OPENCODE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --dry-run --yes)
+CODEX_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent codex --dry-run --yes)
+CLAUDE_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent claude --dry-run --yes)
+DETECTED_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" PATH="$MOCK_BIN:$PATH" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent detected --dry-run --yes)
+DOCTOR_ERROR_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js doctor --agent bogus --yes 2>&1)
 DOCTOR_ERROR_STATUS=$?
-DISABLE_FLAG_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --disable-omo-continuation --dry-run --yes 2>&1)
+DISABLE_FLAG_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --disable-omo-continuation --dry-run --yes 2>&1)
 DISABLE_FLAG_STATUS=$?
-KEEP_FLAG_OUTPUT=$(cd "$ROOT" && node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --keep-omo-continuation --dry-run --yes 2>&1)
+KEEP_FLAG_OUTPUT=$(cd "$ROOT" && HOME="$TMP_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --keep-omo-continuation --dry-run --yes 2>&1)
 KEEP_FLAG_STATUS=$?
 PACKAGE_VERSION=$(cd "$ROOT" && node -p "require('./packages/let-my-agent-sleep/package.json').version")
 

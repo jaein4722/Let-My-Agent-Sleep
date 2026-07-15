@@ -92,12 +92,12 @@ export const LetMyAgentSleepTuiPlugin = async (api) => {
   }
 
   const unregister = api.slots.register({
+    id: "let-my-agent-sleep-sidebar",
+    order: 100,
     slots: {
-      sidebar_content: renderSidebar,
-    },
-    render(input = {}) {
-      if (input.name !== "sidebar_content") return null
-      return renderSidebar(input)
+      sidebar_content(_context, input = {}) {
+        return renderSidebar(input)
+      },
     },
   })
 

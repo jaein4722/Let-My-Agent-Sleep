@@ -1,6 +1,6 @@
 {
   "name": "let-my-agent-sleep",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Let My Agent Sleep handoff workflow for long-running jobs in Codex and agent sessions.",
   "skills": "./skills/"
 }

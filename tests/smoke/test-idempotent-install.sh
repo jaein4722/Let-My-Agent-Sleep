@@ -22,6 +22,7 @@ EXPECTED_CUSTOM_CONFIG_FILE_DIR=$(cd "$TMP_CUSTOM_CONFIG_FILE_DIR" && pwd)
 TMP_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-jsonc-home.XXXXXX")
 TMP_COMMENT_ONLY_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-comment-only-jsonc-home.XXXXXX")
 TMP_REPLACE_JSONC_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-replace-jsonc-home.XXXXXX")
+TMP_MIXED_CONFIG_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-mixed-config-home.XXXXXX")
 TMP_STALE_CACHE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-stale-cache-home.XXXXXX")
 TMP_PLUGIN_ORDER_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-plugin-order-home.XXXXXX")
 TMP_MODE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/lmas-mode-home.XXXXXX")
@@ -155,6 +156,22 @@ JSONC
 REPLACE_JSONC_OUTPUT=$(cd "$ROOT" && HOME="$TMP_REPLACE_JSONC_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 REPLACE_JSONC_SECOND_OUTPUT=$(cd "$ROOT" && HOME="$TMP_REPLACE_JSONC_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
 
+mkdir -p "$TMP_MIXED_CONFIG_HOME/.config/opencode"
+cat > "$TMP_MIXED_CONFIG_HOME/.config/opencode/opencode.jsonc" <<'JSONC'
+{
+  "$schema": "https://opencode.ai/config.json"
+}
+JSONC
+cat > "$TMP_MIXED_CONFIG_HOME/.config/opencode/opencode.json" <<'JSON'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "let-my-agent-sleep@0.2.6"
+  ]
+}
+JSON
+MIXED_CONFIG_OUTPUT=$(cd "$ROOT" && HOME="$TMP_MIXED_CONFIG_HOME" node packages/let-my-agent-sleep/bin/lmas-install.js install --agent opencode --yes)
+
 mkdir -p "$TMP_PLUGIN_ORDER_HOME/.config/opencode"
 cat > "$TMP_PLUGIN_ORDER_HOME/.config/opencode/opencode.jsonc" <<'JSONC'
 {
@@ -244,6 +261,7 @@ printf '%s\n' "$COMMENT_ONLY_JSONC_OUTPUT" | grep -q 'OpenCode install configure
 printf '%s\n' "$COMMENT_ONLY_JSONC_SECOND_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'second comment-only opencode jsonc install did not complete\n' >&2; exit 1; }
 printf '%s\n' "$REPLACE_JSONC_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'replace opencode jsonc install did not complete\n' >&2; exit 1; }
 printf '%s\n' "$REPLACE_JSONC_SECOND_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'second replace opencode jsonc install did not complete\n' >&2; exit 1; }
+printf '%s\n' "$MIXED_CONFIG_OUTPUT" | grep -q 'opencode.json' || { printf 'mixed opencode config did not use existing plugin-bearing json config\n' >&2; exit 1; }
 printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'OpenCode install configured' || { printf 'plugin order install did not complete\n' >&2; exit 1; }
 printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'does not modify OMO disabled_hooks' || { printf 'omo plugin install did not report preservation policy\n' >&2; exit 1; }
 if printf '%s\n' "$PLUGIN_ORDER_OUTPUT" | grep -q 'Oh My OpenAgent continuation configured'; then
@@ -366,6 +384,16 @@ fi
 
 if grep -q '"let-my-agent-sleep@0.1.0"' "$TMP_REPLACE_JSONC_HOME/.config/opencode/opencode.jsonc"; then
   printf 'replace opencode jsonc kept stale lmas plugin entry\n' >&2
+  exit 1
+fi
+
+if ! grep -q "\"let-my-agent-sleep@$PACKAGE_VERSION\"" "$TMP_MIXED_CONFIG_HOME/.config/opencode/opencode.json"; then
+  printf 'mixed opencode json config missing latest plugin entry\n' >&2
+  exit 1
+fi
+
+if grep -q "\"let-my-agent-sleep@$PACKAGE_VERSION\"" "$TMP_MIXED_CONFIG_HOME/.config/opencode/opencode.jsonc"; then
+  printf 'mixed opencode install wrote plugin entry to inactive jsonc config\n' >&2
   exit 1
 fi
 

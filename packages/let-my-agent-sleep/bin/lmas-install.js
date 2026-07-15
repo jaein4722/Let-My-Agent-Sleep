@@ -479,6 +479,15 @@ function readJsoncIfExists(target, fallback) {
   return JSON.parse(stripJsonc(readFileSync(target, "utf8")))
 }
 
+function readJsoncMaybe(target) {
+  if (!existsSync(target)) return undefined
+  try {
+    return readJsoncIfExists(target, undefined)
+  } catch {
+    return undefined
+  }
+}
+
 function isJsoncPath(target) {
   return target.endsWith(".jsonc")
 }
@@ -812,6 +821,19 @@ function resolveOpenCodeConfigPath(configDir) {
 
   const jsoncPath = join(configDir, "opencode.jsonc")
   const jsonPath = join(configDir, "opencode.json")
+  const candidates = [jsoncPath, jsonPath].filter((candidate) => existsSync(candidate))
+
+  for (const candidate of candidates) {
+    const config = readJsoncMaybe(candidate)
+    if (config?.plugin !== undefined && normalizePluginList(config.plugin).some((plugin) => isPackagePluginSpec(plugin, packageName))) {
+      return candidate
+    }
+  }
+
+  for (const candidate of candidates) {
+    const config = readJsoncMaybe(candidate)
+    if (normalizePluginList(config?.plugin).length > 0) return candidate
+  }
 
   if (existsSync(jsoncPath)) return jsoncPath
   if (existsSync(jsonPath)) return jsonPath
@@ -843,6 +865,13 @@ function getPluginSpecName(plugin) {
   if (typeof plugin === "string") return plugin
   if (Array.isArray(plugin) && typeof plugin[0] === "string") return plugin[0]
   return undefined
+}
+
+function normalizePluginList(plugin) {
+  if (plugin === undefined) return []
+  if (typeof plugin === "string") return [plugin]
+  if (Array.isArray(plugin)) return plugin
+  return []
 }
 
 function isPackagePluginSpec(plugin, name) {

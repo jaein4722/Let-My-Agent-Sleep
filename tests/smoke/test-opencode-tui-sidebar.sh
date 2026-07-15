@@ -94,17 +94,17 @@ if (tui !== LetMyAgentSleepTuiPlugin) {
 }
 
 await LetMyAgentSleepTuiPlugin(api)
-if (!api.registeredPlugin || typeof api.registeredPlugin.render !== "function") {
-  throw new Error("TUI plugin did not register a renderable sidebar slot")
+if (!api.registeredPlugin || api.registeredPlugin.id !== "let-my-agent-sleep-sidebar") {
+  throw new Error("TUI plugin did not register with a stable sidebar plugin id")
 }
 
-const rendered = api.registeredPlugin.render({ name: "sidebar_content", session_id: sessionID })
+if (typeof api.registeredPlugin.slots?.sidebar_content !== "function") {
+  throw new Error("TUI plugin did not register a sidebar_content slot renderer")
+}
+
+const rendered = api.registeredPlugin.slots.sidebar_content({}, { name: "sidebar_content", session_id: sessionID })
 if (!String(rendered).includes(runID) || !String(rendered).includes("FINALIZING")) {
   throw new Error(`registered sidebar renderer returned unexpected text: ${rendered}`)
-}
-
-if (api.registeredPlugin.render({ name: "home_footer" }) !== null) {
-  throw new Error("TUI plugin should not render into unrelated slots")
 }
 
 api.dispose?.()

@@ -2,6 +2,15 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.3.4 - 2026-07-15
+
+### Fixed
+
+- Fixed the OpenCode TUI sidebar registration to use OpenTUI's real slot registry contract, so the LMAS sidebar entity can render guard state and visible runs.
+- Hardened the TUI sidebar smoke test so it verifies the registered slot plugin id and `sidebar_content` renderer shape instead of accepting a loose mock-only render function.
+- Fixed OpenCode install config selection when `opencode.json` and `opencode.jsonc` both exist by preferring the config file that already carries LMAS or other plugin entries.
+- Isolated installer dry-run smoke tests from the developer's real OpenCode home config.
+
 ## 0.3.3 - 2026-07-15
 
 ### Fixed
