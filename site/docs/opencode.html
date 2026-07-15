@@ -22,12 +22,14 @@
       <li><code>lmas_start</code> starts a command through LMAS handoff semantics.</li>
       <li><code>lmas_status</code> reads a run status without polling blindly.</li>
       <li><code>lmas_cancel</code> cancels a user-selected run and records cancellation when the watcher is still alive.</li>
-      <li><code>lmas_info</code> reports plugin diagnostics for live doctor checks.</li>
+      <li><code>lmas_info</code> reports current guard and run diagnostics for live doctor checks.</li>
+      <li>The OpenCode TUI sidebar can show the current session's LMAS guard state and active/finalizing runs.</li>
     </ul>
     <h2>Oh My OpenAgent continuation</h2>
     <p>During OpenCode install, LMAS does not modify Oh My OpenAgent <code>disabled_hooks</code> or <code>disabled_skills</code>. Existing settings are preserved; doctor only warns about entries that may be LMAS 0.3.0 residue.</p>
     <p>The OpenCode plugin guard blocks reply-expecting continuation prompts only while an <code>LMAS_HANDOFF v1</code> is active in the same session.</p>
     <p>LMAS also installs a runtime guard in the OpenCode plugin. While an <code>LMAS_HANDOFF v1</code> is active, reply-expecting prompt injection into that same session is no-oped until <code>LMAS_COMPLETION_EVENT v1</code> arrives. A direct user request authorizes one exact-run status or cancel action without ending the handoff. <code>noReply</code> internal notifications and LMAS completion prompts are allowed through.</p>
+    <p>LMAS does not install OpenCode compaction hooks. Compaction and ordinary continuation remain owned by OpenCode and other plugins; LMAS only blocks live reply-expecting prompts for active handoffs.</p>
     <h2>Agent prompt</h2>
     <pre><code>Use the let-my-agent-sleep skill for this task.
 Start this command with lmas_start:

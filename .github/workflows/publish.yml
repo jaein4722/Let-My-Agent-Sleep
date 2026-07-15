@@ -195,6 +195,11 @@ jobs:
             fi
           done
 
+          if ! cmp -s CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; then
+            printf 'root and package changelogs must match before release\n' >&2
+            exit 1
+          fi
+
       - name: Install tmux
         if: steps.release.outputs.publish_needed == 'true' || steps.release.outputs.release_needed == 'true'
         run: |
@@ -217,6 +222,14 @@ jobs:
         if: steps.release.outputs.publish_needed == 'true'
         run: npm run pack
 
+      - name: Prepare GitHub release notes
+        if: steps.release.outputs.release_needed == 'true'
+        run: |
+          node scripts/extract-release-notes.mjs \
+            --version "${{ steps.release.outputs.version }}" \
+            --changelog CHANGELOG.md \
+            --output "$RUNNER_TEMP/release-notes.md"
+
       - name: Publish to npm
         if: steps.release.outputs.publish_needed == 'true'
         run: npm publish --workspace let-my-agent-sleep
@@ -235,4 +248,4 @@ jobs:
           gh release create "${{ steps.release.outputs.tag }}" \
             --verify-tag \
             --title "let-my-agent-sleep ${{ steps.release.outputs.tag }}" \
-            --generate-notes
+            --notes-file "$RUNNER_TEMP/release-notes.md"

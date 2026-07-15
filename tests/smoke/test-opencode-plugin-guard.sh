@@ -387,25 +387,10 @@ await expectGuardedFetchResponse(blockedLiveRouteRuntimeFallbackPrompt, "live-ro
 if (fetchCalls !== 0) {
   throw new Error("expected live-route OMO runtime-fallback shaped prompt to be no-oped before fetch")
 }
-const compactionAutocontinueOutput = { enabled: true }
-await promptGuardPlugin["experimental.compaction.autocontinue"](
-  { sessionID: promptGuardSessionID, agent: "sisyphus" },
-  compactionAutocontinueOutput,
-)
-if (compactionAutocontinueOutput.enabled !== false) {
-  throw new Error("expected active LMAS handoff to disable OpenCode compaction autocontinue")
-}
-const sessionCompactingOutput = { context: [] }
-await promptGuardPlugin["experimental.session.compacting"](
-  { sessionID: promptGuardSessionID },
-  sessionCompactingOutput,
-)
-if (
-  sessionCompactingOutput.context.length !== 1
-  || !sessionCompactingOutput.context[0].includes("LMAS handoff is active")
-  || !sessionCompactingOutput.context[0].includes("lmas_prompt_guard")
-) {
-  throw new Error("expected active LMAS handoff to be preserved in OpenCode compaction context")
+for (const hookName of ["experimental.compaction.autocontinue", "experimental.session.compacting"]) {
+  if (hookName in promptGuardPlugin) {
+    throw new Error(`LMAS guard must not install compaction hook: ${hookName}`)
+  }
 }
 const systemTransformOutput = { system: [] }
 await promptGuardPlugin["experimental.chat.system.transform"](
@@ -414,10 +399,9 @@ await promptGuardPlugin["experimental.chat.system.transform"](
 )
 if (
   systemTransformOutput.system.length !== 1
-  || !systemTransformOutput.system[0].includes("LMAS handoff is active")
-  || !systemTransformOutput.system[0].includes("lmas_prompt_guard")
+  || !systemTransformOutput.system[0].includes("live turn only")
 ) {
-  throw new Error("expected active LMAS handoff to be preserved in OpenCode system context")
+  throw new Error("expected active LMAS handoff to add live-turn-only system context")
 }
 const blockedLiveRouteRequestObject = await fetch(new Request(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
@@ -649,22 +633,6 @@ await promptGuardPlugin.event({
     },
   },
 })
-const compactionAutocontinueAfterCompletionOutput = { enabled: true }
-await promptGuardPlugin["experimental.compaction.autocontinue"](
-  { sessionID: promptGuardSessionID, agent: "sisyphus" },
-  compactionAutocontinueAfterCompletionOutput,
-)
-if (compactionAutocontinueAfterCompletionOutput.enabled !== true) {
-  throw new Error("did not expect OpenCode compaction autocontinue to be disabled after LMAS completion")
-}
-const sessionCompactingAfterCompletionOutput = { context: [] }
-await promptGuardPlugin["experimental.session.compacting"](
-  { sessionID: promptGuardSessionID },
-  sessionCompactingAfterCompletionOutput,
-)
-if (sessionCompactingAfterCompletionOutput.context.length !== 0) {
-  throw new Error("did not expect OpenCode compaction context to be modified after LMAS completion")
-}
 const systemTransformAfterCompletionOutput = { system: [] }
 await promptGuardPlugin["experimental.chat.system.transform"](
   { sessionID: promptGuardSessionID, model: {} },
@@ -942,14 +910,6 @@ await plugin["permission.ask"](
 if (cancelObjectToolPermissionOutput.status !== undefined) {
   throw new Error("expected object-shaped lmas_cancel tool to preserve permission.ask status")
 }
-const cancelCompactionAutocontinueBeforeOutput = { enabled: true }
-await plugin["experimental.compaction.autocontinue"](
-  { sessionID: cancelIntentSessionID, agent: "sisyphus" },
-  cancelCompactionAutocontinueBeforeOutput,
-)
-if (cancelCompactionAutocontinueBeforeOutput.enabled !== false) {
-  throw new Error("expected active LMAS handoff to disable compaction autocontinue before cancel")
-}
 globalThis.Bun = {
   spawn() {
     cancelSpawned = true
@@ -979,14 +939,6 @@ try {
 }
 if (!cancelSpawned) {
   throw new Error(`expected explicit user cancel intent to allow lmas_cancel after RUNNING status, got: ${cancelOutput}`)
-}
-const cancelCompactionAutocontinueAfterOutput = { enabled: true }
-await plugin["experimental.compaction.autocontinue"](
-  { sessionID: cancelIntentSessionID, agent: "sisyphus" },
-  cancelCompactionAutocontinueAfterOutput,
-)
-if (cancelCompactionAutocontinueAfterOutput.enabled !== true) {
-  throw new Error("did not expect compaction autocontinue to stay disabled after LMAS_CANCEL clears the handoff")
 }
 await plugin["tool.execute.before"](
   { tool: "todowrite", sessionID: cancelIntentSessionID, callID: "call_after_cancel_todowrite" },
@@ -1589,15 +1541,6 @@ await plugin["permission.ask"](
 )
 if (camelSessionPermissionOutput.status !== "deny") {
   throw new Error("expected plugin permission hook to deny with camelCase session id")
-}
-
-const camelSessionAutocontinueOutput = { enabled: true }
-await plugin["experimental.compaction.autocontinue"](
-  { sessionId: sessionID, agent: "sisyphus" },
-  camelSessionAutocontinueOutput,
-)
-if (camelSessionAutocontinueOutput.enabled !== false) {
-  throw new Error("expected plugin compaction autocontinue hook to disable with camelCase session id")
 }
 
 const commandOutput = {

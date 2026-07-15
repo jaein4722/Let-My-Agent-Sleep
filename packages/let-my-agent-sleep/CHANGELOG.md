@@ -2,19 +2,25 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
-## 0.3.2 - 2026-07-10
+## 0.3.3 - 2026-07-15
 
 ### Fixed
 
+- Added an OpenCode TUI sidebar entity for current-session LMAS guard state and active/finalizing run visibility.
+- Extended `lmas_info` to report current-session guard state and visible run summaries.
+- Removed the OpenCode compaction autocontinue and session-compacting guard hooks; LMAS now leaves compaction/continuation ownership to OpenCode and other plugins while blocking only live reply-expecting prompts for active handoffs.
 - Removed the `--disable-omo-continuation` and `--keep-omo-continuation` install options.
 - Removed installer writes to Oh My OpenAgent `disabled_hooks` and `disabled_skills`; existing OMO settings are preserved byte-for-byte.
 - Added a read-only doctor warning for known continuation-hook entries that may remain from an LMAS 0.3.0 install.
 - Kept OMO compatibility entirely in the OpenCode runtime guard, scoped to sessions with an active `LMAS_HANDOFF v1`.
 - Restricted runtime protocol learning to LMAS tools, recognized LMAS CLI commands, and session events; arbitrary tool output can no longer arm or clear a handoff guard.
-- Reduced the npm entry module to one plugin function export so OpenCode does not execute test helpers as additional plugins.
+- Kept the npm entry module limited to explicit OpenCode `server` and `tui` plugin exports so OpenCode does not execute test helpers as additional plugins.
 - Validated protocol run IDs, removed dynamic data from guarded shell no-ops, bounded streaming buffers, and fixed split-delta handoff parsing.
 - Required explicit cancel intent and an exact active run ID without overriding the user's OpenCode permission decision.
 - Made completion and resume files atomic, added a handoff-start barrier, moved tmux sockets to short stable paths, and surfaced surviving cancellation processes.
+- Added post-launch tmux socket/session verification so sandbox-denied socket creation cannot emit a false `LMAS_HANDOFF STARTED` before becoming `LOST`.
+- Added non-Git Codex resume support, a configurable `LMAS_CODEX_BIN`, and an explicit reload/reopen requirement after external completion of an already-running Codex Desktop task or CLI TUI.
+- Documented direct Codex Desktop testing that showed persisted external turns can be visible in the thread while remaining absent from the already-running app-server's model context.
 - Restricted completion HTTP endpoints to `http://` or `https://` and removed model-facing notification/server URL fields from OpenCode tools.
 - Pinned the OpenCode plugin spec to the exact LMAS version while leaving both legacy and versioned OpenCode cache layouts entirely under OpenCode's control.
 - Stopped OpenCode-only installs from moving Codex or Claude assets, and moved Codex update backups outside the discoverable skills directory.

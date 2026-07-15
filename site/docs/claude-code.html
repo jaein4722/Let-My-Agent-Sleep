@@ -19,7 +19,7 @@
     <p>This installs <code>~/.claude/commands/let-my-agent-sleep.md</code> and supporting scripts under <code>~/.claude/lmas/let-my-agent-sleep/</code>. It does not install a global Claude skill, so OpenCode does not pick up the Claude integration through <code>~/.claude/skills</code>.</p>
     <h2>Recommended settings</h2>
     <ul>
-      <li>Set <code>LMAS_CLAUDE_SESSION_ID</code> when you know the exact session to resume.</li>
+      <li>LMAS captures <code>CLAUDE_CODE_SESSION_ID</code> automatically when the job starts.</li>
       <li>Use <code>LMAS_CLAUDE_CONTINUE=1</code> only when continuing the most recent Claude session in the working directory is acceptable.</li>
       <li>If automatic resume is not safe, use the generated <code>resume_prompt.txt</code> as a manual fallback.</li>
     </ul>

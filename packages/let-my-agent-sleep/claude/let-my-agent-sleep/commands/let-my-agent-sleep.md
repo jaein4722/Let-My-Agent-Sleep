@@ -59,10 +59,10 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 The Claude Code adapter uses:
 
 ```bash
-claude --resume "$LMAS_CLAUDE_SESSION_ID" -p "$(cat resume_prompt.txt)"
+claude --resume "$claude_session_id" -p "$(cat resume_prompt.txt)"
 ```
 
-If `LMAS_CLAUDE_SESSION_ID` is absent, the wrapper writes the prompt and skips automatic resume. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
+The wrapper captures Claude Code's `CLAUDE_CODE_SESSION_ID` automatically when the job starts and resumes that exact session after completion. If Claude Code does not expose a session ID, the wrapper writes the prompt and skips automatic resume. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
 User task or command context:
 

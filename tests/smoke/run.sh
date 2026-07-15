@@ -5,6 +5,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 
 tests=(
   tests/smoke/test-basic-handoff.sh
+  tests/smoke/test-tmux-launch-verification.sh
   tests/smoke/test-success-completion.sh
   tests/smoke/test-failed-completion.sh
   tests/smoke/test-status-list.sh
@@ -13,6 +14,7 @@ tests=(
   tests/smoke/test-omo-guard.sh
   tests/smoke/test-opencode-plugin-guard.sh
   tests/smoke/test-opencode-plugin-real-import.sh
+  tests/smoke/test-opencode-tui-sidebar.sh
   tests/smoke/test-packed-opencode-plugin-import.sh
   tests/smoke/test-opencode-adapter.sh
   tests/smoke/test-codex-adapter.sh

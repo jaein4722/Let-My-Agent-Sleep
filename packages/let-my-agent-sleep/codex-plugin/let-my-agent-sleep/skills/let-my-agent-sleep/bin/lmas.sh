@@ -34,8 +34,9 @@ Environment:
   LMAS_OPENCODE_SESSION_ID   Required for opencode adapter
   LMAS_OPENCODE_USERNAME     Optional basic-auth username. Default: OPENCODE_SERVER_USERNAME or opencode
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
-  LMAS_CODEX_SESSION_ID      Preferred for codex adapter; CODEX_THREAD_ID is also used when available
-  LMAS_CLAUDE_SESSION_ID     Preferred for claude adapter exact resume
+  LMAS_CODEX_BIN             Codex executable path or command name. Default: codex
+  CODEX_THREAD_ID            Automatically supplied by Codex for exact thread resume
+  CLAUDE_CODE_SESSION_ID     Automatically supplied by Claude Code for exact session resume
   LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
   LMAS_HTTP_CONNECT_TIMEOUT  HTTP adapter/notify connect timeout seconds. Default: 5
   LMAS_HTTP_MAX_TIME         HTTP adapter/notify total timeout seconds. Default: 30
@@ -279,23 +280,28 @@ run_opencode_adapter() {
 }
 
 run_codex_adapter() {
-  local run_dir prompt_file session_id
+  local run_dir prompt_file session_id codex_bin
   run_dir=$1
   prompt_file=$2
   session_id=$(awk -F= '$1 == "codex_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
-  [ -n "$session_id" ] || session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
+  [ -n "$session_id" ] || session_id=${CODEX_THREAD_ID:-}
+  codex_bin=${LMAS_CODEX_BIN:-codex}
 
   if [ -z "$session_id" ]; then
-    printf 'codex adapter skipped: codex_session_id, LMAS_CODEX_SESSION_ID, and CODEX_THREAD_ID are empty\n' > "$run_dir/adapter.log"
+    printf 'codex adapter skipped: codex_session_id and CODEX_THREAD_ID are empty\n' > "$run_dir/adapter.log"
     return 0
   fi
 
-  if ! command -v codex >/dev/null 2>&1; then
-    printf 'codex adapter skipped: codex command not found\n' > "$run_dir/adapter.log"
+  if ! command -v "$codex_bin" >/dev/null 2>&1; then
+    printf 'codex adapter skipped: codex command not found: %s\n' "$codex_bin" > "$run_dir/adapter.log"
     return 0
   fi
 
-  codex exec resume "$session_id" - < "$prompt_file" > "$run_dir/adapter.log" 2>&1 || {
+  {
+    cat "$prompt_file"
+    printf '\nCodex Desktop synchronization requirement:\n'
+    printf 'This completion turn is running in a separate Codex process. An already-running Codex Desktop app-server may display this turn without adding it to that process\047s model-visible context. Tell the user to reload or reopen the task before sending another message from the previously open view.\n'
+  } | "$codex_bin" exec resume --skip-git-repo-check "$session_id" - > "$run_dir/adapter.log" 2>&1 || {
     printf '\ncodex adapter failed for session %s\n' "$session_id" >> "$run_dir/adapter.log"
     return 0
   }
@@ -305,7 +311,8 @@ run_claude_adapter() {
   local run_dir prompt_file session_id continue_mode prompt cwd
   run_dir=$1
   prompt_file=$2
-  session_id=${LMAS_CLAUDE_SESSION_ID:-}
+  session_id=$(awk -F= '$1 == "claude_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
+  [ -n "$session_id" ] || session_id=${CLAUDE_CODE_SESSION_ID:-}
   continue_mode=${LMAS_CLAUDE_CONTINUE:-}
 
   if ! command -v claude >/dev/null 2>&1; then
@@ -333,7 +340,7 @@ run_claude_adapter() {
     return 0
   fi
 
-  printf 'claude adapter skipped: LMAS_CLAUDE_SESSION_ID is empty; set LMAS_CLAUDE_CONTINUE=1 to continue the most recent Claude session in cwd\n' > "$run_dir/adapter.log"
+  printf 'claude adapter skipped: claude_session_id and CLAUDE_CODE_SESSION_ID are empty; set LMAS_CLAUDE_CONTINUE=1 to continue the most recent Claude session in cwd\n' > "$run_dir/adapter.log"
 }
 
 run_adapter() {
@@ -483,6 +490,9 @@ launch_watcher_tmux() {
   command_line=$(quote_command "$SCRIPT_PATH" __watch "$run_dir" "$run_id" "$adapter" "$cwd" "$command_text" "$stdout_path" "$stderr_path" "$metadata_path" "$artifacts_dir" -- "$@")
   log_path=$(shell_quote "$run_dir/watcher.log")
   ( cd "$cwd" && tmux -S "$tmux_socket" new-session -d -s "$session" "exec $command_line > $log_path 2>&1" ) || die "failed to start tmux watcher session: $session"
+  if [ ! -S "$tmux_socket" ] || ! tmux -S "$tmux_socket" has-session -t "$session" >/dev/null 2>&1; then
+    die "failed to verify tmux watcher session: $session"
+  fi
   printf 'tmux:%s\n' "$session"
 }
 
@@ -531,7 +541,7 @@ watch_command() {
 }
 
 start_command() {
-  local adapter runs_dir cwd artifacts_dir notify_url run_id run_dir command_text started_at started_epoch metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id
+  local adapter runs_dir cwd artifacts_dir notify_url run_id run_dir command_text started_at started_epoch metadata_path stdout_path stderr_path resume_instruction watcher_id codex_session_id claude_session_id
   local metadata=()
 
   adapter=${LMAS_ADAPTER:-noop}
@@ -612,7 +622,15 @@ start_command() {
   started_epoch=$(now_epoch)
   codex_session_id=
   if [ "$adapter" = "codex" ]; then
-    codex_session_id=${LMAS_CODEX_SESSION_ID:-${CODEX_THREAD_ID:-}}
+    codex_session_id=${CODEX_THREAD_ID:-}
+  fi
+  claude_session_id=
+  if [ "$adapter" = "claude" ]; then
+    claude_session_id=${CLAUDE_CODE_SESSION_ID:-}
+  fi
+  opencode_session_id=
+  if [ "$adapter" = "opencode" ]; then
+    opencode_session_id=${LMAS_OPENCODE_SESSION_ID:-}
   fi
   metadata_path="$run_dir/metadata.txt"
   stdout_path="$run_dir/stdout.log"
@@ -633,6 +651,12 @@ start_command() {
     fi
     if [ -n "$codex_session_id" ]; then
       printf 'codex_session_id=%s\n' "$codex_session_id"
+    fi
+    if [ -n "$claude_session_id" ]; then
+      printf 'claude_session_id=%s\n' "$claude_session_id"
+    fi
+    if [ -n "$opencode_session_id" ]; then
+      printf 'opencode_session_id=%s\n' "$opencode_session_id"
     fi
     set +u
     for item in "${metadata[@]}"; do

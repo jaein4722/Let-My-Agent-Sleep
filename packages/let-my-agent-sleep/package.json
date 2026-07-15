@@ -1,6 +1,6 @@
 {
   "name": "let-my-agent-sleep",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Start long-running jobs, stop polling, resume OpenCode and Codex sessions, with experimental Claude Code support.",
   "homepage": "https://jaein4722.github.io/Let-My-Agent-Sleep/",
   "bugs": {
@@ -13,7 +13,8 @@
   "type": "module",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./tui": "./src/tui.js"
   },
   "bin": {
     "let-my-agent-sleep": "bin/lmas-install.js",

@@ -49,8 +49,10 @@ globalThis.fetch = async () => {
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
 
 const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
-if (functionExports.length !== 1 || functionExports[0][0] !== "LetMyAgentSleepPlugin") {
-  throw new Error(`expected exactly one plugin function export, got: ${functionExports.map(([name]) => name).join(", ")}`)
+for (const expected of ["LetMyAgentSleepPlugin", "server", "LetMyAgentSleepTuiPlugin", "tui", "default"]) {
+  if (typeof module[expected] !== "function") {
+    throw new Error(`missing packed plugin function export: ${expected}`)
+  }
 }
 
 const officialGuardHooks = [
@@ -58,15 +60,11 @@ const officialGuardHooks = [
   "chat.message",
   "experimental.chat.messages.transform",
   "experimental.chat.system.transform",
-  "experimental.session.compacting",
   "tool.execute.before",
   "tool.execute.after",
   "shell.env",
   "command.execute.before",
   "permission.ask",
-]
-const compatibilityGuardHooks = [
-  "experimental.compaction.autocontinue",
 ]
 
 for (const hookName of officialGuardHooks) {
@@ -75,9 +73,9 @@ for (const hookName of officialGuardHooks) {
   }
 }
 
-for (const hookName of compatibilityGuardHooks) {
-  if (typeof hooks[hookName] !== "function") {
-    throw new Error(`missing compatibility guard hook: ${hookName}`)
+for (const hookName of ["experimental.compaction.autocontinue", "experimental.session.compacting"]) {
+  if (typeof hooks[hookName] === "function") {
+    throw new Error(`packed plugin should not install compaction hook: ${hookName}`)
   }
 }
 
@@ -104,7 +102,12 @@ if (!hooks.tool.lmas_cancel.args.run_id.safeParse("lmas_test").success) {
 }
 
 const info = await hooks.tool.lmas_info.execute({}, { sessionID: "ses_packed_info" })
-if (!info.includes("LMAS_INFO v1") || !info.includes("version:")) {
+if (
+  !info.includes("LMAS_INFO v1")
+  || !info.includes("version:")
+  || !info.includes("current_session_guard_active: false")
+  || !info.includes("current_session_runs: none")
+) {
   throw new Error("packed lmas_info did not return diagnostic info")
 }
 
@@ -146,29 +149,6 @@ if (fetchCalls !== 0) {
   throw new Error("packed plugin markerless prompt injection reached underlying fetch")
 }
 
-const compactionAutocontinueOutput = { enabled: true }
-await hooks["experimental.compaction.autocontinue"](
-  { sessionID: "ses_packed_import", agent: "sisyphus" },
-  compactionAutocontinueOutput,
-)
-
-if (compactionAutocontinueOutput.enabled !== false) {
-  throw new Error("packed plugin did not disable compaction autocontinue during active handoff")
-}
-
-const sessionCompactingOutput = { context: [] }
-await hooks["experimental.session.compacting"](
-  { sessionID: "ses_packed_import" },
-  sessionCompactingOutput,
-)
-if (
-  sessionCompactingOutput.context.length !== 1
-  || !sessionCompactingOutput.context[0].includes("LMAS handoff is active")
-  || !sessionCompactingOutput.context[0].includes("lmas_packed_import")
-) {
-  throw new Error("packed plugin did not preserve LMAS handoff state in compaction context")
-}
-
 const systemTransformOutput = { system: [] }
 await hooks["experimental.chat.system.transform"](
   { sessionID: "ses_packed_import", model: {} },
@@ -176,10 +156,9 @@ await hooks["experimental.chat.system.transform"](
 )
 if (
   systemTransformOutput.system.length !== 1
-  || !systemTransformOutput.system[0].includes("LMAS handoff is active")
-  || !systemTransformOutput.system[0].includes("lmas_packed_import")
+  || !systemTransformOutput.system[0].includes("live turn only")
 ) {
-  throw new Error("packed plugin did not preserve LMAS handoff state in system context")
+  throw new Error("packed plugin did not add live-turn-only guard system context")
 }
 
 const args = { command: "cat stdout.log", timeout: 60000 }

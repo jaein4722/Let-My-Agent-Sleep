@@ -8,7 +8,7 @@
   "scripts": {
     "pack": "npm_config_cache=${TMPDIR:-/tmp}/lmas-npm-cache npm pack --workspace let-my-agent-sleep --dry-run",
     "release:check": "bash tests/release/check.sh",
-    "test:syntax": "bash -n packages/let-my-agent-sleep/bin/lmas.sh tests/release/check.sh tests/smoke/*.sh && find packages/let-my-agent-sleep/bin packages/let-my-agent-sleep/src -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "test:syntax": "bash -n packages/let-my-agent-sleep/bin/lmas.sh tests/release/check.sh tests/smoke/*.sh && find scripts packages/let-my-agent-sleep/bin packages/let-my-agent-sleep/src -type f \\( -name '*.js' -o -name '*.mjs' \\) -print0 | xargs -0 -n1 node --check",
     "test:site": "tests/site/check-site.py",
     "test:smoke": "tests/smoke/run.sh"
   }

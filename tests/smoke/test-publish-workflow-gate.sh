@@ -39,6 +39,7 @@ for text in [
     "packages/let-my-agent-sleep/package.json",
     ".github/workflows/publish.yml",
     "publish workflow trigger path",
+    "root and package changelogs must match before release",
 ]:
     if text not in release_check:
         raise SystemExit(f"release check missing publish-trigger invariant: {text}")
@@ -195,13 +196,17 @@ required = [
     "npm view \"let-my-agent-sleep@${version}\" gitHead",
     'git rev-list -n 1 "$tag"',
     "--verify-tag",
+    "Prepare GitHub release notes",
+    "node scripts/extract-release-notes.mjs",
+    '--notes-file "$RUNNER_TEMP/release-notes.md"',
+    "root and package changelogs must match before release",
 ]
 
 for text in required:
     if text not in workflow:
         raise SystemExit(f"publish workflow missing trusted publishing invariant: {text}")
 
-for forbidden in ["NODE_AUTH_TOKEN", "NPM_TOKEN", "--otp", "always-auth"]:
+for forbidden in ["NODE_AUTH_TOKEN", "NPM_TOKEN", "--otp", "always-auth", "--generate-notes"]:
     if forbidden in workflow:
         raise SystemExit(f"publish workflow should not use token/OTP publishing path: {forbidden}")
 
@@ -382,5 +387,64 @@ grep -q 'must be newer than npm latest' "$SAME_VERSION_OUTPUT" || {
   cat "$SAME_VERSION_OUTPUT" >&2
   exit 1
 }
+
+CHANGELOG_FIXTURE="$TMPDIR_ROOT/CHANGELOG.md"
+RELEASE_NOTES="$TMPDIR_ROOT/release-notes.md"
+cat > "$CHANGELOG_FIXTURE" <<'EOF'
+# Changelog
+
+## 1.2.3 - 2026-07-10
+
+### Added
+
+- First release-note item.
+- Second release-note item with `code`.
+
+## 1.2.2 - 2026-07-09
+
+- Previous release.
+EOF
+
+if ! node scripts/extract-release-notes.mjs \
+  --version 1.2.3 \
+  --changelog "$CHANGELOG_FIXTURE" \
+  --output "$RELEASE_NOTES"; then
+  printf 'release-note extraction failed for an existing version\n' >&2
+  exit 1
+fi
+
+cat > "$TMPDIR_ROOT/expected-release-notes.md" <<'EOF'
+### Added
+
+- First release-note item.
+- Second release-note item with `code`.
+EOF
+
+cmp "$TMPDIR_ROOT/expected-release-notes.md" "$RELEASE_NOTES" || exit 1
+
+if node scripts/extract-release-notes.mjs \
+  --version 9.9.9 \
+  --changelog "$CHANGELOG_FIXTURE" \
+  --output "$RELEASE_NOTES" >"$TMPDIR_ROOT/missing-release-notes.out" 2>&1; then
+  printf 'release-note extraction should fail for a missing version\n' >&2
+  exit 1
+fi
+grep -q 'CHANGELOG entry for version 9.9.9 was not found' "$TMPDIR_ROOT/missing-release-notes.out" || exit 1
+
+cat > "$TMPDIR_ROOT/empty-CHANGELOG.md" <<'EOF'
+## 1.2.3 - 2026-07-10
+
+## 1.2.2 - 2026-07-09
+
+- Previous release.
+EOF
+if node scripts/extract-release-notes.mjs \
+  --version 1.2.3 \
+  --changelog "$TMPDIR_ROOT/empty-CHANGELOG.md" \
+  --output "$RELEASE_NOTES" >"$TMPDIR_ROOT/empty-release-notes.out" 2>&1; then
+  printf 'release-note extraction should fail for an empty version entry\n' >&2
+  exit 1
+fi
+grep -q 'CHANGELOG entry for version 1.2.3 is empty' "$TMPDIR_ROOT/empty-release-notes.out" || exit 1
 
 printf 'ok publish workflow gate\n'

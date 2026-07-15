@@ -51,6 +51,11 @@ for changelog in CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; do
   fi
 done
 
+if ! cmp -s CHANGELOG.md packages/let-my-agent-sleep/CHANGELOG.md; then
+  printf 'root and package changelogs must match before release\n' >&2
+  exit 1
+fi
+
 if [ -z "${GITHUB_ACTIONS:-}" ]; then
   UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
   if [ -z "$UPSTREAM" ]; then

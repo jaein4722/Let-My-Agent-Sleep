@@ -16,7 +16,7 @@
     <p class="lead">LMAS starts the long-running job in tmux, records the handoff, waits outside the agent turn, and resumes the Codex thread when the process finishes.</p>
     <h2>Install</h2>
     <pre><code>npx let-my-agent-sleep install --agent codex</code></pre>
-    <p>Restart Codex after installation. The Codex session must be resumable from the machine where the job is running. An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn appears.</p>
+    <p>Restart Codex after installation. The Codex session must be resumable from the machine where the job is running. After an external completion, reload or reopen a Codex Desktop task that was already running before sending another message. The UI can display the external turn while the existing app-server's model context still excludes it.</p>
     <h2>What the agent should do</h2>
     <ul>
       <li>Use the installed <code>let-my-agent-sleep</code> skill for commands that would require waiting.</li>
@@ -24,7 +24,7 @@
       <li>After <code>LMAS_HANDOFF v1</code>, end the turn instead of sleeping, polling, or repeatedly continuing.</li>
     </ul>
     <h2>Completion</h2>
-    <p>When the process exits, LMAS writes a completion event with the run id, status, exit code, command, stdout, stderr, metadata, artifacts directory, and finish time. Codex then resumes the same logical thread and can continue from the completed job state.</p>
+    <p>When the process exits, LMAS writes a completion event with the run id, status, exit code, command, stdout, stderr, metadata, artifacts directory, and finish time. A separate Codex process appends the completion turn to the persisted thread. Reload or reopen an already-running Desktop task so its model context is rebuilt from that persisted state before continuing.</p>
   </main>
   <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
 </body>

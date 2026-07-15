@@ -132,7 +132,7 @@ npx let-my-agent-sleep install --agent opencode
 
 Existing OMO settings are preserved. `lmas doctor --agent opencode` warns when known continuation hooks may be residue from an LMAS 0.3.0 install, but never removes them automatically. The OpenCode plugin blocks reply-expecting continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
 
-LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action; it does not end the handoff. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` is a diagnostic tool used by live doctor checks.
+LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action; it does not end the handoff. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` reports current guard and run state for live doctor checks, and the OpenCode TUI sidebar shows whether the current session has an active LMAS guard plus the visible active/finalizing runs.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
@@ -141,7 +141,7 @@ OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 Codex support is available through the installed Let My Agent Sleep skill.
 
 For automatic resume, the Codex session must be resumable from the environment where the job is running.
-An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn becomes visible.
+After an external completion, reload or reopen an already-running Codex Desktop task before sending another message. Direct testing confirmed that the UI can display the external turn while the existing app-server's model context still excludes it. Use `LMAS_CODEX_BIN=/path/to/codex` when the first `codex` on `PATH` is not the executable LMAS should use.
 
 Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
@@ -149,7 +149,7 @@ Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
 Claude Code support is experimental. It is available through the installed `/let-my-agent-sleep` command, but automatic resume behavior is not guaranteed across every Claude Code frontend or remote session setup.
 
-For exact automatic resume, set `LMAS_CLAUDE_SESSION_ID` before starting the job. Without it, LMAS leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
+LMAS captures Claude Code's `CLAUDE_CODE_SESSION_ID` automatically when the job starts. If Claude Code does not expose a session ID, LMAS leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
 Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html
 

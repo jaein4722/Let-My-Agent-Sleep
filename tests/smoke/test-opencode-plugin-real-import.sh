@@ -15,8 +15,10 @@ import { LetMyAgentSleepPlugin } from "./packages/let-my-agent-sleep/src/index.j
 
 const module = await import("./packages/let-my-agent-sleep/src/index.js")
 const functionExports = Object.entries(module).filter(([, value]) => typeof value === "function")
-if (functionExports.length !== 1 || functionExports[0][0] !== "LetMyAgentSleepPlugin") {
-  throw new Error(`expected exactly one plugin function export, got: ${functionExports.map(([name]) => name).join(", ")}`)
+for (const expected of ["LetMyAgentSleepPlugin", "server", "LetMyAgentSleepTuiPlugin", "tui", "default"]) {
+  if (typeof module[expected] !== "function") {
+    throw new Error(`missing plugin function export: ${expected}`)
+  }
 }
 
 const hooks = await LetMyAgentSleepPlugin({ serverUrl: new URL("http://127.0.0.1:4096") })
@@ -26,15 +28,11 @@ const officialGuardHooks = [
   "chat.message",
   "experimental.chat.messages.transform",
   "experimental.chat.system.transform",
-  "experimental.session.compacting",
   "tool.execute.before",
   "tool.execute.after",
   "shell.env",
   "command.execute.before",
   "permission.ask",
-]
-const compatibilityGuardHooks = [
-  "experimental.compaction.autocontinue",
 ]
 
 for (const hookName of officialGuardHooks) {
@@ -43,9 +41,9 @@ for (const hookName of officialGuardHooks) {
   }
 }
 
-for (const hookName of compatibilityGuardHooks) {
-  if (typeof hooks[hookName] !== "function") {
-    throw new Error(`missing compatibility guard hook: ${hookName}`)
+for (const hookName of ["experimental.compaction.autocontinue", "experimental.session.compacting"]) {
+  if (typeof hooks[hookName] === "function") {
+    throw new Error(`compaction hook should not be installed by LMAS guard: ${hookName}`)
   }
 }
 
@@ -72,7 +70,12 @@ if (!hooks.tool.lmas_cancel.args.run_id.safeParse("lmas_test").success) {
 }
 
 const info = await hooks.tool.lmas_info.execute({}, { sessionID: "ses_info_test" })
-if (!info.includes("LMAS_INFO v1") || !info.includes("version:")) {
+if (
+  !info.includes("LMAS_INFO v1")
+  || !info.includes("version:")
+  || !info.includes("current_session_guard_active: false")
+  || !info.includes("current_session_runs: none")
+) {
   throw new Error("lmas_info did not return diagnostic info")
 }
 

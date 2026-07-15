@@ -17,19 +17,16 @@ import {
 } from "./omo-guard.js"
 import { omoContinuationHooks } from "./omo-constants.js"
 import { findLmasScript } from "./find-lmas-script.js"
+import {
+  describeSessionState,
+  getGlobalEventTextBuffers,
+  getGlobalSessionGuards,
+} from "./runtime-state.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
-const sessionGuardsSymbol = Symbol.for("let-my-agent-sleep.opencode.session-guards")
-const eventTextBuffersSymbol = Symbol.for("let-my-agent-sleep.opencode.event-text-buffers")
-const sessionGuards = globalThis[sessionGuardsSymbol] instanceof Map
-  ? globalThis[sessionGuardsSymbol]
-  : new Map()
-const eventTextBuffers = globalThis[eventTextBuffersSymbol] instanceof Map
-  ? globalThis[eventTextBuffersSymbol]
-  : new Map()
-globalThis[sessionGuardsSymbol] = sessionGuards
-globalThis[eventTextBuffersSymbol] = eventTextBuffers
+const sessionGuards = getGlobalSessionGuards()
+const eventTextBuffers = getGlobalEventTextBuffers()
 const promptGuardSymbol = Symbol.for("let-my-agent-sleep.opencode.prompt-guard")
 const promptGuardSessions = new WeakSet()
 const injectionGuardSymbol = Symbol.for("let-my-agent-sleep.opencode.injection-guard")
@@ -107,15 +104,6 @@ function createCommandGuardPart(sessionID, runIds) {
       runIds,
     },
   }
-}
-
-function createCompactionGuardContext(runIds) {
-  const runList = runIds?.length > 0 ? runIds.join(", ") : "unknown"
-  return [
-    "LMAS handoff is active.",
-    `Active run_id(s): ${runList}.`,
-    "The agent intentionally stopped after handoff and must not continue, poll, read logs, or inspect artifacts until LMAS_COMPLETION_EVENT v1 or explicit user instruction.",
-  ].join(" ")
 }
 
 function createFetchPromptGuardResponse(sessionID, runIds, pathname) {
@@ -681,6 +669,18 @@ function createInfoTool(defaultServerUrl) {
     args: {},
     async execute(_args, context) {
       const sessionID = getRuntimeSessionID(context)
+      const cwd = context.directory || context.worktree || process.cwd()
+      const state = describeSessionState({ sessionGuards, sessionID, cwd })
+      const guard = state.guard
+      const runLines = state.runs.length > 0
+        ? state.runs.flatMap((run, index) => [
+          `current_session_run_${index + 1}: ${run.runId}`,
+          `current_session_run_${index + 1}_status: ${run.status}`,
+          `current_session_run_${index + 1}_elapsed_seconds: ${run.elapsedSeconds || ""}`,
+          `current_session_run_${index + 1}_command: ${run.commandSummary || ""}`,
+          `current_session_run_${index + 1}_run_dir: ${run.runDir}`,
+        ])
+        : ["current_session_runs: none"]
       return [
         "LMAS_INFO v1",
         `name: ${packageJson.name}`,
@@ -689,6 +689,14 @@ function createInfoTool(defaultServerUrl) {
         `server_url: ${process.env.LMAS_OPENCODE_SERVER_URL || defaultServerUrl}`,
         `session_id: ${sessionID || ""}`,
         `guarded_sessions: ${sessionGuards.size}`,
+        `current_session_guard_available: ${guard.available === true ? "true" : "false"}`,
+        `current_session_guard_active: ${guard.active === true ? "true" : "false"}`,
+        `current_session_guard_omo_turn: ${guard.omoTurn === true ? "true" : "false"}`,
+        `current_session_guard_allow_status: ${guard.allowStatus === true ? "true" : "false"}`,
+        `current_session_guard_allow_cancel: ${guard.allowCancel === true ? "true" : "false"}`,
+        `current_session_guard_run_ids: ${(guard.runIds || []).join(",")}`,
+        `current_session_guard_updated_at: ${guard.updatedAt ? new Date(guard.updatedAt).toISOString() : ""}`,
+        ...runLines,
       ].join("\n")
     },
   })
@@ -728,20 +736,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
       if (!guard) return
       if (!Array.isArray(output.system)) output.system = []
-      output.system.push(createCompactionGuardContext(guard.runIds))
-    },
-    "experimental.compaction.autocontinue": async (input, output) => {
-      ensureFetchGuard()
-      const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
-      if (!guard) return
-      output.enabled = false
-    },
-    "experimental.session.compacting": async (input, output) => {
-      ensureFetchGuard()
-      const guard = getSessionActiveHandoff(getRuntimeSessionID(input))
-      if (!guard) return
-      if (!Array.isArray(output.context)) output.context = []
-      output.context.push(createCompactionGuardContext(guard.runIds))
+      output.system.push("LMAS handoff guard is active for this live turn only. Do not poll active LMAS runs unless the user explicitly asks.")
     },
     "tool.execute.before": async (input, output) => {
       ensureFetchGuard()
@@ -815,3 +810,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     },
   }
 }
+
+export const server = LetMyAgentSleepPlugin
+export { LetMyAgentSleepTuiPlugin, tui } from "./tui.js"
+export default LetMyAgentSleepPlugin

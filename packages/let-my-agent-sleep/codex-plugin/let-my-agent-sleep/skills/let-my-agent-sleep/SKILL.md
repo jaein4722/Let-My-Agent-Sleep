@@ -38,6 +38,7 @@ ${CODEX_HOME:-~/.codex}/skills/let-my-agent-sleep/scripts/lmas.sh start --adapte
 5. When `LMAS_COMPLETION_EVENT v1` appears later in the session, run `lmas.sh status <run_id>` if you need a concise summary, then inspect stdout/stderr/artifacts and continue the original task.
 
 Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed and available on `PATH`; do not fall back to `nohup`, `launchctl`, or direct background shell execution.
+Codex's default workspace sandbox can block tmux socket creation. If LMAS reports that the watcher session could not be started or verified, request the narrowly scoped permission needed to rerun the same LMAS start command. Never accept a handoff unless `LMAS_HANDOFF v1` was printed after watcher verification.
 
 ## Required Behavior
 
@@ -50,6 +51,7 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 - If the user explicitly asks to cancel, stop, or terminate an LMAS run, use `scripts/lmas.sh cancel <run_id>`. Do not kill tmux sessions or job processes directly.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - If the Codex adapter cannot resume automatically, tell the user where `resume_prompt.txt` and `adapter.log` are.
+- If completion was externally resumed while a Codex Desktop task or CLI TUI remained open, tell the user to reload or reopen that task before sending another message. The persisted turn can be visible even when the already-running process's model context does not include it.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
 - After completion, read stdout/stderr first; read metadata only when command context is unclear.
 
@@ -62,12 +64,12 @@ Let My Agent Sleep uses `tmux` for watcher sessions. `tmux` must be installed an
 
 ## Adapter Notes
 
-The Codex adapter captures the current thread id at job start. It uses `LMAS_CODEX_SESSION_ID` when explicitly set, otherwise it uses `CODEX_THREAD_ID` when Codex exposes it.
+The Codex adapter captures the `CODEX_THREAD_ID` supplied by Codex at job start. No manual session-id environment variable is required.
 
 On completion it runs:
 
 ```bash
-codex exec resume "$codex_session_id" - < resume_prompt.txt
+${LMAS_CODEX_BIN:-codex} exec resume --skip-git-repo-check "$codex_session_id" - < resume_prompt.txt
 ```
 
-If no session id is available, the wrapper writes the prompt and skips automatic resume.
+If no session id is available, the wrapper writes the prompt and skips automatic resume. Set `LMAS_CODEX_BIN` to an executable path when `codex` on `PATH` is not usable.

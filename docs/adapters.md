@@ -42,7 +42,9 @@ POST /session/:session_id/prompt_async
 
 The OpenCode npm plugin provides `lmas_start`, `lmas_status`, `lmas_cancel`, and diagnostic `lmas_info`. `lmas_start` sets the session id from the OpenCode tool context.
 
-The OpenCode plugin also installs a runtime handoff guard. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into the same session is treated as a no-op until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action without ending the handoff. This protects the handoff from loop plugins that try to continue a session because a TODO or plan item is still open. `noReply` internal notifications and LMAS completion prompts are not blocked.
+The OpenCode plugin also installs a runtime handoff guard. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into the same session is treated as a no-op until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action without ending the handoff. This protects the handoff from loop plugins that try to continue a session because a TODO or plan item is still open. `noReply` internal notifications and LMAS completion prompts are not blocked. LMAS does not install OpenCode compaction hooks; compaction and continuation remain owned by OpenCode and other plugins, while LMAS blocks only live reply-expecting prompts for active handoffs.
+
+The OpenCode TUI sidebar can show the current session guard state and active/finalizing LMAS runs when OpenCode loads the LMAS TUI entity. The same state is available from `lmas_info` for live doctor checks.
 
 The server URL must be the same OpenCode server that owns the session id. The plugin uses its current OpenCode server URL automatically. For direct CLI fallback on a non-default port, export the same URL before attaching:
 
@@ -67,41 +69,38 @@ Then inspect `stdout.log` and `stderr.log`. `metadata.txt` is intended as second
 
 Secondary prototype adapter.
 
-Preferred:
-
-```bash
-export LMAS_CODEX_SESSION_ID=<session-id>
-```
-
-If `LMAS_CODEX_SESSION_ID` is empty, the adapter uses `CODEX_THREAD_ID` when Codex exposes it. The resolved id is written to `metadata.txt` at job start, so parallel Codex threads resume the thread that launched each LMAS run.
+The adapter captures the `CODEX_THREAD_ID` supplied by Codex and writes it to `metadata.txt` at job start, so parallel Codex threads resume the thread that launched each LMAS run. No manual session-id environment variable is required.
 
 On completion, the watcher runs:
 
 ```bash
-codex exec resume "$codex_session_id" - < resume_prompt.txt
+${LMAS_CODEX_BIN:-codex} exec resume --skip-git-repo-check "$codex_session_id" - < resume_prompt.txt
 ```
 
-If the session id or `codex` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
+`LMAS_CODEX_BIN` can point to a working Codex executable when the first `codex` on `PATH` is missing or broken. If the session id or executable is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
 
-An already-open Codex Desktop view may need to be refreshed or reopened before an externally resumed turn becomes visible.
+### Verified active-session boundary
+
+Direct tests with the bundled Codex CLI and a Codex Desktop-created task established two separate facts:
+
+- `codex exec resume` appends the external completion turn to the same persisted thread. Codex Desktop's thread reader can display that turn.
+- An app-server or CLI TUI that was already running does not add the external turn to its in-memory model-visible context. In the Desktop test, the persisted thread displayed `APP_EXTERNAL_942`, but the next Desktop turn could only recall the pre-injection tokens. The same stale-context continuation was reproduced in the CLI TUI.
+
+Do not send another message from a Codex view that stayed open across external completion. Reload or reopen the task first. A fresh resume reads the persisted completion history correctly. Showing the external turn in the UI is not evidence that the already-running model context was rebased.
 
 ## `claude`
 
 Secondary prototype adapter.
 
-Preferred:
-
-```bash
-export LMAS_CLAUDE_SESSION_ID=<session-id>
-```
+The adapter captures the `CLAUDE_CODE_SESSION_ID` supplied by Claude Code and writes it to `metadata.txt` at job start. No manual session-id environment variable is required.
 
 On completion, the watcher runs:
 
 ```bash
-claude --resume "$LMAS_CLAUDE_SESSION_ID" -p "$(cat resume_prompt.txt)"
+claude --resume "$claude_session_id" -p "$(cat resume_prompt.txt)"
 ```
 
-If `LMAS_CLAUDE_SESSION_ID` is empty, set `LMAS_CLAUDE_CONTINUE=1` to let the adapter fall back to:
+If Claude Code does not supply a session ID, set `LMAS_CLAUDE_CONTINUE=1` to let the adapter fall back to:
 
 ```bash
 claude --continue -p "$(cat resume_prompt.txt)"
@@ -111,7 +110,7 @@ which resumes the most recently used Claude session in the job's `cwd`. If neith
 
 ### Verified live-session behavior
 
-The following are observations from a limited set of real Claude Code sessions (a bare CLI/tmux session and the Desktop app) using an explicit session ID with a matching `cwd`; they are not an upstream compatibility guarantee:
+The following are observations from a limited set of real Claude Code sessions (a bare CLI/tmux session and the Desktop app) using a matching session ID and `cwd`; they are not an upstream compatibility guarantee:
 
 - In those tests, `claude --resume` appended the completion turn to the session transcript whether the target session was dormant or currently open.
 - An already-open, idle interactive session does **not** refresh live. The person watching that window sees nothing new until they restart/reopen it — this matches the `codex` adapter's documented behavior.
