@@ -20,6 +20,7 @@ const paths = {
   codexPlugin: join(packageRoot, "codex-plugin", "let-my-agent-sleep"),
   claudeCommand: join(packageRoot, "claude", "let-my-agent-sleep", "commands", "let-my-agent-sleep.md"),
   claudeBin: join(packageRoot, "claude", "let-my-agent-sleep", "assets", "bin", "lmas.sh"),
+  claudeCodexWake: join(packageRoot, "claude", "let-my-agent-sleep", "assets", "bin", "codex-live-wake.cjs"),
   claudeScript: join(packageRoot, "claude", "let-my-agent-sleep", "assets", "scripts", "lmas.sh"),
 }
 
@@ -1184,10 +1185,12 @@ function doctorCodex() {
   const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex")
   const codexSkillTarget = join(codexHome, "skills", openCodeSkillName, "SKILL.md")
   const codexBinTarget = join(codexHome, "skills", openCodeSkillName, "bin", "lmas.sh")
+  const codexWakeTarget = join(codexHome, "skills", openCodeSkillName, "bin", "codex-live-wake.cjs")
   const codexScriptTarget = join(codexHome, "skills", openCodeSkillName, "scripts", "lmas.sh")
   console.log("Codex doctor:")
   console.log(`  skill: ${codexSkillTarget}`)
   console.log(`  binary: ${codexBinTarget}`)
+  console.log(`  live wake: ${codexWakeTarget}`)
   console.log(`  wrapper: ${codexScriptTarget}`)
   let healthy = true
   if (!existsSync(codexSkillTarget)) {
@@ -1199,6 +1202,11 @@ function doctorCodex() {
     healthy = doctorFail("Codex LMAS binary is missing or not executable; run: lmas install --agent codex") && healthy
   } else {
     doctorOk("Codex LMAS binary is executable")
+  }
+  if (!isExecutableFile(codexWakeTarget)) {
+    healthy = doctorFail("Codex live wake helper is missing or not executable; run: lmas install --agent codex") && healthy
+  } else {
+    doctorOk("Codex live wake helper is executable")
   }
   if (!isExecutableFile(codexScriptTarget)) {
     healthy = doctorFail("Codex LMAS wrapper is missing or not executable; run: lmas install --agent codex") && healthy
@@ -1291,6 +1299,7 @@ function installClaude(options) {
 
   copyFileAsset(paths.claudeCommand, claudeCommandTarget, options)
   copyFileAsset(paths.claudeBin, join(claudeAssetsTarget, "bin", "lmas.sh"), options)
+  copyFileAsset(paths.claudeCodexWake, join(claudeAssetsTarget, "bin", "codex-live-wake.cjs"), options)
   copyFileAsset(paths.claudeScript, join(claudeAssetsTarget, "scripts", "lmas.sh"), options)
   moveAside(legacyClaudeSkillTarget, join(backupRoot, "skills"), options)
   moveAside(legacyClaudeExperimentalSkillTarget, join(backupRoot, "skills"), options)

@@ -40,12 +40,26 @@ function message(role, text, id, sessionID = "ses_test") {
   }
 }
 
-if (!shouldBlockPromptInputDuringActiveHandoff({
+if (shouldBlockPromptInputDuringActiveHandoff({
   body: {
     parts: [{ type: "text", text: "continue without an internal marker" }],
   },
 })) {
-  throw new Error("expected active handoff prompt guard to block markerless reply-expecting prompt")
+  throw new Error("did not expect active handoff prompt guard to block an unmarked generic prompt")
+}
+if (!shouldBlockPromptInputDuringActiveHandoff({
+  body: {
+    parts: [{ type: "text", text: "Continue working on the remaining task." }],
+  },
+})) {
+  throw new Error("expected active handoff prompt guard to block a clear continuation prompt")
+}
+if (shouldBlockPromptInputDuringActiveHandoff({
+  body: {
+    parts: [{ type: "text", text: "Provider credentials refreshed.", synthetic: true }],
+  },
+})) {
+  throw new Error("did not expect a benign synthetic notification to be blocked")
 }
 if (shouldBlockPromptInputDuringActiveHandoff({
   body: {
@@ -152,6 +166,21 @@ if (!markerlessSyntheticState.latestUserIsOmoContinuation) {
 }
 if (!markerlessSyntheticOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
   throw new Error("expected markerless synthetic user continuation to be neutralized")
+}
+
+const benignSyntheticOutput = {
+  messages: [
+    message("assistant", "LMAS_HANDOFF v1\nrun_id: lmas_benign_synthetic\nstatus: STARTED", "benign_synthetic_handoff", "ses_benign_synthetic"),
+    message("user", "Provider credentials refreshed.", "benign_synthetic_notice", "ses_benign_synthetic"),
+  ],
+}
+benignSyntheticOutput.messages[1].parts[0].synthetic = true
+const benignSyntheticState = applyOmoContinuationGuard(benignSyntheticOutput, new Map(), 1065)
+if (benignSyntheticState.latestUserIsOmoContinuation) {
+  throw new Error("did not expect a benign synthetic notification to be classified as continuation")
+}
+if (benignSyntheticOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("did not expect a benign synthetic notification to be neutralized")
 }
 
 const markerlessNoReplyOutput = {

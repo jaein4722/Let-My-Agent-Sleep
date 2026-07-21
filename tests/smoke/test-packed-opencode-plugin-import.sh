@@ -141,7 +141,7 @@ await hooks.event({
   },
 })
 
-const blockedMarkerlessPrompt = await fetch("http://127.0.0.1:4096/session/ses_packed_import/prompt_async", {
+const allowedMarkerlessPrompt = await fetch("http://127.0.0.1:4096/session/ses_packed_import/prompt_async", {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
@@ -149,12 +149,31 @@ const blockedMarkerlessPrompt = await fetch("http://127.0.0.1:4096/session/ses_p
   }),
 })
 
-if (blockedMarkerlessPrompt.status !== 204 || blockedMarkerlessPrompt.headers.get("x-lmas-guard") !== "active") {
-  throw new Error("packed plugin did not no-op markerless prompt injection during active handoff")
+if (allowedMarkerlessPrompt.status !== 200) {
+  throw new Error("packed plugin blocked an unmarked prompt during active handoff")
 }
 
-if (fetchCalls !== 0) {
-  throw new Error("packed plugin markerless prompt injection reached underlying fetch")
+if (fetchCalls !== 1) {
+  throw new Error("packed plugin did not pass an unmarked prompt to underlying fetch")
+}
+
+const blockedExplicitContinuation = await fetch("http://127.0.0.1:4096/session/ses_packed_import/prompt_async", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    parts: [{ type: "text", text: "Continue working on the remaining task." }],
+  }),
+})
+
+if (
+  blockedExplicitContinuation.status !== 204
+  || blockedExplicitContinuation.headers.get("x-lmas-guard") !== "active"
+) {
+  throw new Error("packed plugin did not no-op an explicit continuation during active handoff")
+}
+
+if (fetchCalls !== 1) {
+  throw new Error("packed plugin explicit continuation reached underlying fetch")
 }
 
 const systemTransformOutput = { system: [] }

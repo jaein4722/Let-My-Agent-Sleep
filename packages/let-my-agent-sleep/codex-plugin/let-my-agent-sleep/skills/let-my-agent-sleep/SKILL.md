@@ -51,7 +51,9 @@ Codex's default workspace sandbox can block tmux socket creation. If LMAS report
 - If the user explicitly asks to cancel, stop, or terminate an LMAS run, use `scripts/lmas.sh cancel <run_id>`. Do not kill tmux sessions or job processes directly.
 - If a user later asks for status and `LMAS_STATUS v1` reports `LOST`, inspect `watcher.log` and `stderr.log`, report the run as lost, and ask before relaunching. Do not silently start a replacement job.
 - If the Codex adapter cannot resume automatically, tell the user where `resume_prompt.txt` and `adapter.log` are.
-- If completion was externally resumed while a Codex Desktop task or CLI TUI remained open, tell the user to reload or reopen that task before sending another message. The persisted turn can be visible even when the already-running process's model context does not include it.
+- If `adapter.log` reports that live wake succeeded, continue normally in the already-running task; no reload instruction is required.
+- If `adapter.log` reports the separate-process fallback, tell the user to reload or reopen any Codex TUI or Desktop task that stayed open across completion. A persisted external turn can be visible even when that process's model context does not include it.
+- If `adapter.log` reports an ambiguous live-wake outcome, do not resend the prompt automatically. Check whether the completion turn is already visible, and point the user to `resume_prompt.txt` for manual recovery only if it was not delivered.
 - Make the completion response concrete: cite the run id, status, exit code, and relevant log/artifact paths.
 - After completion, read stdout/stderr first; read metadata only when command context is unclear.
 
@@ -64,12 +66,21 @@ Codex's default workspace sandbox can block tmux socket creation. If LMAS report
 
 ## Adapter Notes
 
-The Codex adapter captures the `CODEX_THREAD_ID` supplied by Codex at job start. No manual session-id environment variable is required.
+The Codex adapter captures the `CODEX_THREAD_ID` supplied by Codex at job start. No manual session-id environment variable is required. On completion it first tries Codex's same-user app-server socket. A TUI attached with `codex --remote unix://` receives that turn immediately. It then tries the active Codex Desktop owner as a secondary live route.
 
-On completion it runs:
+The remote-TUI path uses only Codex's built-in server and client commands:
+
+```bash
+codex app-server --listen unix://
+codex --remote unix://
+```
+
+LMAS does not install, bootstrap, or start that server and does not replace or relocate the Codex executable. Keep the app-server process alive using the remote host's existing process manager when live wake-up must survive an SSH disconnect.
+
+If live delivery is definitively unavailable, it falls back to:
 
 ```bash
 ${LMAS_CODEX_BIN:-codex} exec resume --skip-git-repo-check "$codex_session_id" - < resume_prompt.txt
 ```
 
-If no session id is available, the wrapper writes the prompt and skips automatic resume. Set `LMAS_CODEX_BIN` to an executable path when `codex` on `PATH` is not usable.
+If delivery becomes ambiguous after dispatch, the wrapper does not run the fallback because that could duplicate the completion turn. If no session id is available, the wrapper writes the prompt and skips automatic resume. Set `LMAS_CODEX_LIVE_WAKE=0` to disable live attempts, `LMAS_CODEX_APP_SERVER_WAKE=0` to skip only the app-server socket, or `LMAS_CODEX_APP_SERVER_SOCKET` to test a non-default same-user socket. Set `LMAS_CODEX_BIN` to an executable path when the fallback `codex` on `PATH` is not usable.

@@ -130,9 +130,9 @@ For OpenCode installs, LMAS does not modify Oh My OpenAgent `disabled_hooks` or 
 npx let-my-agent-sleep install --agent opencode
 ```
 
-Existing OMO settings are preserved. `lmas doctor --agent opencode` warns when known continuation hooks may be residue from an LMAS 0.3.0 install, but never removes them automatically. The OpenCode plugin blocks reply-expecting continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
+Existing OMO settings are preserved. `lmas doctor --agent opencode` warns when known continuation hooks may be residue from an LMAS 0.3.0 install, but never removes them automatically. The OpenCode plugin blocks explicitly marked or clearly identified continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
 
-LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, reply-expecting prompt injection into that same session is no-oped until `LMAS_COMPLETION_EVENT v1` arrives. A direct user request authorizes one exact-run status or cancel action; it does not end the handoff. `noReply` internal notifications and LMAS completion prompts are allowed through. `lmas_info` reports current guard and run state for live doctor checks, and the OpenCode TUI sidebar shows whether the current session has an active LMAS guard plus the visible active/finalizing runs.
+LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, OMO initiator markers, compaction-continuation metadata, and known TODO/Ralph/Boulder or explicit continue-work prompts are no-oped until `LMAS_COMPLETION_EVENT v1` arrives. Unmarked fallback prompts, benign synthetic notifications, direct user slash commands, `noReply` internal notifications, and LMAS completion prompts pass through. A direct user request authorizes one exact-run status or cancel action without ending the handoff. `lmas_info` reports current guard and run state for live doctor checks, and the OpenCode TUI sidebar shows whether the current session has an active LMAS guard plus the visible active/finalizing runs.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
@@ -141,7 +141,15 @@ OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 Codex support is available through the installed Let My Agent Sleep skill.
 
 For automatic resume, the Codex session must be resumable from the environment where the job is running.
-After an external completion, reload or reopen an already-running Codex Desktop task before sending another message. Direct testing confirmed that the UI can display the external turn while the existing app-server's model context still excludes it. Use `LMAS_CODEX_BIN=/path/to/codex` when the first `codex` on `PATH` is not the executable LMAS should use.
+For a server or SSH workflow with live TUI wake-up, run Codex's built-in app server and attach the TUI to it; LMAS installs no service, wrapper, or alternate Codex binary:
+
+```bash
+codex app-server --listen unix://
+# From the terminal where you use Codex:
+codex --remote unix://
+```
+
+Keep the app-server command alive with the same tmux/systemd setup you already use for remote services. LMAS detects its same-user default Unix socket and starts the completion turn through that active owner, so the attached TUI updates immediately. The Desktop owner is retained as a secondary live route. If neither live owner is available, LMAS falls back to `codex exec resume`; that separate-process path requires reloading or reopening a TUI or Desktop view that stayed open. LMAS never installs, bootstraps, or starts a Codex service and never changes the Codex executable path. Set `LMAS_CODEX_LIVE_WAKE=0` to disable live attempts, and use `LMAS_CODEX_BIN=/path/to/codex` only to override the fallback executable.
 
 Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 

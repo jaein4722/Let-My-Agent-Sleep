@@ -25,10 +25,12 @@ PKG="$EXTRACT_DIR/package"
 [ -f "$PKG/package.json" ] || { printf 'packed tarball missing package.json\n' >&2; exit 1; }
 [ -x "$PKG/bin/lmas-install.js" ] || { printf 'packed tarball lmas-install.js is not executable\n' >&2; exit 1; }
 [ -x "$PKG/bin/lmas.sh" ] || { printf 'packed tarball lmas.sh is not executable\n' >&2; exit 1; }
+[ -x "$PKG/bin/codex-live-wake.cjs" ] || { printf 'packed tarball missing executable Codex live wake helper\n' >&2; exit 1; }
 [ -f "$PKG/src/index.js" ] || { printf 'packed tarball missing OpenCode plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/src/tui.js" ] || { printf 'packed tarball missing OpenCode TUI plugin entry\n' >&2; exit 1; }
 [ -f "$PKG/skills/let-my-agent-sleep/SKILL.md" ] || { printf 'packed tarball missing OpenCode skill\n' >&2; exit 1; }
 [ -f "$PKG/codex-plugin/let-my-agent-sleep/.codex-plugin/plugin.json" ] || { printf 'packed tarball missing Codex plugin manifest\n' >&2; exit 1; }
+[ -x "$PKG/codex-plugin/let-my-agent-sleep/bin/codex-live-wake.cjs" ] || { printf 'packed Codex plugin missing live wake helper\n' >&2; exit 1; }
 [ -f "$PKG/README.md" ] || { printf 'packed tarball missing README.md\n' >&2; exit 1; }
 [ -f "$PKG/CHANGELOG.md" ] || { printf 'packed tarball missing CHANGELOG.md\n' >&2; exit 1; }
 [ -f "$PKG/LICENSE" ] || { printf 'packed tarball missing LICENSE\n' >&2; exit 1; }

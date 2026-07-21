@@ -233,7 +233,7 @@ await guardedClient.session.promptAsync({
 if (promptAsyncCalls !== 2) {
   throw new Error("expected no-reply marker promptAsync to pass through prompt injection guard even without a noReply flag")
 }
-const blockedModelFallbackShapePromptAsync = await guardedClient.session.promptAsync({
+const allowedModelFallbackShapePromptAsync = await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
   body: {
     agent: "sisyphus",
@@ -241,10 +241,10 @@ const blockedModelFallbackShapePromptAsync = await guardedClient.session.promptA
     parts: [{ type: "text", text: "continue" }],
   },
 })
-if (promptAsyncCalls !== 2 || blockedModelFallbackShapePromptAsync?.data?.lmas_guard !== true) {
-  throw new Error("expected active LMAS handoff to no-op OMO model-fallback shaped promptAsync")
+if (promptAsyncCalls !== 3 || allowedModelFallbackShapePromptAsync?.data?.id !== "real_prompt_async") {
+  throw new Error("expected an unmarked model-fallback shaped promptAsync to pass through")
 }
-const blockedRuntimeFallbackShapePromptAsync = await guardedClient.session.promptAsync({
+const allowedRuntimeFallbackShapePromptAsync = await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
   body: {
     messageID: "retry_message",
@@ -253,17 +253,26 @@ const blockedRuntimeFallbackShapePromptAsync = await guardedClient.session.promp
     parts: [{ type: "text", text: "Retry the previous user request." }],
   },
 })
-if (promptAsyncCalls !== 2 || blockedRuntimeFallbackShapePromptAsync?.data?.lmas_guard !== true) {
-  throw new Error("expected active LMAS handoff to no-op OMO runtime-fallback shaped promptAsync")
+if (promptAsyncCalls !== 4 || allowedRuntimeFallbackShapePromptAsync?.data?.id !== "real_prompt_async") {
+  throw new Error("expected an unmarked runtime-fallback shaped promptAsync to pass through")
 }
-const blockedMarkerlessPromptAsync = await guardedClient.session.promptAsync({
+const allowedMarkerlessPromptAsync = await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
   body: {
     parts: [{ type: "text", text: "ordinary user prompt" }],
   },
 })
-if (promptAsyncCalls !== 2 || blockedMarkerlessPromptAsync?.data?.lmas_guard !== true) {
-  throw new Error("expected active LMAS handoff to no-op markerless reply-expecting promptAsync before injection")
+if (promptAsyncCalls !== 5 || allowedMarkerlessPromptAsync?.data?.id !== "real_prompt_async") {
+  throw new Error("expected an unmarked generic promptAsync to pass through")
+}
+const blockedExplicitContinuationPromptAsync = await guardedClient.session.promptAsync({
+  path: { id: promptGuardSessionID },
+  body: {
+    parts: [{ type: "text", text: "Continue working on the remaining task." }],
+  },
+})
+if (promptAsyncCalls !== 5 || blockedExplicitContinuationPromptAsync?.data?.lmas_guard !== true) {
+  throw new Error("expected a clear continuation promptAsync to be no-oped")
 }
 await guardedClient.session.promptAsync({
   path: { id: promptGuardSessionID },
@@ -274,14 +283,14 @@ await guardedClient.session.promptAsync({
     }],
   },
 })
-if (promptAsyncCalls !== 3) {
+if (promptAsyncCalls !== 6) {
   throw new Error("expected plain LMAS completion promptAsync to pass through prompt injection guard")
 }
 const blockedBodyShapedPrompt = await guardedClient.session.promptAsync({
   sessionID: promptGuardSessionID,
   parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
 })
-if (promptAsyncCalls !== 3 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 6 || blockedBodyShapedPrompt?.data?.lmas_guard !== true) {
   throw new Error("expected body-shaped internal prompt input to be no-oped by prompt injection guard")
 }
 const reusedPromptGuardModule = await import(`./packages/let-my-agent-sleep/src/index.js?reused-prompt-guard=${Date.now()}`)
@@ -308,7 +317,7 @@ const blockedThroughExistingPromptWrapper = await guardedClient.session.promptAs
     parts: [{ type: "text", text: "continue\n<!-- OMO_INTERNAL_INITIATOR -->" }],
   },
 })
-if (promptAsyncCalls !== 3 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
+if (promptAsyncCalls !== 6 || blockedThroughExistingPromptWrapper?.data?.lmas_guard !== true) {
   throw new Error("expected a reloaded plugin module to share an already-installed LMAS prompt guard")
 }
 await promptGuardPlugin.event({
@@ -349,18 +358,17 @@ if (blockedLiveRouteSyncPrompt.status !== 200) {
 if (fetchCalls !== 0) {
   throw new Error("expected live-route sync prompt internal prompt to be no-oped before fetch")
 }
-const blockedLiveRouteMarkerlessPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+const allowedLiveRouteMarkerlessPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
     parts: [{ type: "text", text: "ordinary retry prompt without internal marker" }],
   }),
 })
-await expectGuardedFetchResponse(blockedLiveRouteMarkerlessPrompt, "live-route markerless reply-expecting prompt")
-if (fetchCalls !== 0) {
-  throw new Error("expected live-route markerless reply-expecting prompt to be no-oped before fetch")
+if (allowedLiveRouteMarkerlessPrompt.status !== 200 || fetchCalls !== 1) {
+  throw new Error("expected live-route unmarked generic prompt to pass through fetch guard")
 }
-const blockedLiveRouteModelFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+const allowedLiveRouteModelFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
@@ -369,11 +377,10 @@ const blockedLiveRouteModelFallbackPrompt = await fetch(`http://127.0.0.1:4096/s
     parts: [{ type: "text", text: "continue" }],
   }),
 })
-await expectGuardedFetchResponse(blockedLiveRouteModelFallbackPrompt, "live-route OMO model-fallback shaped prompt")
-if (fetchCalls !== 0) {
-  throw new Error("expected live-route OMO model-fallback shaped prompt to be no-oped before fetch")
+if (allowedLiveRouteModelFallbackPrompt.status !== 200 || fetchCalls !== 2) {
+  throw new Error("expected live-route unmarked model-fallback prompt to pass through fetch guard")
 }
-const blockedLiveRouteRuntimeFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+const allowedLiveRouteRuntimeFallbackPrompt = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
@@ -383,10 +390,21 @@ const blockedLiveRouteRuntimeFallbackPrompt = await fetch(`http://127.0.0.1:4096
     parts: [{ type: "text", text: "Retry the previous user request." }],
   }),
 })
-await expectGuardedFetchResponse(blockedLiveRouteRuntimeFallbackPrompt, "live-route OMO runtime-fallback shaped prompt")
-if (fetchCalls !== 0) {
-  throw new Error("expected live-route OMO runtime-fallback shaped prompt to be no-oped before fetch")
+if (allowedLiveRouteRuntimeFallbackPrompt.status !== 200 || fetchCalls !== 3) {
+  throw new Error("expected live-route unmarked runtime-fallback prompt to pass through fetch guard")
 }
+const blockedLiveRouteExplicitContinuation = await fetch(`http://127.0.0.1:4096/session/${promptGuardSessionID}/prompt_async`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    parts: [{ type: "text", text: "Continue working on the remaining task." }],
+  }),
+})
+await expectGuardedFetchResponse(blockedLiveRouteExplicitContinuation, "live-route clear continuation prompt")
+if (fetchCalls !== 3) {
+  throw new Error("expected a clear continuation prompt to be no-oped before fetch")
+}
+fetchCalls = 0
 for (const hookName of ["experimental.compaction.autocontinue", "experimental.session.compacting"]) {
   if (hookName in promptGuardPlugin) {
     throw new Error(`LMAS guard must not install compaction hook: ${hookName}`)
@@ -1410,6 +1428,28 @@ if (!markerlessSyntheticOutput.messages[0].parts[0].text.includes("[LMAS GUARD: 
   throw new Error("expected plugin transform hook to neutralize markerless synthetic continuation")
 }
 
+const benignSyntheticOutput = {
+  messages: [
+    message(
+      "assistant",
+      "LMAS_HANDOFF v1\nrun_id: lmas_benign_synthetic_notice\nstatus: STARTED",
+      "benign_synthetic_handoff",
+      "benign_synthetic_session",
+    ),
+    message(
+      "user",
+      "Provider credentials refreshed.",
+      "omo_benign_synthetic_notice",
+      "benign_synthetic_session",
+    ),
+  ],
+}
+benignSyntheticOutput.messages[1].parts[0].synthetic = true
+await plugin["experimental.chat.messages.transform"]({}, benignSyntheticOutput)
+if (benignSyntheticOutput.messages[1].parts[0].text.includes("[LMAS GUARD: ACTIVE HANDOFF]")) {
+  throw new Error("did not expect plugin transform hook to neutralize a benign synthetic notification")
+}
+
 const markerlessNoReplyOutput = {
   messages: [
     message(
@@ -1615,6 +1655,7 @@ await plugin.event({
     type: "message.part.delta",
     properties: {
       sessionID,
+      messageID: "event_delta_omo_message",
       role: "user",
       delta: "continue\n<!-- OMO_INTERNAL_INITIATOR -->",
     },
@@ -1637,6 +1678,7 @@ await plugin.event({
     type: "message.part.delta",
     properties: {
       sessionID,
+      messageID: "event_markerless_synthetic_message",
       role: "user",
       synthetic: true,
       delta: "Continue working on the remaining task.",
@@ -1660,6 +1702,7 @@ await plugin.event({
     type: "message.part.delta",
     properties: {
       sessionID,
+      messageID: "event_delta_real_user_message",
       role: "user",
       delta: "Cancel the LMAS run now.",
     },
@@ -1667,6 +1710,23 @@ await plugin.event({
 })
 await plugin["tool.execute.before"](
   { tool: "todowrite", sessionID, callID: "call_event_delta_real_user_todowrite" },
+  { args: { todos: [] } },
+)
+
+await plugin.event({
+  event: {
+    type: "message.part.delta",
+    properties: {
+      sessionID,
+      messageID: "event_benign_synthetic_message",
+      role: "user",
+      synthetic: true,
+      delta: "Provider credentials refreshed.",
+    },
+  },
+})
+await plugin["tool.execute.before"](
+  { tool: "todowrite", sessionID, callID: "call_event_benign_synthetic_todowrite" },
   { args: { todos: [] } },
 )
 
@@ -1743,44 +1803,8 @@ if (realUserCommandOutput.parts[0].metadata?.lmas_guard === true) {
   throw new Error("did not expect a real user slash command to be neutralized after real user follow-up")
 }
 
-const knownOmoCommandOutput = {
-  parts: [{
-    type: "text",
-    text: "You are starting a Sisyphus work session.",
-  }],
-}
-await plugin["command.execute.before"](
-  { command: "start-work", arguments: "", sessionID },
-  knownOmoCommandOutput,
-)
-if (
-  knownOmoCommandOutput.parts.length !== 1
-  || !knownOmoCommandOutput.parts[0].text.includes("LMAS handoff is active")
-  || knownOmoCommandOutput.parts[0].metadata?.lmas_guard !== true
-) {
-  throw new Error("expected command hook to neutralize known OMO start-work command during active LMAS handoff")
-}
-
-const ralphLoopCommandOutput = {
-  parts: [{
-    type: "text",
-    text: "You are starting a Ralph Loop.",
-  }],
-}
-await plugin["command.execute.before"](
-  { command: "ralph-loop", arguments: "continue", sessionID },
-  ralphLoopCommandOutput,
-)
-if (
-  ralphLoopCommandOutput.parts.length !== 1
-  || !ralphLoopCommandOutput.parts[0].text.includes("LMAS handoff is active")
-  || ralphLoopCommandOutput.parts[0].metadata?.lmas_guard !== true
-) {
-  throw new Error("expected command hook to neutralize known OMO ralph-loop command during active LMAS handoff")
-}
-
-for (const command of omoContinuationHooks.filter((hook) => hook !== "ralph-loop")) {
-  const knownContinuationCommandOutput = {
+for (const command of ["start-work", ...omoContinuationHooks]) {
+  const directContinuationCommandOutput = {
     parts: [{
       type: "text",
       text: `You are starting ${command}.`,
@@ -1788,14 +1812,48 @@ for (const command of omoContinuationHooks.filter((hook) => hook !== "ralph-loop
   }
   await plugin["command.execute.before"](
     { command, arguments: "continue", sessionID },
-    knownContinuationCommandOutput,
+    directContinuationCommandOutput,
+  )
+  if (directContinuationCommandOutput.parts[0].metadata?.lmas_guard === true) {
+    throw new Error(`did not expect a direct user ${command} command to be neutralized`)
+  }
+}
+
+for (const command of ["start-work", ...omoContinuationHooks]) {
+  const syntheticContinuationCommandOutput = {
+    parts: [{
+      type: "text",
+      text: `You are starting ${command}.`,
+      synthetic: true,
+    }],
+  }
+  await plugin["command.execute.before"](
+    { command, arguments: "continue", sessionID },
+    syntheticContinuationCommandOutput,
   )
   if (
-    knownContinuationCommandOutput.parts.length !== 1
-    || !knownContinuationCommandOutput.parts[0].text.includes("LMAS handoff is active")
-    || knownContinuationCommandOutput.parts[0].metadata?.lmas_guard !== true
+    syntheticContinuationCommandOutput.parts.length !== 1
+    || !syntheticContinuationCommandOutput.parts[0].text.includes("LMAS handoff is active")
+    || syntheticContinuationCommandOutput.parts[0].metadata?.lmas_guard !== true
   ) {
-    throw new Error(`expected command hook to neutralize known OMO ${command} command during active LMAS handoff`)
+    throw new Error(`expected a synthetic ${command} continuation command to be neutralized`)
+  }
+}
+
+for (const command of ["model-fallback", "runtime-fallback", "atlas"]) {
+  const removedBroadCommandOutput = {
+    parts: [{
+      type: "text",
+      text: `You are starting ${command}.`,
+      synthetic: true,
+    }],
+  }
+  await plugin["command.execute.before"](
+    { command, arguments: "continue", sessionID },
+    removedBroadCommandOutput,
+  )
+  if (removedBroadCommandOutput.parts[0].metadata?.lmas_guard === true) {
+    throw new Error(`did not expect removed broad command ${command} to be neutralized by name alone`)
   }
 }
 

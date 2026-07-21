@@ -35,6 +35,13 @@ Environment:
   LMAS_OPENCODE_USERNAME     Optional basic-auth username. Default: OPENCODE_SERVER_USERNAME or opencode
   LMAS_OPENCODE_PASSWORD     Optional basic-auth password
   LMAS_CODEX_BIN             Codex executable path or command name. Default: codex
+  LMAS_CODEX_LIVE_WAKE       Try an active Codex app-server/TUI owner, then Desktop. Default: auto; set 0 to disable
+  LMAS_CODEX_APP_SERVER_WAKE Set 0 to skip the Codex app-server socket
+  LMAS_CODEX_APP_SERVER_SOCKET
+                             Override the Codex app-server Unix socket path
+  LMAS_CODEX_IPC_SOCKET      Override the Codex Desktop IPC socket path
+  LMAS_CODEX_LIVE_WAKE_TIMEOUT_MS
+                             Live wake timeout milliseconds. Default: 15000
   CODEX_THREAD_ID            Automatically supplied by Codex for exact thread resume
   CLAUDE_CODE_SESSION_ID     Automatically supplied by Claude Code for exact session resume
   LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
@@ -280,7 +287,7 @@ run_opencode_adapter() {
 }
 
 run_codex_adapter() {
-  local run_dir prompt_file session_id codex_bin
+  local run_dir prompt_file session_id codex_bin live_mode live_helper live_timeout live_log live_status node_bin
   run_dir=$1
   prompt_file=$2
   session_id=$(awk -F= '$1 == "codex_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
@@ -292,16 +299,58 @@ run_codex_adapter() {
     return 0
   fi
 
+  : > "$run_dir/adapter.log"
+  live_mode=${LMAS_CODEX_LIVE_WAKE:-auto}
+  live_helper=${LMAS_CODEX_LIVE_WAKE_HELPER:-"${SCRIPT_PATH%/*}/codex-live-wake.cjs"}
+  live_timeout=${LMAS_CODEX_LIVE_WAKE_TIMEOUT_MS:-15000}
+  live_log="$run_dir/codex-live-wake.log"
+  node_bin=${LMAS_NODE_BIN:-node}
+
+  case "$live_mode" in
+    0|false|FALSE|off|OFF|disabled|DISABLED)
+      printf 'codex live wake disabled; using separate-process fallback\n' >> "$run_dir/adapter.log"
+      ;;
+    *)
+      if ! command -v "$node_bin" >/dev/null 2>&1; then
+        printf 'codex live wake unavailable: node command not found: %s; using separate-process fallback\n' "$node_bin" >> "$run_dir/adapter.log"
+      elif [ ! -f "$live_helper" ]; then
+        printf 'codex live wake unavailable: helper not found: %s; using separate-process fallback\n' "$live_helper" >> "$run_dir/adapter.log"
+      else
+        "$node_bin" "$live_helper" \
+          --thread-id "$session_id" \
+          --prompt-file "$prompt_file" \
+          --timeout-ms "$live_timeout" > "$live_log" 2>&1
+        live_status=$?
+        case "$live_status" in
+          0)
+            printf 'codex live wake succeeded: active app-server or Desktop owner acknowledged the completion turn\n' >> "$run_dir/adapter.log"
+            cat "$live_log" >> "$run_dir/adapter.log"
+            return 0
+            ;;
+          10)
+            printf 'codex live wake unavailable; using separate-process fallback\n' >> "$run_dir/adapter.log"
+            cat "$live_log" >> "$run_dir/adapter.log"
+            ;;
+          *)
+            printf 'codex live wake outcome is ambiguous after dispatch; separate-process fallback suppressed to avoid a duplicate completion turn\n' >> "$run_dir/adapter.log"
+            cat "$live_log" >> "$run_dir/adapter.log"
+            return 0
+            ;;
+        esac
+      fi
+      ;;
+  esac
+
   if ! command -v "$codex_bin" >/dev/null 2>&1; then
-    printf 'codex adapter skipped: codex command not found: %s\n' "$codex_bin" > "$run_dir/adapter.log"
+    printf 'codex separate-process fallback skipped: codex command not found: %s\n' "$codex_bin" >> "$run_dir/adapter.log"
     return 0
   fi
 
   {
     cat "$prompt_file"
-    printf '\nCodex Desktop synchronization requirement:\n'
-    printf 'This completion turn is running in a separate Codex process. An already-running Codex Desktop app-server may display this turn without adding it to that process\047s model-visible context. Tell the user to reload or reopen the task before sending another message from the previously open view.\n'
-  } | "$codex_bin" exec resume --skip-git-repo-check "$session_id" - > "$run_dir/adapter.log" 2>&1 || {
+    printf '\nCodex live-session synchronization requirement:\n'
+    printf 'This completion turn is running in a separate Codex process. A Codex TUI or Desktop view that stayed open may display the persisted turn without adding it to that process\047s model-visible context. Tell the user to reload or reopen the task before sending another message from that view.\n'
+  } | "$codex_bin" exec resume --skip-git-repo-check "$session_id" - >> "$run_dir/adapter.log" 2>&1 || {
     printf '\ncodex adapter failed for session %s\n' "$session_id" >> "$run_dir/adapter.log"
     return 0
   }

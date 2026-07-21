@@ -13,10 +13,12 @@ tests=(
   tests/smoke/test-omo-hook-policy.sh
   tests/smoke/test-omo-guard.sh
   tests/smoke/test-opencode-plugin-guard.sh
+  tests/smoke/test-opencode-guard-recovery.sh
   tests/smoke/test-opencode-plugin-real-import.sh
   tests/smoke/test-opencode-tui-sidebar.sh
   tests/smoke/test-packed-opencode-plugin-import.sh
   tests/smoke/test-opencode-adapter.sh
+  tests/smoke/test-codex-live-wake.sh
   tests/smoke/test-codex-adapter.sh
   tests/smoke/test-claude-adapter.sh
   tests/smoke/test-doctor.sh

@@ -2,6 +2,23 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.3.6 - 2026-07-20
+
+### Added
+
+- Added a project-local OpenCode guard-state bridge with atomic snapshots and heartbeats so the independent server and TUI plugin processes share current-session guard state.
+- Rehydrate active OpenCode guards from `RUNNING` and `FINALIZING` run metadata after a plugin restart.
+- Added a Codex live-wake adapter that first routes completion through an existing built-in app-server owner, including server-side TUI sessions attached with `codex --remote unix://`, then tries Desktop before using a separate `codex exec resume` process.
+
+### Changed
+
+- Refresh the OpenCode sidebar every five seconds and distinguish active, recovered, stale, unavailable, and running-without-guard states.
+- Narrow continuation suppression to explicit internal markers, compaction metadata, known continuation directives, and clear continuation prompts.
+- Allow unmarked fallback prompts, benign synthetic notifications, and direct user slash commands instead of blocking them solely by fallback or hook name.
+- Stop treating `model-fallback`, `runtime-fallback`, and `atlas` as guarded continuation hooks by name alone.
+- Fall back to `codex exec resume` only after definite live-wake non-delivery, and suppress fallback after ambiguous delivery so a completion turn is not duplicated.
+- Keep Codex live mode zero-install: LMAS discovers an existing same-user `codex app-server --listen unix://` socket but never installs, bootstraps, starts, wraps, copies, or relocates Codex.
+
 ## 0.3.5 - 2026-07-15
 
 ### Fixed

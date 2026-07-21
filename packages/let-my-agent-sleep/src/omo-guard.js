@@ -1,4 +1,3 @@
-const OMO_TODO_CONTINUATION = "[SYSTEM DIRECTIVE: OH-MY-OPENCODE - TODO CONTINUATION]"
 const OMO_DIRECTIVE_PREFIX = "[SYSTEM DIRECTIVE: OH-MY-OPENCODE"
 const OMO_INTERNAL_INITIATOR = "<!-- OMO_INTERNAL_INITIATOR -->"
 const OMO_INTERNAL_NOREPLY = "<!-- OMO_INTERNAL_NOREPLY -->"
@@ -85,7 +84,9 @@ export function isReplyExpectingInternalPromptInput(input) {
   if (text.includes(OMO_INTERNAL_NOREPLY)) return false
   if (stripOmoInternalMarkers(text).length === 0) return false
 
-  return parts.some(partIsSyntheticOrInternal)
+  return parts.some(partHasExplicitContinuationSignal)
+    || looksLikeOmoContinuationDirectiveText(text)
+    || (parts.some(partIsSynthetic) && looksLikeExplicitContinuationText(text))
 }
 
 export function shouldBlockPromptInputDuringActiveHandoff(input) {
@@ -98,8 +99,11 @@ export function shouldBlockPromptInputDuringActiveHandoff(input) {
   const text = parts.map(collectTextFromPart).filter(Boolean).join("\n")
   if (text.includes(LMAS_COMPLETION)) return false
   if (text.includes(OMO_INTERNAL_NOREPLY)) return false
+  if (stripOmoInternalMarkers(text).length === 0) return false
 
-  return stripOmoInternalMarkers(text).length > 0
+  return parts.some(partHasExplicitContinuationSignal)
+    || looksLikeOmoContinuationDirectiveText(text)
+    || looksLikeExplicitContinuationText(text)
 }
 
 export function getRoleFromEvent(event) {
@@ -175,12 +179,6 @@ function hasOmoInternalInitiatorMarker(text) {
   return typeof text === "string" && /<!--\s*OMO_INTERNAL_INITIATOR\s*-->/.test(text)
 }
 
-function isOmoReplyExpectingInternalText(text) {
-  if (!text.includes(OMO_INTERNAL_INITIATOR)) return false
-  if (text.includes(OMO_INTERNAL_NOREPLY)) return false
-  return stripOmoInternalMarkers(text).length > 0
-}
-
 function looksLikeOmoContinuationDirectiveText(text) {
   if (typeof text !== "string" || text.includes(OMO_INTERNAL_NOREPLY)) return false
   const stripped = stripOmoInternalMarkers(text)
@@ -196,47 +194,62 @@ function looksLikeOmoContinuationDirectiveText(text) {
     )
 }
 
-function partIsSyntheticOrInternal(part) {
+function looksLikeExplicitContinuationText(text) {
+  if (typeof text !== "string" || text.includes(OMO_INTERNAL_NOREPLY)) return false
+  if (looksLikeOmoContinuationDirectiveText(text)) return true
+  const stripped = stripOmoInternalMarkers(text)
+  if (stripped.length === 0) return false
+
+  return /\bcontinue working on (?:the )?(?:remaining|next|pending)\b/i.test(stripped)
+    || /\bcontinue (?:the )?(?:loop|next plan step)\b/i.test(stripped)
+    || /\bincomplete tasks remain in (?:your|the) todo list\b/i.test(stripped)
+    || /\bunfinished boulder work\b[\s\S]*\bcontinue\b/i.test(stripped)
+}
+
+function partIsSynthetic(part) {
   return part?.synthetic === true
-    || part?.metadata?.compaction_continue === true
+}
+
+function partHasExplicitContinuationSignal(part) {
+  return part?.metadata?.compaction_continue === true
     || hasOmoInternalInitiatorMarker(part?.text)
     || hasOmoInternalInitiatorMarker(part?.state?.output)
 }
 
-function messageHasSyntheticOrInternalPart(message) {
-  return (message?.parts || []).some(partIsSyntheticOrInternal)
+function messageHasSyntheticPart(message) {
+  return (message?.parts || []).some(partIsSynthetic)
 }
 
-function isReplyExpectingSyntheticUserMessage(message, text) {
-  if (!messageHasSyntheticOrInternalPart(message)) return false
-  if (text.includes(OMO_INTERNAL_NOREPLY)) return false
-  return stripOmoInternalMarkers(text).length > 0
+function messageHasExplicitContinuationSignal(message) {
+  return (message?.parts || []).some(partHasExplicitContinuationSignal)
 }
 
-function eventHasSyntheticOrInternalPart(event, text) {
+function eventHasExplicitContinuationSignal(event, text) {
+  const part = event?.properties?.part
+  const messageParts = event?.properties?.message?.parts || []
+  return event?.properties?.metadata?.compaction_continue === true
+    || hasOmoInternalInitiatorMarker(text)
+    || partHasExplicitContinuationSignal(part)
+    || messageParts.some(partHasExplicitContinuationSignal)
+}
+
+function eventHasSyntheticPart(event) {
   const part = event?.properties?.part
   const messageParts = event?.properties?.message?.parts || []
   return event?.properties?.synthetic === true
-    || event?.properties?.metadata?.compaction_continue === true
-    || hasOmoInternalInitiatorMarker(text)
-    || partIsSyntheticOrInternal(part)
-    || messageParts.some(partIsSyntheticOrInternal)
+    || partIsSynthetic(part)
+    || messageParts.some(partIsSynthetic)
 }
 
-function isOmoContinuationEvent(event, text) {
+function isOmoContinuationEvent(event, bufferedText) {
   const role = getRoleFromEvent(event)
   if (role && role !== "user") return false
   const eventText = getTextFromEvent(event)
-  if (!eventHasSyntheticOrInternalPart(event, eventText) && !looksLikeOmoContinuationDirectiveText(text)) return false
-  return isOmoTodoContinuationMessage({
-    info: { role: "user" },
-    parts: [{
-      type: "text",
-      text,
-      synthetic: true,
-      metadata: { compaction_continue: true },
-    }],
-  })
+  if (!eventText || eventText.includes(OMO_INTERNAL_NOREPLY)) return false
+  if (stripOmoInternalMarkers(bufferedText).length === 0) return false
+  if (eventHasExplicitContinuationSignal(event, eventText)) return true
+  if (looksLikeOmoContinuationDirectiveText(bufferedText)) return true
+  return eventHasSyntheticPart(event) && looksLikeExplicitContinuationText(bufferedText)
 }
 
 function hasExplicitCancelIntent(text) {
@@ -537,27 +550,12 @@ export function updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, eve
 
 export function isOmoTodoContinuationMessage(message) {
   if (getRoleFromMessage(message) !== "user") return false
-  const hasInternalPart = messageHasSyntheticOrInternalPart(message)
   const text = collectTextFromMessage(message)
-  if (!hasInternalPart) return looksLikeOmoContinuationDirectiveText(text)
-
-  return text.includes(OMO_TODO_CONTINUATION) || (
-    text.includes(OMO_DIRECTIVE_PREFIX)
-    && (
-      text.includes("TODO CONTINUATION")
-      || text.includes("RALPH LOOP")
-      || text.includes("BOULDER CONTINUATION")
-      || text.includes("continue")
-      || text.includes("Continue")
-    )
-  ) || (
-    text.includes(OMO_INTERNAL_INITIATOR)
-    && text.includes("Incomplete tasks remain in your todo list")
-  ) || (
-    isOmoReplyExpectingInternalText(text)
-  ) || (
-    isReplyExpectingSyntheticUserMessage(message, text)
-  )
+  if (text.includes(OMO_INTERNAL_NOREPLY)) return false
+  if (stripOmoInternalMarkers(text).length === 0) return false
+  if (messageHasExplicitContinuationSignal(message)) return true
+  if (looksLikeOmoContinuationDirectiveText(text)) return true
+  return messageHasSyntheticPart(message) && looksLikeExplicitContinuationText(text)
 }
 
 export function analyzeLmasHandoffState(messages, fallbackSessionID) {

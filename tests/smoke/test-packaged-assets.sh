@@ -5,9 +5,13 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PKG="$ROOT/packages/let-my-agent-sleep"
 
 CANONICAL="$PKG/bin/lmas.sh"
+CANONICAL_CODEX_WAKE="$PKG/bin/codex-live-wake.cjs"
 CODEX_PLUGIN_BIN="$PKG/codex-plugin/let-my-agent-sleep/bin/lmas.sh"
+CODEX_PLUGIN_WAKE="$PKG/codex-plugin/let-my-agent-sleep/bin/codex-live-wake.cjs"
 CODEX_SKILL_BIN="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/bin/lmas.sh"
+CODEX_SKILL_WAKE="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/bin/codex-live-wake.cjs"
 CLAUDE_ASSET_BIN="$PKG/claude/let-my-agent-sleep/assets/bin/lmas.sh"
+CLAUDE_ASSET_WAKE="$PKG/claude/let-my-agent-sleep/assets/bin/codex-live-wake.cjs"
 CODEX_WRAPPER="$PKG/codex-plugin/let-my-agent-sleep/skills/let-my-agent-sleep/scripts/lmas.sh"
 CLAUDE_WRAPPER="$PKG/claude/let-my-agent-sleep/assets/scripts/lmas.sh"
 CLAUDE_COMMAND="$PKG/claude/let-my-agent-sleep/commands/let-my-agent-sleep.md"
@@ -24,9 +28,13 @@ GITIGNORE="$ROOT/.gitignore"
 
 [ -x "$PKG/bin/lmas-install.js" ] || { printf 'lmas-install.js is not executable\n' >&2; exit 1; }
 [ -x "$CANONICAL" ] || { printf 'canonical lmas.sh is not executable\n' >&2; exit 1; }
+[ -x "$CANONICAL_CODEX_WAKE" ] || { printf 'canonical codex-live-wake.cjs is not executable\n' >&2; exit 1; }
 [ -x "$CODEX_PLUGIN_BIN" ] || { printf 'codex plugin lmas.sh is not executable\n' >&2; exit 1; }
+[ -x "$CODEX_PLUGIN_WAKE" ] || { printf 'codex plugin live wake helper is not executable\n' >&2; exit 1; }
 [ -x "$CODEX_SKILL_BIN" ] || { printf 'codex skill lmas.sh is not executable\n' >&2; exit 1; }
+[ -x "$CODEX_SKILL_WAKE" ] || { printf 'codex skill live wake helper is not executable\n' >&2; exit 1; }
 [ -x "$CLAUDE_ASSET_BIN" ] || { printf 'claude asset lmas.sh is not executable\n' >&2; exit 1; }
+[ -x "$CLAUDE_ASSET_WAKE" ] || { printf 'claude asset live wake helper is not executable\n' >&2; exit 1; }
 [ -x "$CODEX_WRAPPER" ] || { printf 'codex wrapper lmas.sh is not executable\n' >&2; exit 1; }
 [ -x "$CLAUDE_WRAPPER" ] || { printf 'claude wrapper lmas.sh is not executable\n' >&2; exit 1; }
 [ -f "$OPENCODE_SKILL" ] || { printf 'opencode skill was not packaged\n' >&2; exit 1; }
@@ -41,9 +49,18 @@ GITIGNORE="$ROOT/.gitignore"
 [ -f "$PACKAGE_README" ] || { printf 'package README.md is missing\n' >&2; exit 1; }
 [ -f "$GITIGNORE" ] || { printf '.gitignore is missing\n' >&2; exit 1; }
 
+if grep -q 'node:child_process' "$CANONICAL_CODEX_WAKE" \
+  || grep -Eq 'app-server daemon (bootstrap|start)' "$CANONICAL_CODEX_WAKE" "$PKG/bin/lmas-install.js"; then
+  printf 'Codex live wake must not install, start, or bootstrap an app-server\n' >&2
+  exit 1
+fi
+
 cmp -s "$CANONICAL" "$CODEX_PLUGIN_BIN" || { printf 'codex plugin bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
 cmp -s "$CANONICAL" "$CODEX_SKILL_BIN" || { printf 'codex skill bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
 cmp -s "$CANONICAL" "$CLAUDE_ASSET_BIN" || { printf 'claude asset bin/lmas.sh differs from canonical bin/lmas.sh\n' >&2; exit 1; }
+cmp -s "$CANONICAL_CODEX_WAKE" "$CODEX_PLUGIN_WAKE" || { printf 'codex plugin live wake helper differs from canonical helper\n' >&2; exit 1; }
+cmp -s "$CANONICAL_CODEX_WAKE" "$CODEX_SKILL_WAKE" || { printf 'codex skill live wake helper differs from canonical helper\n' >&2; exit 1; }
+cmp -s "$CANONICAL_CODEX_WAKE" "$CLAUDE_ASSET_WAKE" || { printf 'claude asset live wake helper differs from canonical helper\n' >&2; exit 1; }
 cmp -s "$ROOT_CHANGELOG" "$PACKAGE_CHANGELOG" || { printf 'package CHANGELOG.md differs from root CHANGELOG.md\n' >&2; exit 1; }
 grep -q 'site/social-card.png' "$ROOT_README" || { printf 'root README.md must use the PNG social card preview\n' >&2; exit 1; }
 grep -q 'https://jaein4722.github.io/Let-My-Agent-Sleep/social-card.png' "$PACKAGE_README" || {

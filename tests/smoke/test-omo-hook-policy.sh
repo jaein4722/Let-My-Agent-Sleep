@@ -11,19 +11,19 @@ import { omoContinuationHooks } from "./packages/let-my-agent-sleep/src/omo-cons
 
 const guardedContinuationHooks = [
   "todo-continuation-enforcer",
-  "model-fallback",
-  "runtime-fallback",
   "ralph-loop",
   "ulw-loop",
   "ultrawork",
   "start-work-continuation",
   "boulder-continuation",
   "unstable-agent-babysitter",
-  "atlas",
 ]
 
 const intentionallyUnguardedHooks = [
   "start-work",
+  "model-fallback",
+  "runtime-fallback",
+  "atlas",
   "stop-continuation-guard",
   "background-notification",
   "compaction-context-injector",
@@ -52,6 +52,7 @@ for (const readmePath of ["README.md", "packages/let-my-agent-sleep/README.md"])
   for (const text of [
     "LMAS does not modify Oh My OpenAgent `disabled_hooks` or `disabled_skills`",
     "Existing OMO settings are preserved",
+    "Unmarked fallback prompts, benign synthetic notifications, direct user slash commands",
   ]) {
     if (!readme.includes(text)) {
       throw new Error(`${readmePath} does not document default OMO continuation policy: ${text}`)
@@ -63,6 +64,7 @@ const opencodeSiteDocs = readFileSync("site/docs/opencode.html", "utf8")
 for (const text of [
   "LMAS does not modify Oh My OpenAgent <code>disabled_hooks</code> or <code>disabled_skills</code>",
   "Existing settings are preserved",
+  "Unmarked fallback prompts, benign synthetic notifications, direct user slash commands",
 ]) {
   if (!opencodeSiteDocs.includes(text)) {
     throw new Error(`site/docs/opencode.html does not document default OMO continuation policy: ${text}`)

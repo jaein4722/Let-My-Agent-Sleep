@@ -2,14 +2,16 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { jsx } from "@opentui/solid/jsx-runtime"
+import { createSignal, onCleanup } from "solid-js"
 import { analyzeLmasHandoffState } from "./omo-guard.js"
 import {
   describeSessionState,
-  getGlobalSessionGuards,
+  readSessionGuardState,
 } from "./runtime-state.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
+const sidebarRefreshMs = 5000
 
 function getSessionMessages(api, sessionID) {
   if (!sessionID) return []
@@ -41,30 +43,38 @@ function formatElapsed(seconds) {
   return rest > 0 ? `${hours}h${rest}m` : `${hours}h`
 }
 
-function formatGuardLine(guard, historyActive) {
-  if (guard.available && guard.active) return "Guard active"
-  if (guard.available && !guard.active && historyActive) return "Guard inactive; handoff visible"
-  if (guard.available) return "Guard inactive"
-  return historyActive ? "Guard unknown; handoff visible" : "Guard unknown"
+function formatGuardLine(guard, historyActive, activeRunCount) {
+  if (guard.available && guard.active) {
+    return guard.source === "recovered" ? "Guard active (recovered)" : "Guard active"
+  }
+  if (guard.stale && activeRunCount > 0) return "Guard stale; job running"
+  if (guard.available && historyActive) return "Guard inactive; handoff visible"
+  if (guard.available && activeRunCount > 0) return "Guard inactive; job running"
+  if (historyActive) return "Guard unverified; handoff visible"
+  if (activeRunCount > 0) return "Guard unavailable; job running"
+  return "Guard inactive"
 }
 
-export function createLmasSidebarText(api, sessionID) {
+export function createLmasSidebarText(api, sessionID, options = {}) {
   const messages = getSessionMessages(api, sessionID)
   const history = analyzeLmasHandoffState(messages, sessionID)
-  const sessionGuards = getGlobalSessionGuards()
+  const cwd = getWorkspaceDirectory(api)
   const state = describeSessionState({
-    sessionGuards,
     sessionID,
-    cwd: getWorkspaceDirectory(api),
+    cwd,
     extraRunIds: history.activeRunIds,
   })
-  const guard = state.guard
   const activeRuns = state.runs.filter((run) => ["RUNNING", "FINALIZING"].includes(run.status))
   const visibleRuns = activeRuns.length > 0 ? activeRuns : state.runs.slice(0, 3)
+  const guard = readSessionGuardState({
+    cwd,
+    sessionID,
+    now: options.now,
+  })
 
   const lines = [
     "LMAS",
-    formatGuardLine(guard, history.active),
+    formatGuardLine(guard, history.active, activeRuns.length),
   ]
 
   if (history.activeRunIds.length > 0) {
@@ -86,18 +96,33 @@ export function createLmasSidebarText(api, sessionID) {
   return lines.join("\n")
 }
 
+function LmasSidebarContent(props) {
+  const [revision, setRevision] = createSignal(0)
+  const timer = setInterval(() => setRevision((value) => value + 1), sidebarRefreshMs)
+  timer.unref?.()
+  onCleanup(() => clearInterval(timer))
+
+  return jsx("box", {
+    flexDirection: "column",
+    paddingLeft: 1,
+    paddingRight: 1,
+    children: jsx("text", {
+      get children() {
+        revision()
+        return createLmasSidebarText(props.api, props.sessionID)
+      },
+    }),
+  })
+}
+
 export const LetMyAgentSleepTuiPlugin = async (api) => {
   if (!api?.slots?.register) return
 
   const renderSidebar = (input = {}) => {
     const sessionID = input.session_id || input.sessionID
-    return jsx("box", {
-      flexDirection: "column",
-      paddingLeft: 1,
-      paddingRight: 1,
-      children: jsx("text", {
-        children: createLmasSidebarText(api, sessionID),
-      }),
+    return jsx(LmasSidebarContent, {
+      api,
+      sessionID,
     })
   }
 

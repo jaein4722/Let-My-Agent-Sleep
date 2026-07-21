@@ -71,22 +71,40 @@ Secondary prototype adapter.
 
 The adapter captures the `CODEX_THREAD_ID` supplied by Codex and writes it to `metadata.txt` at job start, so parallel Codex threads resume the thread that launched each LMAS run. No manual session-id environment variable is required.
 
-On completion, the watcher runs:
+On completion, the watcher first connects to Codex's same-user app-server Unix socket and asks that active thread owner to start a turn with `resume_prompt.txt`. A CLI TUI attached to the server receives the prompt and response immediately. The watcher then tries the active Codex Desktop IPC owner as a secondary live route.
+
+For remote/SSH use, the live path needs no LMAS-installed daemon, wrapper, or alternate binary. Start and supervise Codex's own built-in server exactly as you would an OpenCode server, then attach the TUI:
+
+```bash
+codex app-server --listen unix://
+codex --remote unix://
+```
+
+Both commands use `$CODEX_HOME/app-server-control/app-server-control.sock` by default. LMAS only discovers and connects to that same-user socket; it never installs, bootstraps, or starts the app server. If the server must outlive an SSH connection, keep the first command in the host's existing tmux/systemd process setup.
+
+The result is handled as follows:
+
+- App-server or Desktop owner acknowledgment: live wake succeeded, so no CLI fallback or reload warning is added.
+- Missing socket, incompatible owner, or another definite non-delivery result: run the existing fallback.
+- Timeout, disconnect, or another ambiguous result after dispatch: retain `resume_prompt.txt` and suppress the fallback to avoid a duplicate completion turn.
+
+The separate-process fallback remains:
 
 ```bash
 ${LMAS_CODEX_BIN:-codex} exec resume --skip-git-repo-check "$codex_session_id" - < resume_prompt.txt
 ```
 
-`LMAS_CODEX_BIN` can point to a working Codex executable when the first `codex` on `PATH` is missing or broken. If the session id or executable is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
+Set `LMAS_CODEX_LIVE_WAKE=0` to skip all live attempts, or `LMAS_CODEX_APP_SERVER_WAKE=0` to skip only the app-server socket. `LMAS_CODEX_APP_SERVER_SOCKET` overrides the default Unix socket for an explicitly configured server. `LMAS_CODEX_BIN` can point to a working Codex executable when the first `codex` on `PATH` is missing or broken. If the session id or fallback executable is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
 
 ### Verified active-session boundary
 
-Direct tests with the bundled Codex CLI and a Codex Desktop-created task established two separate facts:
+Direct tests with the bundled Codex CLI established three separate facts:
 
 - `codex exec resume` appends the external completion turn to the same persisted thread. Codex Desktop's thread reader can display that turn.
 - An app-server or CLI TUI that was already running does not add the external turn to its in-memory model-visible context. In the Desktop test, the persisted thread displayed `APP_EXTERNAL_942`, but the next Desktop turn could only recall the pre-injection tokens. The same stale-context continuation was reproduced in the CLI TUI.
+- When the TUI is attached to a shared Codex app server with `codex --remote unix://`, an external `turn/start` is rendered in that already-running TUI and enters the owner's live model context without a restart.
 
-Do not send another message from a Codex view that stayed open across external completion. Reload or reopen the task first. A fresh resume reads the persisted completion history correctly. Showing the external turn in the UI is not evidence that the already-running model context was rebased.
+This stale-context boundary applies to the `codex exec resume` fallback. When `adapter.log` says `codex live wake succeeded`, the active app-server or Desktop owner itself started the turn and does not need to be reloaded. When the fallback was used, do not send another message from a Codex view that stayed open across completion; reload or reopen the task first. A fresh resume reads the persisted completion history correctly. Showing the external turn in the UI is not evidence that an external-process fallback rebased the already-running model context.
 
 ## `claude`
 

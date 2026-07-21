@@ -1,9 +1,23 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs"
-import { join, resolve } from "node:path"
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
+import { createHash, randomUUID } from "node:crypto"
+import { dirname, join, resolve } from "node:path"
 import { spawnSync } from "node:child_process"
 
 export const sessionGuardsSymbol = Symbol.for("let-my-agent-sleep.opencode.session-guards")
 export const eventTextBuffersSymbol = Symbol.for("let-my-agent-sleep.opencode.event-text-buffers")
+export const guardStateBridgesSymbol = Symbol.for("let-my-agent-sleep.opencode.guard-state-bridges")
+export const GUARD_STATE_VERSION = 1
+export const GUARD_STATE_HEARTBEAT_MS = 5000
+export const GUARD_STATE_STALE_MS = 15000
 
 export function getGlobalSessionGuards() {
   const existing = globalThis[sessionGuardsSymbol]
@@ -198,6 +212,123 @@ export function resolveRunsDir(cwd) {
   return resolve(cwd || process.cwd(), ".lmas/runs")
 }
 
+export function resolveGuardStateDir(cwd) {
+  return join(dirname(resolveRunsDir(cwd)), "opencode-guard-state")
+}
+
+function guardStateKey(sessionID) {
+  return createHash("sha256").update(String(sessionID || "")).digest("hex")
+}
+
+export function resolveGuardStateFile(cwd, sessionID) {
+  return join(resolveGuardStateDir(cwd), `${guardStateKey(sessionID)}.json`)
+}
+
+export function readSessionGuardState({ cwd, sessionID, now = Date.now(), staleAfterMs = GUARD_STATE_STALE_MS } = {}) {
+  if (!sessionID) {
+    return {
+      active: false,
+      available: false,
+      observed: false,
+      stale: false,
+      reason: "missing_session_id",
+      runIds: [],
+    }
+  }
+
+  const file = resolveGuardStateFile(cwd, sessionID)
+  if (!existsSync(file)) {
+    return {
+      active: false,
+      available: false,
+      observed: false,
+      stale: false,
+      reason: "missing_state",
+      runIds: [],
+      file,
+    }
+  }
+
+  try {
+    const value = JSON.parse(readFileSync(file, "utf8"))
+    if (
+      value?.version !== GUARD_STATE_VERSION
+      || value?.sessionId !== sessionID
+      || typeof value?.active !== "boolean"
+      || !Number.isFinite(value?.updatedAt)
+    ) {
+      throw new Error("invalid guard state")
+    }
+
+    const ageMs = Math.max(0, now - value.updatedAt)
+    const stale = ageMs > staleAfterMs
+    return {
+      active: !stale && value.active === true,
+      available: !stale,
+      observed: true,
+      stale,
+      reason: stale ? "stale_state" : undefined,
+      runIds: Array.isArray(value.runIds) ? value.runIds.filter((runId) => typeof runId === "string") : [],
+      source: value.source === "recovered" ? "recovered" : "runtime",
+      updatedAt: value.updatedAt,
+      ageMs,
+      writerId: typeof value.writerId === "string" ? value.writerId : "",
+      file,
+    }
+  } catch {
+    return {
+      active: false,
+      available: false,
+      observed: true,
+      stale: false,
+      reason: "invalid_state",
+      runIds: [],
+      file,
+    }
+  }
+}
+
+export function writeSessionGuardState({ cwd, sessionID, guard, writerId = "", now = Date.now() } = {}) {
+  if (!sessionID) return false
+  const stateDir = resolveGuardStateDir(cwd)
+  const file = resolveGuardStateFile(cwd, sessionID)
+  const temp = `${file}.${process.pid}.${randomUUID()}.tmp`
+  const value = {
+    version: GUARD_STATE_VERSION,
+    sessionId: sessionID,
+    active: guard?.active === true,
+    runIds: Array.isArray(guard?.runIds) ? guard.runIds.filter((runId) => typeof runId === "string") : [],
+    source: guard?.recovered === true ? "recovered" : "runtime",
+    updatedAt: now,
+    writerId,
+  }
+
+  try {
+    mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+    writeFileSync(temp, `${JSON.stringify(value)}\n`, { mode: 0o600 })
+    renameSync(temp, file)
+    chmodSync(file, 0o600)
+    return true
+  } catch {
+    try {
+      unlinkSync(temp)
+    } catch {
+      // Ignore cleanup failures; the next atomic write uses a unique path.
+    }
+    return false
+  }
+}
+
+export function removeSessionGuardState({ cwd, sessionID } = {}) {
+  if (!sessionID) return false
+  try {
+    unlinkSync(resolveGuardStateFile(cwd, sessionID))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function listRunsForSession({ cwd, sessionID, runIds = [], limit = 5 } = {}) {
   const runsDir = resolveRunsDir(cwd)
   if (!existsSync(runsDir)) return []
@@ -206,7 +337,19 @@ export function listRunsForSession({ cwd, sessionID, runIds = [], limit = 5 } = 
   const runs = []
   for (const entry of readdirSync(runsDir, { withFileTypes: true })) {
     if (!entry.isDirectory() || !entry.name.startsWith("lmas_")) continue
-    const run = summarizeRunDir(join(runsDir, entry.name))
+    const runDir = join(runsDir, entry.name)
+    if (sessionID || wanted.size > 0) {
+      const metadata = join(runDir, "metadata.txt")
+      const metadataRunID = readMetadataField(metadata, "run_id")
+      const metadataSessionID = readMetadataField(metadata, "opencode_session_id")
+      if (
+        !wanted.has(entry.name)
+        && !wanted.has(metadataRunID)
+        && !(sessionID && metadataSessionID === sessionID)
+      ) continue
+    }
+
+    const run = summarizeRunDir(runDir)
     if (
       wanted.has(run.runId)
       || (sessionID && run.opencodeSessionId === sessionID)
@@ -229,4 +372,110 @@ export function describeSessionState({ sessionGuards, sessionID, cwd, extraRunId
     guard,
     runs,
   }
+}
+
+export function rehydrateSessionGuardsFromRuns({ sessionGuards, cwd, now = Date.now() } = {}) {
+  if (!sessionGuards?.set) return []
+  const runs = listRunsForSession({ cwd, limit: Number.MAX_SAFE_INTEGER })
+    .filter((run) => run.opencodeSessionId && ["RUNNING", "FINALIZING"].includes(run.status))
+  const grouped = new Map()
+
+  for (const run of runs) {
+    const values = grouped.get(run.opencodeSessionId) || []
+    values.push(run.runId)
+    grouped.set(run.opencodeSessionId, values)
+  }
+
+  for (const [sessionID, recoveredRunIds] of grouped) {
+    const existing = sessionGuards.get(sessionID)
+    const runIds = [...new Set([
+      ...(existing?.active && Array.isArray(existing.runIds) ? existing.runIds : []),
+      ...recoveredRunIds,
+    ])]
+    if (existing?.active) {
+      sessionGuards.set(sessionID, {
+        ...existing,
+        runIds,
+      })
+      continue
+    }
+    sessionGuards.set(sessionID, {
+      active: runIds.length > 0,
+      omoTurn: runIds.length > 0,
+      allowCancel: false,
+      allowStatus: false,
+      runIds,
+      updatedAt: now,
+      recovered: true,
+    })
+  }
+
+  return [...grouped.keys()]
+}
+
+function getGlobalGuardStateBridges() {
+  const existing = globalThis[guardStateBridgesSymbol]
+  if (existing instanceof Map) return existing
+  const bridges = new Map()
+  globalThis[guardStateBridgesSymbol] = bridges
+  return bridges
+}
+
+export function getOrCreateSessionGuardBridge({
+  cwd,
+  sessionGuards,
+  heartbeatMs = GUARD_STATE_HEARTBEAT_MS,
+} = {}) {
+  const root = resolveGuardStateDir(cwd)
+  const bridges = getGlobalGuardStateBridges()
+  const existing = bridges.get(root)
+  if (existing) return existing
+
+  const trackedSessionIds = new Set()
+  const writerId = `${process.pid}:${randomUUID()}`
+
+  const bridge = {
+    root,
+    writerId,
+    track(sessionID) {
+      if (!sessionID) return false
+      const guard = sessionGuards?.get?.(sessionID)
+      if (!guard?.active) {
+        const wasTracked = trackedSessionIds.delete(sessionID)
+        const stateFileExists = existsSync(resolveGuardStateFile(cwd, sessionID))
+        return wasTracked || stateFileExists
+          ? removeSessionGuardState({ cwd, sessionID })
+          : false
+      }
+      trackedSessionIds.add(sessionID)
+      return bridge.flush(sessionID)
+    },
+    clear(sessionID) {
+      if (!sessionID) return false
+      trackedSessionIds.delete(sessionID)
+      return removeSessionGuardState({ cwd, sessionID })
+    },
+    flush(sessionID) {
+      if (!sessionID) return false
+      return writeSessionGuardState({
+        cwd,
+        sessionID,
+        guard: sessionGuards?.get?.(sessionID),
+        writerId,
+      })
+    },
+    flushAll() {
+      for (const sessionID of trackedSessionIds) bridge.flush(sessionID)
+    },
+    stop() {
+      clearInterval(bridge.timer)
+      bridges.delete(root)
+    },
+    trackedSessionIds,
+  }
+
+  bridge.timer = setInterval(() => bridge.flushAll(), heartbeatMs)
+  bridge.timer.unref?.()
+  bridges.set(root, bridge)
+  return bridge
 }

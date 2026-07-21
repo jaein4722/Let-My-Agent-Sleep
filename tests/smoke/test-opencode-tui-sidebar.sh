@@ -12,7 +12,7 @@ trap cleanup EXIT
 cd "$ROOT"
 
 node --input-type=module - "$TMPDIR_ROOT" <<'JS'
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   LetMyAgentSleepTuiPlugin,
@@ -20,6 +20,13 @@ import {
   tui,
 } from "./packages/let-my-agent-sleep/src/tui.js"
 import tuiModule from "./packages/let-my-agent-sleep/src/tui.js"
+import {
+  GUARD_STATE_STALE_MS,
+  readSessionGuardState,
+  rehydrateSessionGuardsFromRuns,
+  removeSessionGuardState,
+  writeSessionGuardState,
+} from "./packages/let-my-agent-sleep/src/runtime-state.js"
 
 const root = process.argv[2]
 const sessionID = "ses_tui_sidebar"
@@ -81,11 +88,94 @@ const api = {
   },
 }
 
-const text = createLmasSidebarText(api, sessionID)
-for (const expected of ["LMAS", "Guard", "History active: 1", runID, "FINALIZING", "'bash' '-lc' 'echo tui'"]) {
+const now = Date.now()
+let text = createLmasSidebarText(api, sessionID, { now })
+for (const expected of ["LMAS", "Guard unverified; handoff visible", "History active: 1", runID, "FINALIZING", "'bash' '-lc' 'echo tui'"]) {
   if (!text.includes(expected)) {
     throw new Error(`sidebar text missing ${expected}: ${text}`)
   }
+}
+
+const recoveredGuards = new Map()
+const recoveredSessions = rehydrateSessionGuardsFromRuns({
+  sessionGuards: recoveredGuards,
+  cwd: root,
+  now,
+})
+const recoveredGuard = recoveredGuards.get(sessionID)
+if (
+  recoveredSessions.length !== 1
+  || recoveredSessions[0] !== sessionID
+  || recoveredGuard?.active !== true
+  || recoveredGuard?.recovered !== true
+  || !recoveredGuard.runIds.includes(runID)
+) {
+  throw new Error(`active run did not recover its session guard: ${JSON.stringify(recoveredGuard)}`)
+}
+
+if (!writeSessionGuardState({
+  cwd: root,
+  sessionID,
+  guard: recoveredGuard,
+  writerId: "test-writer",
+  now,
+})) {
+  throw new Error("failed to write guard bridge state")
+}
+
+const bridgeState = readSessionGuardState({ cwd: root, sessionID, now })
+if (!bridgeState.available || !bridgeState.active || bridgeState.source !== "recovered") {
+  throw new Error(`fresh guard bridge state was not readable: ${JSON.stringify(bridgeState)}`)
+}
+if ((statSync(bridgeState.file).mode & 0o777) !== 0o600) {
+  throw new Error("guard bridge state must be owner-readable and owner-writable only")
+}
+
+text = createLmasSidebarText(api, sessionID, { now })
+if (!text.includes("Guard active (recovered)")) {
+  throw new Error(`sidebar did not render recovered guard state: ${text}`)
+}
+
+writeSessionGuardState({
+  cwd: root,
+  sessionID,
+  guard: recoveredGuard,
+  writerId: "stale-writer",
+  now: now - GUARD_STATE_STALE_MS - 1,
+})
+text = createLmasSidebarText(api, sessionID, { now })
+if (!text.includes("Guard stale; job running")) {
+  throw new Error(`sidebar did not distinguish stale guard state: ${text}`)
+}
+
+writeSessionGuardState({
+  cwd: root,
+  sessionID,
+  guard: { active: false, runIds: [] },
+  writerId: "inactive-writer",
+  now,
+})
+text = createLmasSidebarText(api, sessionID, { now })
+if (!text.includes("Guard inactive; handoff visible")) {
+  throw new Error(`sidebar did not distinguish inactive guard with visible history: ${text}`)
+}
+
+const apiWithoutHistory = {
+  ...api,
+  state: {
+    ...api.state,
+    session: { messages: () => [] },
+  },
+}
+text = createLmasSidebarText(apiWithoutHistory, sessionID, { now })
+if (!text.includes("Guard inactive; job running")) {
+  throw new Error(`sidebar did not distinguish inactive guard with an active job: ${text}`)
+}
+
+removeSessionGuardState({ cwd: root, sessionID })
+text = createLmasSidebarText(apiWithoutHistory, sessionID, { now })
+if (!text.includes("Guard unavailable; job running")) {
+  throw new Error(`sidebar did not distinguish missing guard state with an active job: ${text}`)
 }
 
 if (tui !== LetMyAgentSleepTuiPlugin) {

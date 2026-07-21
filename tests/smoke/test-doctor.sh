@@ -88,6 +88,10 @@ printf '%s\n' "$CODEX_DOCTOR_OUTPUT" | grep -q 'Codex LMAS binary is executable'
   printf 'codex doctor did not verify executable binary\n%s\n' "$CODEX_DOCTOR_OUTPUT" >&2
   exit 1
 }
+printf '%s\n' "$CODEX_DOCTOR_OUTPUT" | grep -q 'Codex live wake helper is executable' || {
+  printf 'codex doctor did not verify the live wake helper\n%s\n' "$CODEX_DOCTOR_OUTPUT" >&2
+  exit 1
+}
 printf '%s\n' "$CODEX_DOCTOR_OUTPUT" | grep -q 'Codex LMAS wrapper is executable' || {
   printf 'codex doctor did not verify executable wrapper\n%s\n' "$CODEX_DOCTOR_OUTPUT" >&2
   exit 1

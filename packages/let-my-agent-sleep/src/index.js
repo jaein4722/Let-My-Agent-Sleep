@@ -7,6 +7,7 @@ import {
   createBlockedToolMessage,
   createGuardedToolAction,
   getActiveOmoGuard,
+  getSessionIDFromEvent,
   getSessionIDFromPromptInput,
   isReplyExpectingInternalPromptInput,
   shouldBlockPromptInputDuringActiveHandoff,
@@ -21,6 +22,8 @@ import {
   describeSessionState,
   getGlobalEventTextBuffers,
   getGlobalSessionGuards,
+  getOrCreateSessionGuardBridge,
+  rehydrateSessionGuardsFromRuns,
 } from "./runtime-state.js"
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -480,7 +483,7 @@ function updateSessionGuardFromToolOutput(input, output) {
   if (isCancel) updateSessionGuardFromCancelText(sessionGuards, sessionID, text)
 }
 
-function createStartTool(defaultServerUrl) {
+function createStartTool(defaultServerUrl, onGuardChanged = () => {}) {
   return tool({
     description:
       "Start a long-running training, evaluation, preprocessing, benchmark, or batch job through Let My Agent Sleep. Returns LMAS_HANDOFF v1 immediately and injects a completion prompt into this OpenCode session when the job finishes.",
@@ -549,12 +552,13 @@ function createStartTool(defaultServerUrl) {
         allowHandoff: true,
         omoTurn: true,
       })
+      onGuardChanged(sessionID)
       return result
     },
   })
 }
 
-function createStatusTool() {
+function createStatusTool(onGuardChanged = () => {}) {
   return tool({
     description:
       "Inspect an LMAS run only when the user explicitly asks for status or after an LMAS_COMPLETION_EVENT. If LMAS_STATUS v1 reports RUNNING or FINALIZING, stop immediately; do not poll, tail logs, inspect artifacts, or continue checking until a completion event arrives or the user explicitly asks again.",
@@ -600,12 +604,13 @@ function createStatusTool() {
 
       const result = stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
       updateSessionGuardFromStatusText(sessionGuards, sessionID, result)
+      onGuardChanged(sessionID)
       return result
     },
   })
 }
 
-function createCancelTool(defaultServerUrl) {
+function createCancelTool(defaultServerUrl, onGuardChanged = () => {}) {
   return tool({
     description:
       "Cancel a running Let My Agent Sleep job. If the watcher is still alive, writes a CANCELLED completion event and injects the cancellation completion prompt into this OpenCode session.",
@@ -657,6 +662,7 @@ function createCancelTool(defaultServerUrl) {
 
       const result = stderr.trim().length > 0 ? `${stdout}\n${stderr}` : stdout
       updateSessionGuardFromCancelText(sessionGuards, sessionID, result)
+      onGuardChanged(sessionID)
       return result
     },
   })
@@ -705,6 +711,15 @@ function createInfoTool(defaultServerUrl) {
 export const LetMyAgentSleepPlugin = async (input = {}) => {
   const { serverUrl } = input
   const defaultServerUrl = serverUrl?.toString?.().replace(/\/$/, "") || "http://127.0.0.1:4096"
+  const pluginDirectory = input.directory || input.worktree
+  const guardBridge = pluginDirectory
+    ? getOrCreateSessionGuardBridge({ cwd: pluginDirectory, sessionGuards })
+    : undefined
+  const recoveredSessionIds = pluginDirectory
+    ? rehydrateSessionGuardsFromRuns({ sessionGuards, cwd: pluginDirectory })
+    : []
+  for (const sessionID of recoveredSessionIds) guardBridge?.track(sessionID)
+  const syncGuardState = (sessionID) => guardBridge?.track(sessionID)
   const ensureFetchGuard = () => installFetchPromptInjectionGuard(defaultServerUrl)
   installPromptInjectionGuard(input.client)
   ensureFetchGuard()
@@ -712,8 +727,10 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
   return {
     event: ({ event }) => {
       ensureFetchGuard()
+      const sessionID = getSessionIDFromEvent(event)
       if (event?.type === "session.deleted") {
         updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, event)
+        guardBridge?.clear(sessionID)
         return
       }
       if (
@@ -722,14 +739,17 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
         && event?.type !== "message.updated"
       ) return
       updateSessionGuardFromEvent(sessionGuards, eventTextBuffers, event)
+      syncGuardState(sessionID)
     },
     "chat.message": async (input, output) => {
       ensureFetchGuard()
       updateSessionGuardFromChatMessage(input, output)
+      syncGuardState(getRuntimeSessionID(input) || getRuntimeSessionID(output?.message))
     },
     "experimental.chat.messages.transform": (input, output) => {
       ensureFetchGuard()
       applyOmoContinuationGuard(output, getRuntimeSessionID(input))
+      syncGuardState(getRuntimeSessionID(input))
     },
     "experimental.chat.system.transform": async (input, output) => {
       ensureFetchGuard()
@@ -744,6 +764,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       const activeGuard = getSessionActiveHandoff(sessionID)
       if (activeGuard && !activeGuard.allowStatus && (isStatusTool(input.tool) || argsLookLikeLmasStatus(output.args))) {
         markGuardedPollingAttempt(sessionID, activeGuard)
+        syncGuardState(sessionID)
         const action = createGuardedToolAction(input.tool, output.args, activeGuard.runIds)
         if (action.type === "args") {
           replaceArgsInPlace(output, action.args)
@@ -768,6 +789,7 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
     "tool.execute.after": async (input, output) => {
       ensureFetchGuard()
       updateSessionGuardFromToolOutput(input, output)
+      syncGuardState(getRuntimeSessionID(input))
     },
     "shell.env": async (input, output) => {
       ensureFetchGuard()
@@ -788,7 +810,9 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
         const internalCommand = isReplyExpectingInternalPromptInput({
           body: { parts: output.parts || [] },
         })
-        if (!activeGuard || (!internalCommand && !isOmoContinuationCommand(input.command))) return
+        const syntheticKnownContinuation = isOmoContinuationCommand(input.command)
+          && (output.parts || []).some((part) => part?.synthetic === true)
+        if (!activeGuard || (!internalCommand && !syntheticKnownContinuation)) return
         guard = activeGuard
       }
       output.parts = [createCommandGuardPart(sessionID, guard.runIds)]
@@ -803,9 +827,9 @@ export const LetMyAgentSleepPlugin = async (input = {}) => {
       output.status = "deny"
     },
     tool: {
-      lmas_start: createStartTool(defaultServerUrl),
-      lmas_status: createStatusTool(),
-      lmas_cancel: createCancelTool(defaultServerUrl),
+      lmas_start: createStartTool(defaultServerUrl, syncGuardState),
+      lmas_status: createStatusTool(syncGuardState),
+      lmas_cancel: createCancelTool(defaultServerUrl, syncGuardState),
       lmas_info: createInfoTool(defaultServerUrl),
     },
   }

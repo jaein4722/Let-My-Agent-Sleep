@@ -16,7 +16,7 @@ cat > "$MOCK_CODEX_STDIN"
 SH
 chmod +x "$MOCK_BIN/codex"
 
-OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_CODEX_BIN="$MOCK_BIN/codex" LMAS_RUNS_DIR="$RUNS_DIR" CODEX_THREAD_ID="codex-thread-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CODEX_ARGS="$MOCK_CODEX_ARGS" MOCK_CODEX_STDIN="$MOCK_CODEX_STDIN" LMAS_CODEX_BIN="$MOCK_BIN/codex" LMAS_CODEX_LIVE_WAKE=0 LMAS_RUNS_DIR="$RUNS_DIR" CODEX_THREAD_ID="codex-thread-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter codex -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
