@@ -15,7 +15,7 @@ printf '%s\n' "$@"
 SH
 chmod +x "$MOCK_BIN/claude"
 
-OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID="claude-session-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
+OUTPUT=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_CLAUDE_NATIVE_GRACE_SECONDS=0 LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID="claude-session-123" ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
 RUN_ID=$(printf '%s\n' "$OUTPUT" | awk '/^run_id:/ { print $2 }')
 RUN_DIR="$RUNS_DIR/$RUN_ID"
 
@@ -33,7 +33,7 @@ grep -q '^status: SUCCEEDED$' "$RUN_DIR/completion_event.txt" || { printf 'expec
 grep -q '^claude_session_id=claude-session-123$' "$RUN_DIR/metadata.txt" || { printf 'missing native claude session id metadata\n' >&2; exit 1; }
 
 rm -f "$MOCK_CLAUDE_ARGS"
-OUTPUT_CONTINUE=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID= LMAS_CLAUDE_CONTINUE=1 ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
+OUTPUT_CONTINUE=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_CLAUDE_NATIVE_GRACE_SECONDS=0 LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID= LMAS_CLAUDE_CONTINUE=1 ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
 RUN_ID_CONTINUE=$(printf '%s\n' "$OUTPUT_CONTINUE" | awk '/^run_id:/ { print $2 }')
 RUN_DIR_CONTINUE="$RUNS_DIR/$RUN_ID_CONTINUE"
 
@@ -49,7 +49,7 @@ grep -q 'LMAS_COMPLETION_EVENT v1' "$RUN_DIR_CONTINUE/adapter.log" || { printf '
 grep -q '^status: SUCCEEDED$' "$RUN_DIR_CONTINUE/completion_event.txt" || { printf 'expected continue SUCCEEDED\n' >&2; exit 1; }
 
 rm -f "$MOCK_CLAUDE_ARGS"
-OUTPUT_SKIP=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID= ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
+OUTPUT_SKIP=$(cd "$ROOT" && PATH="$MOCK_BIN:$PATH" MOCK_CLAUDE_ARGS="$MOCK_CLAUDE_ARGS" LMAS_CLAUDE_NATIVE_GRACE_SECONDS=0 LMAS_RUNS_DIR="$RUNS_DIR" CLAUDE_CODE_SESSION_ID= ./packages/let-my-agent-sleep/bin/lmas.sh start --adapter claude -- ./examples/fake_train.sh success)
 RUN_ID_SKIP=$(printf '%s\n' "$OUTPUT_SKIP" | awk '/^run_id:/ { print $2 }')
 RUN_DIR_SKIP="$RUNS_DIR/$RUN_ID_SKIP"
 
@@ -59,7 +59,7 @@ for _ in $(seq 1 100); do
 done
 
 [ -f "$RUN_DIR_SKIP/adapter.log" ] || { printf 'missing claude skip adapter log\n' >&2; exit 1; }
-grep -q 'claude adapter skipped: claude_session_id and CLAUDE_CODE_SESSION_ID are empty; set LMAS_CLAUDE_CONTINUE=1' "$RUN_DIR_SKIP/adapter.log" || {
+grep -q 'claude native waiter is absent or no longer alive, but claude_session_id and CLAUDE_CODE_SESSION_ID are empty' "$RUN_DIR_SKIP/adapter.log" || {
   printf 'claude adapter did not explain missing session id skip\n' >&2
   exit 1
 }

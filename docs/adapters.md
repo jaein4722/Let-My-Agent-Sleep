@@ -110,9 +110,17 @@ This stale-context boundary applies to the `codex exec resume` fallback. When `a
 
 Secondary prototype adapter.
 
-The adapter captures the `CLAUDE_CODE_SESSION_ID` supplied by Claude Code and writes it to `metadata.txt` at job start. No manual session-id environment variable is required.
+The adapter captures the `CLAUDE_CODE_SESSION_ID` supplied by Claude Code and writes it to `metadata.txt` at job start. The installed Claude command uses two steps:
 
-On completion, the watcher runs:
+```bash
+lmas.sh start --adapter claude -- <command...>
+# After LMAS_HANDOFF v1, launch this with Bash run_in_background: true:
+lmas.sh await <run_id>
+```
+
+The first command hands the real job to LMAS and tmux. The second command is a lightweight receiver owned by Claude's native background-task harness; it waits without LLM polling and never owns, kills, or supervises the real command. When the completion event appears, `await` atomically claims native delivery, emits `LMAS_COMPLETION_EVENT v1`, and exits successfully regardless of whether the job status is `SUCCEEDED`, `FAILED`, or `CANCELLED`. Claude's task notification then wakes the same live session. Read the notification's `<output-file>` directly because a completed task may no longer be available through `TaskOutput`.
+
+If Claude exits, the tmux job continues. Its background Bash child may terminate with Claude or briefly survive as an orphan, so the ready marker records both the waiter and the exact owning Claude process, including process start identities to reject PID reuse. At completion, LMAS waits briefly for a native claim. It runs the separate-process fallback only when the waiter was never registered, the waiter is dead, or that recorded Claude owner is dead:
 
 ```bash
 claude --resume "$claude_session_id" -p "$(cat resume_prompt.txt)"
@@ -124,14 +132,15 @@ If Claude Code does not supply a session ID, set `LMAS_CLAUDE_CONTINUE=1` to let
 claude --continue -p "$(cat resume_prompt.txt)"
 ```
 
-which resumes the most recently used Claude session in the job's `cwd`. If neither is set, or the `claude` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt`.
+which resumes the most recently used Claude session in the job's `cwd`. If neither is set, or the `claude` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt` without claiming delivery.
+
+Native and fallback paths share one atomic `delivery.claim` directory. A native claim suppresses fallback even if the task notification later becomes ambiguous; Claude exposes no receipt that could distinguish a lost notification from one queued but not yet processed. A native delivery path whose waiter and owner are still live but has not claimed within the grace period is also ambiguous and suppresses fallback. LMAS never treats a timeout, missing model response, or missing acknowledgement as proof of delivery failure. `resume_prompt.txt` remains available in every case.
 
 ### Verified live-session behavior
 
-The following are observations from a limited set of real Claude Code sessions (a bare CLI/tmux session and the Desktop app) using a matching session ID and `cwd`; they are not an upstream compatibility guarantee:
+The following are observations from isolated real Claude Code CLI sessions; they are not an upstream compatibility guarantee:
 
-- In those tests, `claude --resume` appended the completion turn to the session transcript whether the target session was dormant or currently open.
-- An already-open, idle interactive session does **not** refresh live. The person watching that window sees nothing new until they restart/reopen it — this matches the `codex` adapter's documented behavior.
-- If the user sends the originating session another message before it is restarted, the live process (unaware of the injected turn, since it never re-reads the file) appends its own next turn from the same stale parent, creating a branch in the transcript tree.
-- In the tested versions, reopening/restarting displayed both branches by timestamp. Treat `resume_prompt.txt` as the durable recovery artifact if a future Claude Code version behaves differently.
-- There is currently no known way to make the completion appear in an already-open, un-restarted session in real time. Real-time delivery into a live session (without requiring restart) is an open enhancement, not yet solved.
+- A Bash tool command started with `run_in_background: true` kept running across turns and automatically re-invoked the same idle session when it exited.
+- An actual LMAS/tmux job completed while `lmas.sh await` was the background task; the task notification woke the same session without user input, and its output file contained the expected completion event.
+- The completed task was no longer available through `TaskOutput`, while reading the notification's output-file path recovered the payload correctly.
+- If no native waiter can deliver, `claude --resume` remains the durable fallback. That separate process does not provide live synchronization to an already-open interface, so reopening or resuming the session may still be required.

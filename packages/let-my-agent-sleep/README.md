@@ -98,7 +98,7 @@ The agent should start the job, report a `run_id`, and stop. When the job finish
 | --- | --- | --- |
 | OpenCode | Primary | Plugin tools and native completion prompt injection |
 | Codex | Supported | Same-session resume from the job environment |
-| Claude Code | Experimental | Slash command, resume when possible, manual fallback prompt when needed |
+| Claude Code | Experimental | Native background waiter while the session lives; durable resume fallback otherwise |
 
 Install for a specific agent:
 
@@ -155,9 +155,9 @@ Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
 ## Claude Code
 
-Claude Code support is experimental. It is available through the installed `/let-my-agent-sleep` command, but automatic resume behavior is not guaranteed across every Claude Code frontend or remote session setup.
+Claude Code support is experimental. After LMAS starts and verifies the tmux-owned job, the installed `/let-my-agent-sleep` command registers `lmas await <run_id>` as Claude's own native background task. If that Claude session and waiter stay alive, completion ends the waiter, wakes the same session, and lets it continue without polling. The waiter never owns the real job.
 
-LMAS captures Claude Code's `CLAUDE_CODE_SESSION_ID` automatically when the job starts. If Claude Code does not expose a session ID, LMAS leaves `resume_prompt.txt` as a manual fallback. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
+If Claude exits, the real command keeps running under LMAS and tmux. A background Bash child can briefly survive as an orphan, so LMAS records both the waiter and its owning Claude process; native delivery is eligible only while both exact processes remain alive. When completion proves that no native path can deliver it, LMAS uses the existing `claude --resume` path. An atomic delivery claim prevents native and fallback completion payloads from both winning. Ambiguous post-claim failures suppress fallback to avoid duplicates and retain `resume_prompt.txt` for recovery. LMAS installs no daemon, executable wrapper, or PATH change. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
 
 Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html
 
@@ -165,6 +165,7 @@ Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-cod
 
 ```bash
 lmas start -- python train.py --config configs/exp.yaml
+lmas await <run_id> # Claude native background task only
 lmas status <run_id>
 lmas list
 lmas cancel <run_id>
@@ -229,7 +230,7 @@ No. LMAS wraps the command the agent was already going to run.
 
 ### Does it require a daemon?
 
-LMAS itself does not run a daemon. It uses `tmux` and plain files, with no database, cloud scheduler, or project-specific callback. OpenCode completion injection still requires the OpenCode server/session that owns the run to be alive when the job finishes; if it is not, LMAS leaves `resume_prompt.txt` for manual recovery.
+LMAS itself does not run a daemon. It uses `tmux` and plain files, with no database, cloud scheduler, or project-specific callback. OpenCode completion injection still requires the OpenCode server/session that owns the run to be alive when the job finishes. Claude's same-session native wake requires both its registered waiter and the owning Claude process to remain alive; otherwise LMAS uses the separate-process resume fallback when delivery is definitely safe. Every adapter retains `resume_prompt.txt` for recovery.
 
 ### What happens if a job fails?
 

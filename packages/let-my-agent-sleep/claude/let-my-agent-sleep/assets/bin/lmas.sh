@@ -13,6 +13,7 @@ usage() {
   cat <<'EOF'
 Usage:
   lmas.sh start [options] -- <command...>
+  lmas.sh await [--runs-dir <path>] <run_id|run_dir>
   lmas.sh status [--runs-dir <path>] <run_id|run_dir>
   lmas.sh cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
   lmas.sh list [--runs-dir <path>]
@@ -45,6 +46,8 @@ Environment:
   CODEX_THREAD_ID            Automatically supplied by Codex for exact thread resume
   CLAUDE_CODE_SESSION_ID     Automatically supplied by Claude Code for exact session resume
   LMAS_CLAUDE_CONTINUE       Set to 1 to let claude adapter use --continue
+  LMAS_CLAUDE_NATIVE_GRACE_SECONDS
+                             Seconds to wait for a registered native waiter. Default: 5
   LMAS_HTTP_CONNECT_TIMEOUT  HTTP adapter/notify connect timeout seconds. Default: 5
   LMAS_HTTP_MAX_TIME         HTTP adapter/notify total timeout seconds. Default: 30
 EOF
@@ -376,40 +379,298 @@ run_codex_adapter() {
   }
 }
 
+claude_delivery_claim_winner() {
+  local run_dir winner
+  run_dir=$1
+  winner=$(read_metadata_field "$run_dir/delivery.claim/winner" winner)
+  case "$winner" in
+    native|fallback)
+      printf '%s\n' "$winner"
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+claude_delivery_claim_exists() {
+  local claim_dir
+  claim_dir="$1/delivery.claim"
+  [ -e "$claim_dir" ] || [ -L "$claim_dir" ]
+}
+
+claude_native_waiter_pid() {
+  local run_dir ready_file waiter_pid
+  run_dir=$1
+  ready_file="$run_dir/native_waiter.ready"
+  [ -f "$ready_file" ] || return 1
+  waiter_pid=$(read_metadata_field "$ready_file" waiter_pid)
+  case "$waiter_pid" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  printf '%s\n' "$waiter_pid"
+}
+
+process_start_identity() {
+  local pid identity
+  pid=$1
+  identity=$(ps -p "$pid" -o lstart= 2>/dev/null) || return 1
+  identity=$(printf '%s\n' "$identity" | sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}')
+  [ -n "$identity" ] || return 1
+  printf '%s\n' "$identity"
+}
+
+process_identity_state() {
+  local pid expected actual status
+  pid=$1
+  expected=$2
+
+  actual=$(ps -p "$pid" -o lstart= 2>/dev/null)
+  status=$?
+  case "$status" in
+    0)
+      actual=$(printf '%s\n' "$actual" | sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}')
+      if [ -z "$actual" ]; then
+        printf 'unknown\n'
+      elif [ "$actual" = "$expected" ]; then
+        printf 'live\n'
+      else
+        # The PID was reused after the process recorded in native_waiter.ready died.
+        printf 'dead\n'
+      fi
+      ;;
+    1)
+      printf 'dead\n'
+      ;;
+    *)
+      printf 'unknown\n'
+      ;;
+  esac
+}
+
+find_owning_claude_pid() {
+  local current_pid parent_pid comm_name depth override_pid
+  override_pid=${LMAS_CLAUDE_OWNER_PID:-}
+  if [ -n "$override_pid" ]; then
+    case "$override_pid" in
+      *[!0-9]*) return 1 ;;
+    esac
+    [ "$override_pid" -gt 1 ] || return 1
+    process_start_identity "$override_pid" >/dev/null || return 1
+    printf '%s\n' "$override_pid"
+    return 0
+  fi
+
+  current_pid=$$
+  depth=0
+  while [ "$depth" -lt 16 ]; do
+    parent_pid=$(ps -p "$current_pid" -o ppid= 2>/dev/null | tr -d '[:space:]') || return 1
+    case "$parent_pid" in
+      ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$parent_pid" -gt 1 ] || return 1
+    comm_name=$(ps -p "$parent_pid" -o comm= 2>/dev/null) || return 1
+    comm_name=$(printf '%s\n' "$comm_name" | sed -n '1{s/^[[:space:]]*//;s/[[:space:]]*$//;p;}')
+    comm_name=${comm_name##*/}
+    case "$comm_name" in
+      claude|claude-code|claude.exe)
+        printf '%s\n' "$parent_pid"
+        return 0
+        ;;
+    esac
+    current_pid=$parent_pid
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+claude_native_delivery_state() {
+  local run_dir ready_file waiter_pid waiter_started_at owner_pid owner_started_at waiter_state owner_state
+  run_dir=$1
+  ready_file="$run_dir/native_waiter.ready"
+  if [ ! -f "$ready_file" ]; then
+    printf 'dead\n'
+    return 0
+  fi
+
+  waiter_pid=$(read_metadata_field "$ready_file" waiter_pid)
+  waiter_started_at=$(read_metadata_field "$ready_file" waiter_started_at)
+  owner_pid=$(read_metadata_field "$ready_file" owner_pid)
+  owner_started_at=$(read_metadata_field "$ready_file" owner_started_at)
+  case "$waiter_pid:$owner_pid" in
+    *[!0-9:]*) printf 'unknown\n'; return 0 ;;
+    :*|*:) printf 'unknown\n'; return 0 ;;
+  esac
+  if [ "$waiter_pid" -le 1 ] || [ "$owner_pid" -le 1 ]; then
+    printf 'unknown\n'
+    return 0
+  fi
+  if [ -z "$waiter_started_at" ] || [ -z "$owner_started_at" ]; then
+    # A partially written or older marker cannot prove that fallback is safe.
+    printf 'unknown\n'
+    return 0
+  fi
+
+  waiter_state=$(process_identity_state "$waiter_pid" "$waiter_started_at")
+  case "$waiter_state" in
+    dead) printf 'dead\n'; return 0 ;;
+    unknown) printf 'unknown\n'; return 0 ;;
+  esac
+  owner_state=$(process_identity_state "$owner_pid" "$owner_started_at")
+  case "$owner_state" in
+    live) printf 'live\n' ;;
+    dead) printf 'dead\n' ;;
+    *) printf 'unknown\n' ;;
+  esac
+}
+
+acquire_claude_delivery_claim() {
+  local run_dir winner claim_dir winner_stage
+  run_dir=$1
+  winner=$2
+  claim_dir="$run_dir/delivery.claim"
+
+  if ! mkdir "$claim_dir" 2>/dev/null; then
+    return 1
+  fi
+
+  winner_stage="$claim_dir/.winner.tmp.$$"
+  if ! {
+    printf 'winner=%s\n' "$winner"
+    printf 'claimer_pid=%s\n' "$$"
+    printf 'claimed_at=%s\n' "$(now_system)"
+  } > "$winner_stage"; then
+    rm -f "$winner_stage"
+    return 2
+  fi
+  if ! mv "$winner_stage" "$claim_dir/winner"; then
+    rm -f "$winner_stage"
+    return 2
+  fi
+  return 0
+}
+
+log_existing_claude_delivery_claim() {
+  local run_dir winner
+  run_dir=$1
+  if winner=$(claude_delivery_claim_winner "$run_dir"); then
+    case "$winner" in
+      native)
+        printf 'claude native waiter committed the completion payload; separate-process fallback suppressed\n' >> "$run_dir/adapter.log"
+        ;;
+      fallback)
+        printf 'claude completion was already claimed by the separate-process fallback; duplicate delivery suppressed\n' >> "$run_dir/adapter.log"
+        ;;
+    esac
+  else
+    printf 'claude delivery claim exists without a recognized winner; outcome is ambiguous and separate-process fallback is suppressed to avoid a duplicate completion turn\n' >> "$run_dir/adapter.log"
+  fi
+}
+
 run_claude_adapter() {
-  local run_dir prompt_file session_id continue_mode prompt cwd
+  local run_dir prompt_file session_id continue_mode prompt cwd grace_seconds poll_interval deadline winner waiter_pid claim_status fallback_mode delivery_state
   run_dir=$1
   prompt_file=$2
   session_id=$(awk -F= '$1 == "claude_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
   [ -n "$session_id" ] || session_id=${CLAUDE_CODE_SESSION_ID:-}
   continue_mode=${LMAS_CLAUDE_CONTINUE:-}
+  cwd=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null)
+  [ -n "$cwd" ] || cwd=$(pwd)
+  grace_seconds=${LMAS_CLAUDE_NATIVE_GRACE_SECONDS:-5}
+  poll_interval=${LMAS_CLAUDE_NATIVE_POLL_INTERVAL:-0.1}
+  case "$grace_seconds" in
+    ''|*[!0-9]*) grace_seconds=5 ;;
+  esac
+  if ! [[ "$poll_interval" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    poll_interval=0.1
+  fi
+  : > "$run_dir/adapter.log"
 
-  if ! command -v claude >/dev/null 2>&1; then
-    printf 'claude adapter skipped: claude command not found\n' > "$run_dir/adapter.log"
+  deadline=$(( $(now_epoch) + grace_seconds ))
+  while [ "$(now_epoch)" -lt "$deadline" ]; do
+    if claude_delivery_claim_exists "$run_dir"; then
+      if claude_delivery_claim_winner "$run_dir" >/dev/null; then
+        log_existing_claude_delivery_claim "$run_dir"
+        return 0
+      fi
+    fi
+    sleep "$poll_interval"
+  done
+
+  if claude_delivery_claim_exists "$run_dir"; then
+    log_existing_claude_delivery_claim "$run_dir"
     return 0
   fi
 
-  prompt=$(cat "$prompt_file")
-  cwd=$(awk -F= '$1 == "cwd" { print substr($0, 5); exit }' "$run_dir/metadata.txt" 2>/dev/null)
-  [ -n "$cwd" ] || cwd=$(pwd)
+  delivery_state=$(claude_native_delivery_state "$run_dir")
+  if [ "$delivery_state" != "dead" ]; then
+    waiter_pid=$(claude_native_waiter_pid "$run_dir" || true)
+    printf 'claude native delivery path is %s after %s seconds (waiter pid %s); outcome is ambiguous and separate-process fallback is suppressed to avoid a duplicate completion turn; resume_prompt.txt was retained\n' "$delivery_state" "$grace_seconds" "${waiter_pid:-unknown}" >> "$run_dir/adapter.log"
+    return 0
+  fi
 
+  fallback_mode=none
   if [ -n "$session_id" ]; then
-    ( cd "$cwd" && claude --resume "$session_id" -p "$prompt" ) > "$run_dir/adapter.log" 2>&1 || {
+    fallback_mode=resume
+  elif [ "$continue_mode" = "1" ] || [ "$continue_mode" = "true" ]; then
+    fallback_mode=continue
+  fi
+
+  if [ "$fallback_mode" = "none" ]; then
+    printf 'claude native waiter is absent or no longer alive, but claude_session_id and CLAUDE_CODE_SESSION_ID are empty; set LMAS_CLAUDE_CONTINUE=1 to allow the separate-process fallback; resume_prompt.txt was retained\n' >> "$run_dir/adapter.log"
+    return 0
+  fi
+  if ! command -v claude >/dev/null 2>&1; then
+    printf 'claude native waiter is absent or no longer alive, but the separate-process fallback is unavailable because the claude command was not found; resume_prompt.txt was retained\n' >> "$run_dir/adapter.log"
+    return 0
+  fi
+
+  # Recheck immediately before the atomic claim. A waiter that committed while
+  # fallback availability was being checked must always win.
+  if claude_delivery_claim_exists "$run_dir"; then
+    log_existing_claude_delivery_claim "$run_dir"
+    return 0
+  fi
+  delivery_state=$(claude_native_delivery_state "$run_dir")
+  if [ "$delivery_state" != "dead" ]; then
+    waiter_pid=$(claude_native_waiter_pid "$run_dir" || true)
+    printf 'claude native delivery path became %s before fallback claim (waiter pid %s); separate-process fallback suppressed\n' "$delivery_state" "${waiter_pid:-unknown}" >> "$run_dir/adapter.log"
+    return 0
+  fi
+
+  acquire_claude_delivery_claim "$run_dir" fallback
+  claim_status=$?
+  case "$claim_status" in
+    0)
+      printf 'claude native waiter is proven absent or dead; separate-process fallback claimed completion delivery\n' >> "$run_dir/adapter.log"
+      ;;
+    1)
+      log_existing_claude_delivery_claim "$run_dir"
+      return 0
+      ;;
+    *)
+      printf 'claude fallback acquired the delivery claim but could not record its winner; outcome is ambiguous and delivery is suppressed to avoid a duplicate completion turn; resume_prompt.txt was retained\n' >> "$run_dir/adapter.log"
+      return 0
+      ;;
+  esac
+
+  prompt=$(cat "$prompt_file")
+
+  if [ "$fallback_mode" = "resume" ]; then
+    ( cd "$cwd" && claude --resume "$session_id" -p "$prompt" ) >> "$run_dir/adapter.log" 2>&1 || {
       printf '\nclaude adapter failed for session %s\n' "$session_id" >> "$run_dir/adapter.log"
       return 0
     }
     return 0
   fi
 
-  if [ "$continue_mode" = "1" ] || [ "$continue_mode" = "true" ]; then
-    ( cd "$cwd" && claude --continue -p "$prompt" ) > "$run_dir/adapter.log" 2>&1 || {
+  if [ "$fallback_mode" = "continue" ]; then
+    ( cd "$cwd" && claude --continue -p "$prompt" ) >> "$run_dir/adapter.log" 2>&1 || {
       printf '\nclaude adapter failed while continuing the most recent session\n' >> "$run_dir/adapter.log"
       return 0
     }
     return 0
   fi
 
-  printf 'claude adapter skipped: claude_session_id and CLAUDE_CODE_SESSION_ID are empty; set LMAS_CLAUDE_CONTINUE=1 to continue the most recent Claude session in cwd\n' > "$run_dir/adapter.log"
 }
 
 run_adapter() {
@@ -798,6 +1059,114 @@ completion_event_file() {
     return 0
   fi
   return 1
+}
+
+await_command() {
+  local runs_dir run_ref run_dir run_id ready_file ready_stage claude_session_id event_file payload poll_interval claim_status winner
+  local waiter_started_at claude_owner_pid claude_owner_started_at owner_state
+  runs_dir=${LMAS_RUNS_DIR:-.lmas/runs}
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --runs-dir)
+        [ "$#" -ge 2 ] || die "--runs-dir requires a value"
+        runs_dir=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  [ "$#" -eq 1 ] || die "await requires exactly one run_id or run_dir"
+  run_ref=$1
+  run_dir=$(resolve_run_dir "$runs_dir" "$run_ref") || die "run not found: $run_ref"
+  [ -f "$run_dir/handoff.txt" ] || die "handoff not found for run: $run_ref"
+  run_id=$(read_field "$run_dir/handoff.txt" run_id)
+  [ -n "$run_id" ] || die "run id is missing from handoff: $run_ref"
+
+  claude_session_id=${CLAUDE_CODE_SESSION_ID:-}
+  waiter_started_at=$(process_start_identity "$$") || die "failed to identify native waiter process for run: $run_id"
+  claude_owner_pid=$(find_owning_claude_pid) || die "could not identify the owning Claude process; run await only as Claude Code's background Bash task"
+  claude_owner_started_at=$(process_start_identity "$claude_owner_pid") || die "owning Claude process disappeared before waiter registration for run: $run_id"
+  ready_file="$run_dir/native_waiter.ready"
+  ready_stage="$run_dir/.native_waiter.ready.tmp.$$"
+  if ! {
+    printf 'waiter_pid=%s\n' "$$"
+    printf 'waiter_started_at=%s\n' "$(safe_metadata_line "$waiter_started_at")"
+    printf 'owner_pid=%s\n' "$claude_owner_pid"
+    printf 'owner_started_at=%s\n' "$(safe_metadata_line "$claude_owner_started_at")"
+    printf 'claude_session_id=%s\n' "$(safe_metadata_line "$claude_session_id")"
+    printf 'epoch=%s\n' "$(now_epoch)"
+  } > "$ready_stage"; then
+    rm -f "$ready_stage"
+    die "failed to stage native waiter readiness for run: $run_id"
+  fi
+  if ! mv "$ready_stage" "$ready_file"; then
+    rm -f "$ready_stage"
+    die "failed to publish native waiter readiness for run: $run_id"
+  fi
+
+  poll_interval=${LMAS_CLAUDE_AWAIT_POLL_INTERVAL:-0.2}
+  if ! [[ "$poll_interval" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    poll_interval=0.2
+  fi
+
+  while :; do
+    [ -d "$run_dir" ] || die "run directory disappeared while awaiting completion: $run_id"
+    if event_file=$(completion_event_file "$run_dir"); then
+      if payload=$(cat "$event_file" 2>/dev/null); then
+        break
+      fi
+    fi
+    sleep "$poll_interval"
+  done
+
+  # A background Bash child can outlive the Claude TUI that launched it. Only
+  # claim native delivery while that exact Claude process still exists; PID
+  # reuse is rejected by comparing the recorded process start identity.
+  owner_state=$(process_identity_state "$claude_owner_pid" "$claude_owner_started_at")
+  case "$owner_state" in
+    live) ;;
+    dead)
+      printf '%s: owning Claude process exited before completion delivery for run %s; leaving delivery unclaimed for fallback\n' "$SCRIPT_NAME" "$run_id" >&2
+      return 4
+      ;;
+    *)
+      printf '%s: could not verify the owning Claude process before completion delivery for run %s; leaving delivery unclaimed and fallback ambiguous\n' "$SCRIPT_NAME" "$run_id" >&2
+      return 5
+      ;;
+  esac
+
+  acquire_claude_delivery_claim "$run_dir" native
+  claim_status=$?
+  case "$claim_status" in
+    0)
+      printf '%s\n' "$payload"
+      return 0
+      ;;
+    1)
+      if winner=$(claude_delivery_claim_winner "$run_dir"); then
+        printf 'LMAS_NATIVE_DELIVERY_NOOP v1\n'
+        write_line_field run_id "$run_id"
+        write_line_field reason "completion already claimed by $winner delivery"
+      else
+        printf 'LMAS_NATIVE_DELIVERY_NOOP v1\n'
+        write_line_field run_id "$run_id"
+        write_line_field reason "completion claim already exists with an ambiguous winner"
+      fi
+      return 0
+      ;;
+    *)
+      printf '%s: native waiter acquired the delivery claim but could not record its winner for run %s; fallback remains suppressed\n' "$SCRIPT_NAME" "$run_id" >&2
+      return 3
+      ;;
+  esac
 }
 
 status_from_exit_code() {
@@ -1316,6 +1685,10 @@ main() {
     start)
       shift
       start_command "$@"
+      ;;
+    await)
+      shift
+      await_command "$@"
       ;;
     status)
       shift

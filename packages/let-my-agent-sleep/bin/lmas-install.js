@@ -29,6 +29,7 @@ function usage() {
   lmas install [--agent opencode|codex|claude|all|detected] [--yes] [--dry-run] [--force]
   lmas doctor [--agent opencode|codex|claude|all|detected] [--yes] [--server-url <url>] [--directory <path>] [--workspace <id>] [--server-username <name>] [--server-password <password>]
   lmas start [options] -- <command...>
+  lmas await [--runs-dir <path>] <run_id|run_dir>
   lmas status [--runs-dir <path>] <run_id|run_dir>
   lmas cancel [--runs-dir <path>] [--reason <text>] <run_id|run_dir>
   lmas list [--runs-dir <path>]
@@ -1316,7 +1317,7 @@ async function main() {
   const argv = process.argv.slice(2)
   const command = argv[0]
 
-  if (command === "start" || command === "status" || command === "cancel" || command === "list" || command === "__watch") {
+  if (command === "start" || command === "await" || command === "status" || command === "cancel" || command === "list" || command === "__watch") {
     runWrapper(argv)
   }
 

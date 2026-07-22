@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Claude Code Support in Let My Agent Sleep</title>
-  <meta name="description" content="Claude Code support in Let My Agent Sleep is experimental. Learn how LMAS handles Claude Code long-running jobs and where automatic resume may vary." />
+  <meta name="description" content="Claude Code support in Let My Agent Sleep combines tmux-owned jobs with a native background waiter and a deduplicated resume fallback." />
   <link rel="canonical" href="https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -13,19 +13,28 @@
   <main class="wrap">
     <span class="eyebrow">Claude Code</span>
     <h1>Claude Code support is experimental.</h1>
-    <p class="lead">LMAS installs an experimental Claude Code slash command that can start and watch long-running jobs, but automatic same-session resume is not guaranteed across every Claude Code frontend, desktop, remote, or session-history setup.</p>
+    <p class="lead">LMAS keeps the real job under tmux and registers a lightweight native background waiter. While the Claude session and waiter stay alive, completion wakes that same session without polling. If the native path is definitely unavailable, LMAS retains the existing resume fallback.</p>
     <h2>Install</h2>
     <pre><code>npx let-my-agent-sleep install --agent claude</code></pre>
     <p>This installs <code>~/.claude/commands/let-my-agent-sleep.md</code> and supporting scripts under <code>~/.claude/lmas/let-my-agent-sleep/</code>. It does not install a global Claude skill, so OpenCode does not pick up the Claude integration through <code>~/.claude/skills</code>.</p>
-    <h2>Recommended settings</h2>
+    <h2>How the handoff works</h2>
+    <ol>
+      <li>The command starts through LMAS and returns <code>LMAS_HANDOFF v1</code> with a run id.</li>
+      <li>Claude starts <code>lmas.sh await &lt;run_id&gt;</code> using its native background-task option, then ends the turn immediately.</li>
+      <li>The real command continues under tmux. The waiter only receives its completion event.</li>
+      <li>When the waiter exits, Claude reads the task notification's output file and continues from <code>LMAS_COMPLETION_EVENT v1</code>.</li>
+    </ol>
+    <h2>Recovery behavior</h2>
     <ul>
-      <li>LMAS captures <code>CLAUDE_CODE_SESSION_ID</code> automatically when the job starts.</li>
+      <li>If Claude exits, the real tmux job keeps running. An orphaned waiter is not allowed to claim native delivery.</li>
+      <li>If LMAS can prove the waiter never registered, the waiter is dead, or its exact Claude owner is dead, it uses <code>claude --resume</code>.</li>
+      <li>An atomic delivery claim prevents native and fallback completion payloads from both winning.</li>
+      <li>If delivery became ambiguous after a native claim, LMAS suppresses fallback to avoid duplicates and retains <code>resume_prompt.txt</code>.</li>
       <li>Use <code>LMAS_CLAUDE_CONTINUE=1</code> only when continuing the most recent Claude session in the working directory is acceptable.</li>
-      <li>If automatic resume is not safe, use the generated <code>resume_prompt.txt</code> as a manual fallback.</li>
     </ul>
     <div class="card">
       <h2>Guarantee boundary</h2>
-      <p>OpenCode is the primary target. Codex is supported. Claude Code remains experimental until same-session resume behavior is verified across the relevant frontends.</p>
+      <p>Claude Code remains experimental. Native wake requires the exact Claude process and its registered waiter to stay alive. The job itself does not share that lifetime: it remains owned by LMAS and tmux. LMAS installs no service, executable wrapper, or PATH change.</p>
     </div>
   </main>
   <footer><div class="wrap"><a href="./">Docs index</a></div></footer>

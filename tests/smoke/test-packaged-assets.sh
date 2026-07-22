@@ -113,6 +113,10 @@ for instruction in "$OPENCODE_SKILL" "$CODEX_SKILL" "$CLAUDE_COMMAND"; do
   grep -q 'FINALIZING' "$instruction" || { printf '%s missing FINALIZING stop instruction\n' "$instruction" >&2; exit 1; }
   grep -q 'resume_prompt.txt' "$instruction" || { printf '%s missing resume_prompt fallback instruction\n' "$instruction" >&2; exit 1; }
 done
+grep -q 'run_in_background' "$CLAUDE_COMMAND" || { printf 'claude command missing native background waiter instruction\n' >&2; exit 1; }
+grep -q 'lmas.sh await <run_id>' "$CLAUDE_COMMAND" || { printf 'claude command missing await registration step\n' >&2; exit 1; }
+grep -q 'DO NOT CALL `TaskOutput`' "$CLAUDE_COMMAND" || { printf 'claude command missing TaskOutput prohibition\n' >&2; exit 1; }
+grep -q '<output-file>' "$CLAUDE_COMMAND" || { printf 'claude command missing output-file read instruction\n' >&2; exit 1; }
 
 CODEX_WRAPPER_OUTPUT=$(cd / && "$CODEX_WRAPPER" -h 2>&1)
 printf '%s\n' "$CODEX_WRAPPER_OUTPUT" | grep -q '^Usage:' || {

@@ -21,6 +21,7 @@ tests=(
   tests/smoke/test-codex-live-wake.sh
   tests/smoke/test-codex-adapter.sh
   tests/smoke/test-claude-adapter.sh
+  tests/smoke/test-claude-live-wake.sh
   tests/smoke/test-doctor.sh
   tests/smoke/test-publish-workflow-gate.sh
   tests/smoke/test-installer-dry-run.sh

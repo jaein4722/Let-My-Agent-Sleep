@@ -88,6 +88,10 @@ printf '%s\n' "$HELP_OUTPUT" | grep -q -- '--workspace <id>' || {
   printf 'packed tarball CLI help missing OpenCode workspace live doctor option\n' >&2
   exit 1
 }
+printf '%s\n' "$HELP_OUTPUT" | grep -q 'lmas await' || {
+  printf 'packed tarball CLI help missing await command\n' >&2
+  exit 1
+}
 
 INSTALL_OUTPUT=$(cd / && HOME="$INSTALL_HOME" node "$PKG/bin/lmas-install.js" install --agent all --dry-run --yes 2>&1)
 printf '%s\n' "$INSTALL_OUTPUT" | grep -q 'OpenCode install configured' || {
@@ -145,6 +149,10 @@ done
 }
 grep -q '^status: SUCCEEDED$' "$RUN_DIR/completion_event.txt" || { printf 'packed tarball completion did not report SUCCEEDED\n' >&2; exit 1; }
 grep -q 'tarball-cli-ok' "$RUN_DIR/stdout.log" || { printf 'packed tarball command stdout was not captured\n' >&2; exit 1; }
+
+AWAIT_OUTPUT=$(cd "$WORK_DIR" && LMAS_RUNS_DIR="$RUNS_DIR" LMAS_CLAUDE_OWNER_PID="$$" node "$PKG/bin/lmas-install.js" await "$RUN_ID")
+printf '%s\n' "$AWAIT_OUTPUT" | grep -q '^LMAS_COMPLETION_EVENT v1$' || { printf 'packed tarball CLI await did not emit completion event\n' >&2; exit 1; }
+grep -q '^winner=native$' "$RUN_DIR/delivery.claim/winner" || { printf 'packed tarball CLI await did not create native delivery claim\n' >&2; exit 1; }
 
 STATUS_OUTPUT=$(cd "$WORK_DIR" && LMAS_RUNS_DIR="$RUNS_DIR" node "$PKG/bin/lmas-install.js" status "$RUN_ID")
 printf '%s\n' "$STATUS_OUTPUT" | grep -q '^status: SUCCEEDED$' || { printf 'packed tarball CLI status did not report SUCCEEDED\n' >&2; exit 1; }
