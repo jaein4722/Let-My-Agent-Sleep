@@ -6,7 +6,7 @@ const net = require("node:net")
 
 const [socketPath, mode, capturePath, readyPath] = process.argv.slice(2)
 if (!socketPath || !mode || !capturePath || !readyPath) {
-  throw new Error("usage: mock-codex-app-server.cjs <socket> <success|resume-error|timeout-after-turn> <capture> <ready>")
+  throw new Error("usage: mock-codex-app-server.cjs <socket> <success|resume-error|turn-error|late-errors-after-turn|timeout-after-turn> <capture> <ready>")
 }
 
 if (existsSync(socketPath)) unlinkSync(socketPath)
@@ -85,11 +85,14 @@ const server = net.createServer((socket) => {
   const state = { buffer: Buffer.alloc(0), socket }
   let upgraded = false
   let httpBuffer = Buffer.alloc(0)
+  let initializeId = ""
+  let resumeId = ""
 
   const handleMessage = (message) => {
     capture(message)
 
     if (message.method === "initialize") {
+      initializeId = message.id
       socket.write(frame({
         id: message.id,
         result: {
@@ -100,6 +103,7 @@ const server = net.createServer((socket) => {
     }
 
     if (message.method === "thread/resume") {
+      resumeId = message.id
       if (mode === "resume-error") {
         socket.write(frame({ id: message.id, error: { code: -32000, message: "mock resume rejected" } }))
       } else {
@@ -117,6 +121,13 @@ const server = net.createServer((socket) => {
         id: message.id,
         result: { turn: { id: "mock-turn", status: "inProgress" } },
       }))
+    } else if (mode === "turn-error") {
+      socket.write(frame({ id: message.id, error: { code: -32001, message: "mock turn rejected" } }))
+    } else if (mode === "late-errors-after-turn") {
+      socket.write(Buffer.concat([
+        frame({ id: initializeId, error: { code: -32002, message: "late initialize error" } }),
+        frame({ id: resumeId, error: { code: -32003, message: "late resume error" } }),
+      ]))
     } else if (mode !== "timeout-after-turn" && mode !== "resume-error") {
       throw new Error(`unknown mock mode: ${mode}`)
     }

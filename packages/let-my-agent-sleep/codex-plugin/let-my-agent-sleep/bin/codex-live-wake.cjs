@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 const { createHash, randomBytes, randomUUID } = require("node:crypto")
-const { lstatSync, readFileSync } = require("node:fs")
+const { closeSync, lstatSync, openSync, readFileSync, unlinkSync } = require("node:fs")
 const { homedir } = require("node:os")
 const { dirname, join } = require("node:path")
 const net = require("node:net")
 
 const EXIT_UNAVAILABLE = 10
 const EXIT_AMBIGUOUS = 11
+const CLIENT_VERSION = "0.3.6"
 const MAX_FRAME_BYTES = 256 * 1024 * 1024
 const MAX_HTTP_HEADER_BYTES = 64 * 1024
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -21,6 +22,7 @@ const SAFE_REMOTE_ERRORS = new Set([
 
 function parseArgs(argv) {
   const options = {
+    dispatchMarker: "",
     promptFile: "",
     threadId: "",
     timeoutMs: 15_000,
@@ -38,6 +40,11 @@ function parseArgs(argv) {
       index += 1
       continue
     }
+    if (arg === "--dispatch-marker") {
+      options.dispatchMarker = argv[index + 1] || ""
+      index += 1
+      continue
+    }
     if (arg === "--timeout-ms") {
       options.timeoutMs = Number(argv[index + 1])
       index += 1
@@ -48,6 +55,7 @@ function parseArgs(argv) {
 
   if (!options.threadId) throw new Error("--thread-id is required")
   if (!options.promptFile) throw new Error("--prompt-file is required")
+  if (!options.dispatchMarker) throw new Error("--dispatch-marker is required")
   if (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 100 || options.timeoutMs > 120_000) {
     throw new Error("--timeout-ms must be an integer from 100 to 120000")
   }
@@ -109,6 +117,34 @@ function result(kind, endpoint, reason, transport) {
 
 function writeOutcome(outcome) {
   process.stdout.write(`${JSON.stringify(outcome)}\n`)
+}
+
+function createDispatchMarker(path) {
+  let owned = false
+  let clearError = ""
+
+  return {
+    mark() {
+      const descriptor = openSync(path, "wx", 0o600)
+      owned = true
+      closeSync(descriptor)
+    },
+    clear() {
+      clearError = ""
+      if (!owned) return true
+      try {
+        unlinkSync(path)
+        owned = false
+        return true
+      } catch (error) {
+        clearError = errorReason(error)
+        return false
+      }
+    },
+    clearError() {
+      return clearError
+    },
+  }
 }
 
 function encodeDesktopFrame(message) {
@@ -173,7 +209,7 @@ function appServerError(message, fallback) {
   return errorReason(message.error)
 }
 
-function attemptAppServer(options, prompt) {
+function attemptAppServer(options, prompt, dispatchMarker) {
   const endpoint = appServerEndpoint()
   const transport = "codex-app-server"
 
@@ -207,17 +243,30 @@ function attemptAppServer(options, prompt) {
     let fragmentedPayloads = []
     let fragmentedBytes = 0
 
-    const finish = (kind, reason) => {
+    const finish = (kind, reason, markerClearFailed = false) => {
       if (finished) return
       finished = true
       if (timer) clearTimeout(timer)
       socket.destroy()
-      resolve(result(kind, endpoint, reason, transport))
+      const outcome = result(kind, endpoint, reason, transport)
+      if (markerClearFailed) outcome.markerClearFailed = true
+      resolve(outcome)
     }
 
-    const unavailable = (reason) => finish("unavailable", reason)
     const ambiguous = (reason) => finish("ambiguous", reason)
     const delivered = () => finish("delivered", "app-server-acknowledged-turn-start")
+    const finishUnavailable = (reason) => {
+      const markerCleared = dispatchMarker.clear()
+      const finalReason = markerCleared
+        ? reason
+        : `${reason};dispatch-marker-clear-failed:${dispatchMarker.clearError()}`
+      finish("unavailable", finalReason, !markerCleared)
+    }
+    const unavailable = (reason) => {
+      if (turnDispatched) ambiguous(`unexpected-unavailable-after-dispatch:${reason}`)
+      else finishUnavailable(reason)
+    }
+    const definitiveUnavailable = (reason) => finishUnavailable(reason)
 
     const armTimer = (timeoutMs) => {
       if (timer) clearTimeout(timer)
@@ -240,7 +289,7 @@ function attemptAppServer(options, prompt) {
           clientInfo: {
             name: "let-my-agent-sleep",
             title: "Let My Agent Sleep",
-            version: "0.3.6",
+            version: CLIENT_VERSION,
           },
           capabilities: { experimentalApi: true },
         },
@@ -259,21 +308,40 @@ function attemptAppServer(options, prompt) {
 
     const sendTurn = () => {
       phase = "turn-start"
+      let frame
+      try {
+        frame = encodeWebSocketFrame(0x1, JSON.stringify({
+          id: turnId,
+          method: "turn/start",
+          params: {
+            threadId: options.threadId,
+            clientUserMessageId: randomUUID(),
+            input: [{ type: "text", text: prompt, text_elements: [] }],
+          },
+        }))
+      } catch (error) {
+        unavailable(`turn-frame-encode-failed:${errorReason(error)}`)
+        return
+      }
+
+      try {
+        dispatchMarker.mark()
+      } catch (error) {
+        if (error?.code === "EEXIST") ambiguous(`dispatch-marker-exists:${errorReason(error)}`)
+        else unavailable(`dispatch-marker-failed:${errorReason(error)}`)
+        return
+      }
+
+      // The marker intentionally precedes socket.write. A process death in this
+      // narrow window suppresses fallback to preserve LMAS's at-most-once policy.
       turnDispatched = true
       armTimer(options.timeoutMs)
-      sendJson({
-        id: turnId,
-        method: "turn/start",
-        params: {
-          threadId: options.threadId,
-          clientUserMessageId: randomUUID(),
-          input: [{ type: "text", text: prompt, text_elements: [] }],
-        },
-      })
+      socket.write(frame)
     }
 
     const handleJsonMessage = (message) => {
       if (message?.id === initializeId) {
+        if (phase !== "initialize") return
         if (message.error || !message.result) {
           unavailable(`initialize-failed:${appServerError(message, "missing-result")}`)
           return
@@ -284,6 +352,7 @@ function attemptAppServer(options, prompt) {
       }
 
       if (message?.id === resumeId) {
+        if (phase !== "thread-resume") return
         if (message.error || !message.result?.thread) {
           unavailable(`thread-resume-failed:${appServerError(message, "missing-thread")}`)
           return
@@ -293,8 +362,9 @@ function attemptAppServer(options, prompt) {
       }
 
       if (message?.id !== turnId) return
+      if (phase !== "turn-start") return
       if (message.error || !message.result?.turn) {
-        unavailable(`turn-start-rejected:${appServerError(message, "missing-turn")}`)
+        definitiveUnavailable(`turn-start-rejected:${appServerError(message, "missing-turn")}`)
         return
       }
       delivered()
@@ -483,7 +553,7 @@ function attemptAppServer(options, prompt) {
   })
 }
 
-function attemptDesktopIpc(options, prompt) {
+function attemptDesktopIpc(options, prompt, dispatchMarker) {
   const endpoint = desktopIpcEndpoint()
   const transport = "desktop-ipc"
 
@@ -505,17 +575,30 @@ function attemptDesktopIpc(options, prompt) {
     let timer = null
     let wakeDispatched = false
 
-    const finish = (kind, reason) => {
+    const finish = (kind, reason, markerClearFailed = false) => {
       if (finished) return
       finished = true
       if (timer) clearTimeout(timer)
       socket.destroy()
-      resolve(result(kind, endpoint, reason, transport))
+      const outcome = result(kind, endpoint, reason, transport)
+      if (markerClearFailed) outcome.markerClearFailed = true
+      resolve(outcome)
     }
 
-    const unavailable = (reason) => finish("unavailable", reason)
     const ambiguous = (reason) => finish("ambiguous", reason)
     const delivered = () => finish("delivered", "owner-acknowledged-turn-start")
+    const finishUnavailable = (reason) => {
+      const markerCleared = dispatchMarker.clear()
+      const finalReason = markerCleared
+        ? reason
+        : `${reason};dispatch-marker-clear-failed:${dispatchMarker.clearError()}`
+      finish("unavailable", finalReason, !markerCleared)
+    }
+    const unavailable = (reason) => {
+      if (wakeDispatched) ambiguous(`unexpected-unavailable-after-dispatch:${reason}`)
+      else finishUnavailable(reason)
+    }
+    const definitiveUnavailable = (reason) => finishUnavailable(reason)
 
     const armTimer = (timeoutMs) => {
       if (timer) clearTimeout(timer)
@@ -529,23 +612,41 @@ function attemptDesktopIpc(options, prompt) {
 
     const sendWake = () => {
       phase = "wake-request"
+      let frame
+      try {
+        frame = encodeDesktopFrame({
+          type: "request",
+          requestId: wakeRequestId,
+          sourceClientId: clientId,
+          version: 1,
+          method: "thread-follower-start-turn",
+          params: {
+            conversationId: options.threadId,
+            turnStartParams: {
+              clientUserMessageId: randomUUID(),
+              input: [{ type: "text", text: prompt, text_elements: [] }],
+            },
+          },
+          timeoutMs: options.timeoutMs,
+        })
+      } catch (error) {
+        unavailable(`wake-frame-encode-failed:${errorReason(error)}`)
+        return
+      }
+
+      try {
+        dispatchMarker.mark()
+      } catch (error) {
+        if (error?.code === "EEXIST") ambiguous(`dispatch-marker-exists:${errorReason(error)}`)
+        else unavailable(`dispatch-marker-failed:${errorReason(error)}`)
+        return
+      }
+
+      // See sendTurn: recording uncertainty before write intentionally favors
+      // duplicate suppression over automatic retry in the SIGKILL gap.
       wakeDispatched = true
       armTimer(options.timeoutMs)
-      send({
-        type: "request",
-        requestId: wakeRequestId,
-        sourceClientId: clientId,
-        version: 1,
-        method: "thread-follower-start-turn",
-        params: {
-          conversationId: options.threadId,
-          turnStartParams: {
-            clientUserMessageId: randomUUID(),
-            input: [{ type: "text", text: prompt, text_elements: [] }],
-          },
-        },
-        timeoutMs: options.timeoutMs,
-      })
+      socket.write(frame)
     }
 
     const handleMessage = (message) => {
@@ -578,7 +679,7 @@ function attemptDesktopIpc(options, prompt) {
       }
 
       const remoteError = typeof message.error === "string" ? message.error : "wake-request-failed"
-      if (SAFE_REMOTE_ERRORS.has(remoteError)) unavailable(remoteError)
+      if (SAFE_REMOTE_ERRORS.has(remoteError)) definitiveUnavailable(remoteError)
       else ambiguous(remoteError)
     }
 
@@ -642,25 +743,31 @@ function attemptDesktopIpc(options, prompt) {
 async function main() {
   let options
   let prompt
+  let dispatchMarker
   try {
     options = parseArgs(process.argv.slice(2))
     prompt = readFileSync(options.promptFile, "utf8")
     if (!prompt.trim()) throw new Error("resume prompt is empty")
+    dispatchMarker = createDispatchMarker(options.dispatchMarker)
   } catch (error) {
     writeOutcome(result("unavailable", desktopIpcEndpoint(), errorReason(error), "input"))
     process.exitCode = EXIT_UNAVAILABLE
     return
   }
 
-  const appServerResult = await attemptAppServer(options, prompt)
+  const appServerResult = await attemptAppServer(options, prompt, dispatchMarker)
   writeOutcome(appServerResult)
   if (appServerResult.kind === "delivered") return
   if (appServerResult.kind === "ambiguous") {
     process.exitCode = EXIT_AMBIGUOUS
     return
   }
+  if (appServerResult.markerClearFailed) {
+    process.exitCode = EXIT_UNAVAILABLE
+    return
+  }
 
-  const desktopResult = await attemptDesktopIpc(options, prompt)
+  const desktopResult = await attemptDesktopIpc(options, prompt, dispatchMarker)
   writeOutcome(desktopResult)
   if (desktopResult.kind === "delivered") return
   process.exitCode = desktopResult.kind === "ambiguous" ? EXIT_AMBIGUOUS : EXIT_UNAVAILABLE

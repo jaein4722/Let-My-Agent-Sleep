@@ -287,7 +287,7 @@ run_opencode_adapter() {
 }
 
 run_codex_adapter() {
-  local run_dir prompt_file session_id codex_bin live_mode live_helper live_timeout live_log live_status node_bin
+  local run_dir prompt_file session_id codex_bin live_mode live_helper live_timeout live_log live_status node_bin live_marker marker_attempt marker_candidate
   run_dir=$1
   prompt_file=$2
   session_id=$(awk -F= '$1 == "codex_session_id" { print substr($0, length($1) + 2); exit }' "$run_dir/metadata.txt" 2>/dev/null)
@@ -316,27 +316,47 @@ run_codex_adapter() {
       elif [ ! -f "$live_helper" ]; then
         printf 'codex live wake unavailable: helper not found: %s; using separate-process fallback\n' "$live_helper" >> "$run_dir/adapter.log"
       else
-        "$node_bin" "$live_helper" \
-          --thread-id "$session_id" \
-          --prompt-file "$prompt_file" \
-          --timeout-ms "$live_timeout" > "$live_log" 2>&1
-        live_status=$?
-        case "$live_status" in
-          0)
-            printf 'codex live wake succeeded: active app-server or Desktop owner acknowledged the completion turn\n' >> "$run_dir/adapter.log"
-            cat "$live_log" >> "$run_dir/adapter.log"
-            return 0
-            ;;
-          10)
-            printf 'codex live wake unavailable; using separate-process fallback\n' >> "$run_dir/adapter.log"
-            cat "$live_log" >> "$run_dir/adapter.log"
-            ;;
-          *)
-            printf 'codex live wake outcome is ambiguous after dispatch; separate-process fallback suppressed to avoid a duplicate completion turn\n' >> "$run_dir/adapter.log"
-            cat "$live_log" >> "$run_dir/adapter.log"
-            return 0
-            ;;
-        esac
+        live_marker=
+        marker_attempt=0
+        while [ "$marker_attempt" -lt 8 ]; do
+          marker_candidate="$run_dir/codex-live-wake.$$-${RANDOM:-0}.dispatch"
+          if [ ! -e "$marker_candidate" ] && [ ! -L "$marker_candidate" ]; then
+            live_marker=$marker_candidate
+            break
+          fi
+          marker_attempt=$((marker_attempt + 1))
+        done
+
+        if [ -z "$live_marker" ]; then
+          printf 'codex live wake unavailable: could not allocate a unique dispatch marker path; using separate-process fallback\n' >> "$run_dir/adapter.log"
+        else
+          "$node_bin" "$live_helper" \
+            --thread-id "$session_id" \
+            --prompt-file "$prompt_file" \
+            --dispatch-marker "$live_marker" \
+            --timeout-ms "$live_timeout" > "$live_log" 2>&1
+          live_status=$?
+          case "$live_status" in
+            0)
+              printf 'codex live wake succeeded: active app-server or Desktop owner acknowledged the completion turn\n' >> "$run_dir/adapter.log"
+              cat "$live_log" >> "$run_dir/adapter.log"
+              return 0
+              ;;
+            10)
+              printf 'codex live wake unavailable; using separate-process fallback\n' >> "$run_dir/adapter.log"
+              cat "$live_log" >> "$run_dir/adapter.log"
+              ;;
+            *)
+              if [ -e "$live_marker" ] || [ -L "$live_marker" ]; then
+                printf 'codex live wake outcome is ambiguous after dispatch (helper status %s); separate-process fallback suppressed to avoid a duplicate completion turn\n' "$live_status" >> "$run_dir/adapter.log"
+                cat "$live_log" >> "$run_dir/adapter.log"
+                return 0
+              fi
+              printf 'codex live wake helper exited before creating a dispatch marker (status %s); using separate-process fallback\n' "$live_status" >> "$run_dir/adapter.log"
+              cat "$live_log" >> "$run_dir/adapter.log"
+              ;;
+          esac
+        fi
       fi
       ;;
   esac
