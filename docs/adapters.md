@@ -108,7 +108,7 @@ This stale-context boundary applies to the `codex exec resume` fallback. When `a
 
 ## `claude`
 
-Secondary prototype adapter.
+Experimental adapter.
 
 The adapter captures the `CLAUDE_CODE_SESSION_ID` supplied by Claude Code and writes it to `metadata.txt` at job start. The installed Claude command uses two steps:
 
@@ -135,6 +135,8 @@ claude --continue -p "$(cat resume_prompt.txt)"
 which resumes the most recently used Claude session in the job's `cwd`. If neither is set, or the `claude` command is missing, the adapter writes the reason to `adapter.log` and leaves `resume_prompt.txt` without claiming delivery.
 
 Native and fallback paths share one atomic `delivery.claim` directory. A native claim suppresses fallback even if the task notification later becomes ambiguous; Claude exposes no receipt that could distinguish a lost notification from one queued but not yet processed. A native delivery path whose waiter and owner are still live but has not claimed within the grace period is also ambiguous and suppresses fallback. LMAS never treats a timeout, missing model response, or missing acknowledgement as proof of delivery failure. `resume_prompt.txt` remains available in every case.
+
+Set `LMAS_CLAUDE_NATIVE_GRACE_SECONDS` to change how long LMAS waits for the registered native waiter to claim completion before deciding whether fallback is safe. The default is 5 seconds.
 
 ### Verified live-session behavior
 

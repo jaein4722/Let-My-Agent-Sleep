@@ -13,23 +13,20 @@
   <main class="wrap">
     <span class="eyebrow">OpenCode</span>
     <h1>OpenCode is the primary LMAS target.</h1>
-    <p class="lead">OpenCode gets the cleanest experience: the installer registers the LMAS plugin and skill, and the watcher injects <code>LMAS_COMPLETION_EVENT v1</code> back into the running OpenCode session when the job exits.</p>
+    <p class="lead">OpenCode gets the most complete LMAS experience: start a long job, stop polling, and continue automatically when it finishes.</p>
     <h2>Install</h2>
     <pre><code>npx let-my-agent-sleep install --agent opencode</code></pre>
     <p>Restart OpenCode after installation so it reloads plugin tools and skills.</p>
-    <h2>Tools</h2>
+    <h2>What you get</h2>
     <ul>
-      <li><code>lmas_start</code> starts a command through LMAS handoff semantics.</li>
-      <li><code>lmas_status</code> reads a run status without polling blindly.</li>
-      <li><code>lmas_cancel</code> cancels a user-selected run and records cancellation when the watcher is still alive.</li>
-      <li><code>lmas_info</code> reports current guard and run diagnostics for live doctor checks.</li>
-      <li>The OpenCode TUI sidebar can show the current session's LMAS guard state and active/finalizing runs.</li>
+      <li>Automatic handoff and wake-up in the same session.</li>
+      <li>Status and cancellation when you explicitly ask for them.</li>
+      <li>A TUI sidebar showing the current handoff and run state.</li>
+      <li>A recovery prompt if the OpenCode session is no longer available.</li>
     </ul>
-    <h2>Oh My OpenAgent continuation</h2>
-    <p>During OpenCode install, LMAS does not modify Oh My OpenAgent <code>disabled_hooks</code> or <code>disabled_skills</code>. Existing settings are preserved; doctor only warns about entries that may be LMAS 0.3.0 residue.</p>
-    <p>The OpenCode plugin guard blocks explicitly marked or clearly identified continuation prompts only while an <code>LMAS_HANDOFF v1</code> is active in the same session.</p>
-    <p>LMAS also installs a runtime guard in the OpenCode plugin. While an <code>LMAS_HANDOFF v1</code> is active, OMO initiator markers, compaction-continuation metadata, and known TODO/Ralph/Boulder or explicit continue-work prompts are no-oped until <code>LMAS_COMPLETION_EVENT v1</code> arrives. Unmarked fallback prompts, benign synthetic notifications, direct user slash commands, <code>noReply</code> internal notifications, and LMAS completion prompts pass through. A direct user request authorizes one exact-run status or cancel action without ending the handoff.</p>
-    <p>LMAS does not install OpenCode compaction hooks. Compaction and ordinary continuation remain owned by OpenCode and other plugins; LMAS only blocks live reply-expecting prompts for active handoffs.</p>
+    <h2>Oh My OpenAgent compatibility</h2>
+    <p>LMAS does not modify Oh My OpenAgent <code>disabled_hooks</code> or <code>disabled_skills</code>. Existing settings are preserved.</p>
+    <p>During an active handoff, LMAS blocks only recognized automatic continuation prompts. Unmarked fallback prompts, benign synthetic notifications, direct user slash commands, and LMAS completion messages still pass through.</p>
     <h2>Agent prompt</h2>
     <pre><code>Use the let-my-agent-sleep skill for this task.
 Start this command with lmas_start:
@@ -37,7 +34,7 @@ python train.py --config configs/exp.yaml
 After LMAS_HANDOFF v1, stop. Do not wait, poll, inspect status, or use bash as a fallback.</code></pre>
     <div class="card">
       <h2>Non-default server URL</h2>
-      <p>If OpenCode is running on a non-default server URL, include that URL in the request so the watcher knows where to inject the completion prompt. The server that owns the session must still be running when the watched job finishes; otherwise LMAS leaves <code>resume_prompt.txt</code> for manual recovery.</p>
+      <p>If OpenCode uses a non-default server URL, include it in your request. The server that owns the session must still be running when the job finishes; otherwise LMAS leaves a recovery prompt.</p>
     </div>
     <div class="card">
       <h2>Status, notify, and cancel</h2>

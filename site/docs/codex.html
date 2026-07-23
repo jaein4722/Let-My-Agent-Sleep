@@ -13,24 +13,24 @@
   <main class="wrap">
     <span class="eyebrow">Codex</span>
     <h1>Codex support uses same-session resume.</h1>
-    <p class="lead">LMAS starts the long-running job in tmux, records the handoff, waits outside the agent turn, and resumes the Codex thread when the process finishes.</p>
+    <p class="lead">LMAS keeps the long-running job under tmux, lets Codex stop polling, and resumes the same task when the work finishes.</p>
     <h2>Install</h2>
     <pre><code>npx let-my-agent-sleep install --agent codex</code></pre>
     <p>Restart Codex after installing the LMAS skill. The Codex session must be resumable from the machine where the job is running.</p>
     <h2>Live server and SSH mode</h2>
-    <p>For an already-running TUI to wake immediately, start Codex's own app server and attach the TUI to it. LMAS installs no service, wrapper, or alternate Codex binary.</p>
+    <p>For an already-running TUI to wake immediately, start Codex's built-in app server and attach the TUI to it:</p>
     <pre><code>codex app-server --listen unix://
 # From the terminal where you use Codex:
 codex --remote unix://</code></pre>
-    <p>Keep the first command alive with the same tmux or systemd setup already used for remote services. LMAS discovers the same-user default socket and starts the completion turn through that owner. It never installs, bootstraps, or starts the app server. Codex Desktop remains a secondary live route; if neither owner exists, LMAS falls back to a separate <code>codex exec resume</code> process.</p>
+    <p>Keep the first command running while you use the attached TUI. This works locally and over SSH. LMAS connects to Codex's existing server; it does not install or start a service of its own.</p>
     <h2>What the agent should do</h2>
     <ul>
       <li>Use the installed <code>let-my-agent-sleep</code> skill for commands that would require waiting.</li>
       <li>Start the command with LMAS and return only the handoff summary.</li>
       <li>After <code>LMAS_HANDOFF v1</code>, end the turn instead of sleeping, polling, or repeatedly continuing.</li>
     </ul>
-    <h2>Completion</h2>
-    <p>When the process exits, LMAS writes a completion event with the run id, status, exit code, command, stdout, stderr, metadata, artifacts directory, and finish time. If <code>adapter.log</code> reports a successful live wake, the already-running owner started the completion turn and no reload is required. If it reports the separate-process fallback, reload or reopen a Desktop task or CLI TUI that stayed open across completion before continuing. An ambiguous post-dispatch result never triggers an automatic fallback, preventing duplicate completion turns.</p>
+    <h2>If Codex is not available</h2>
+    <p>The job continues under tmux. LMAS attempts a recovery resume and keeps a recovery prompt with the run results. If a TUI or Desktop task stayed open but did not update, reopen it before continuing.</p>
   </main>
   <footer><div class="wrap"><a href="./">Docs index</a></div></footer>
 </body>

@@ -96,9 +96,9 @@ The agent should start the job, report a `run_id`, and stop. When the job finish
 
 | Agent | Status | Resume path |
 | --- | --- | --- |
-| OpenCode | Primary | Plugin tools and native completion prompt injection |
-| Codex | Supported | Same-session resume from the job environment |
-| Claude Code | Experimental | Native background waiter while the session lives; durable resume fallback otherwise |
+| OpenCode | Primary | Automatic wake-up through the OpenCode plugin |
+| Codex | Supported | Automatic same-session resume |
+| Claude Code | Experimental | Automatic wake while Claude is open, with recovery fallback |
 
 Install for a specific agent:
 
@@ -114,34 +114,24 @@ Use `--dry-run` to preview changes before writing files.
 
 ## OpenCode
 
-OpenCode is the primary target. The installer adds the Let My Agent Sleep plugin and skill, including:
+OpenCode is the primary target. The installer adds the LMAS plugin and skill, so the agent can:
 
-- `lmas_start`
-- `lmas_status`
-- `lmas_cancel`
-- `lmas_info`
+- start long-running jobs;
+- stop polling after a clean handoff;
+- check or cancel a run when you ask; and
+- continue automatically when the job finishes.
 
-If OpenCode is running on a non-default server URL, pass that URL when asking the agent to start a job.
-The OpenCode server that owns the session must still be running when the watched job finishes; otherwise LMAS keeps `resume_prompt.txt` for manual recovery.
+The OpenCode server that owns the session must still be running when the job finishes. If it is not, LMAS keeps a recovery prompt with the run results. The TUI sidebar shows the current handoff and run state.
 
-For OpenCode installs, LMAS does not modify Oh My OpenAgent `disabled_hooks` or `disabled_skills`:
-
-```bash
-npx let-my-agent-sleep install --agent opencode
-```
-
-Existing OMO settings are preserved. `lmas doctor --agent opencode` warns when known continuation hooks may be residue from an LMAS 0.3.0 install, but never removes them automatically. The OpenCode plugin blocks explicitly marked or clearly identified continuation prompts only while an `LMAS_HANDOFF v1` is active in the same session.
-
-LMAS also installs a runtime guard in the OpenCode plugin. While an `LMAS_HANDOFF v1` is active, OMO initiator markers, compaction-continuation metadata, and known TODO/Ralph/Boulder or explicit continue-work prompts are no-oped until `LMAS_COMPLETION_EVENT v1` arrives. Unmarked fallback prompts, benign synthetic notifications, direct user slash commands, `noReply` internal notifications, and LMAS completion prompts pass through. A direct user request authorizes one exact-run status or cancel action without ending the handoff. `lmas_info` reports current guard and run state for live doctor checks, and the OpenCode TUI sidebar shows whether the current session has an active LMAS guard plus the visible active/finalizing runs.
+Compatibility note: LMAS does not modify Oh My OpenAgent `disabled_hooks` or `disabled_skills`. Existing OMO settings are preserved. During an active handoff, LMAS blocks only recognized automatic continuation prompts. Unmarked fallback prompts, benign synthetic notifications, direct user slash commands, and LMAS completion messages still pass through.
 
 OpenCode docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/opencode.html
 
 ## Codex
 
-Codex support is available through the installed Let My Agent Sleep skill.
+Codex support is available through the installed LMAS skill. It can resume the same task automatically when the job finishes.
 
-For automatic resume, the Codex session must be resumable from the environment where the job is running.
-For a server or SSH workflow with live TUI wake-up, run Codex's built-in app server and attach the TUI to it; LMAS installs no service, wrapper, or alternate Codex binary:
+For immediate wake-up in a local TUI or an SSH workflow, use Codex's built-in remote mode:
 
 ```bash
 codex app-server --listen unix://
@@ -149,15 +139,15 @@ codex app-server --listen unix://
 codex --remote unix://
 ```
 
-Keep the app-server command alive with the same tmux/systemd setup you already use for remote services. LMAS detects its same-user default Unix socket and starts the completion turn through that active owner, so the attached TUI updates immediately. The Desktop owner is retained as a secondary live route. If neither live owner is available, LMAS falls back to `codex exec resume`; that separate-process path requires reloading or reopening a TUI or Desktop view that stayed open. LMAS never installs, bootstraps, or starts a Codex service and never changes the Codex executable path. Set `LMAS_CODEX_LIVE_WAKE=0` to disable live attempts, and use `LMAS_CODEX_BIN=/path/to/codex` only to override the fallback executable.
+Keep the app-server command running while you use the attached TUI. LMAS uses that existing Codex connection for immediate wake-up; it does not install or start a service of its own. If no live connection is available, LMAS attempts a recovery resume and leaves a recovery prompt.
 
 Codex docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/codex.html
 
 ## Claude Code
 
-Claude Code support is experimental. After LMAS starts and verifies the tmux-owned job, the installed `/let-my-agent-sleep` command registers `lmas await <run_id>` as Claude's own native background task. If that Claude session and waiter stay alive, completion ends the waiter, wakes the same session, and lets it continue without polling. The waiter never owns the real job.
+Claude Code support is experimental. While Claude remains open, LMAS can wake the same session when the job finishes. If Claude closes, the real job continues under tmux and LMAS attempts a safe recovery resume. A recovery prompt remains available if automatic delivery is not possible.
 
-If Claude exits, the real command keeps running under LMAS and tmux. A background Bash child can briefly survive as an orphan, so LMAS records both the waiter and its owning Claude process; native delivery is eligible only while both exact processes remain alive. When completion proves that no native path can deliver it, LMAS uses the existing `claude --resume` path. An atomic delivery claim prevents native and fallback completion payloads from both winning. Ambiguous post-claim failures suppress fallback to avoid duplicates and retain `resume_prompt.txt` for recovery. LMAS installs no daemon, executable wrapper, or PATH change. Set `LMAS_CLAUDE_CONTINUE=1` only when continuing the most recent Claude session in the current working directory is acceptable.
+LMAS does not install a daemon, replace the Claude executable, or change your `PATH`.
 
 Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-code.html
 
@@ -165,16 +155,11 @@ Claude Code docs: https://jaein4722.github.io/Let-My-Agent-Sleep/docs/claude-cod
 
 ```bash
 lmas start -- python train.py --config configs/exp.yaml
-lmas await <run_id> # Claude native background task only
 lmas status <run_id>
 lmas list
 lmas cancel <run_id>
 lmas start --notify https://ntfy.sh/my-topic -- python train.py
 lmas doctor --agent opencode
-lmas doctor --agent opencode --server-url http://127.0.0.1:4096
-lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --directory "$PWD"
-lmas doctor --agent opencode --server-url http://127.0.0.1:4096 --workspace "<workspace-id>"
-LMAS_OPENCODE_PASSWORD=<password> lmas doctor --agent opencode --server-url http://127.0.0.1:4096
 ```
 
 Most users should let the agent call the installed skill or plugin tool instead of calling the CLI directly. The CLI is still useful for debugging, manual runs, and fallback workflows.
@@ -182,8 +167,6 @@ Most users should let the agent call the installed skill or plugin tool instead 
 Direct `lmas start` uses the `noop` adapter unless `--adapter` or `LMAS_ADAPTER` is set. It always writes `resume_prompt.txt`; automatic session resume requires the matching agent adapter.
 
 `--notify <url>` posts the completion resume prompt to a secondary webhook or ntfy URL after the job exits. Only `http://` and `https://` URLs are accepted. It does not replace session resume; it is only an extra notification path. If the URL contains a secret, prefer environment injection and do not put it in prompts or shared logs. Run artifacts can contain commands, local paths, and metadata; LMAS creates them with owner-only permissions, but they should still be treated as sensitive.
-
-HTTP completion paths are bounded: OpenCode adapter calls and `--notify` use `LMAS_HTTP_CONNECT_TIMEOUT` (default `5` seconds) and `LMAS_HTTP_MAX_TIME` (default `30` seconds). A timeout leaves `resume_prompt.txt` available for manual recovery.
 
 ## Runtime Artifacts
 
@@ -230,7 +213,7 @@ No. LMAS wraps the command the agent was already going to run.
 
 ### Does it require a daemon?
 
-LMAS itself does not run a daemon. It uses `tmux` and plain files, with no database, cloud scheduler, or project-specific callback. OpenCode completion injection still requires the OpenCode server/session that owns the run to be alive when the job finishes. Claude's same-session native wake requires both its registered waiter and the owning Claude process to remain alive; otherwise LMAS uses the separate-process resume fallback when delivery is definitely safe. Every adapter retains `resume_prompt.txt` for recovery.
+No. LMAS uses `tmux` and plain files. It does not install a daemon, database, or cloud service. Automatic wake-up still depends on the selected agent being available; if it is not, LMAS leaves recovery information with the run.
 
 ### What happens if a job fails?
 

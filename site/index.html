@@ -1105,15 +1105,15 @@
           <div class="p-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></svg>
           </div>
-          <h3>Survives everything</h3>
-          <p>The real job stays under tmux if an agent exits. Live owners wake immediately; durable fallbacks preserve recovery without polling.</p>
+          <h3>Keeps jobs running</h3>
+          <p>The real job stays under tmux if the agent exits, with recovery information saved for later.</p>
         </div>
         <div class="card principle reveal">
           <div class="p-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>
           </div>
-          <h3>Crashes get fixed in minutes</h3>
-          <p>A failed run wakes the agent immediately — not found dead the next morning.</p>
+          <h3>Failures surface quickly</h3>
+          <p>When the agent is available, a failed run wakes it with the logs needed to decide what comes next.</p>
         </div>
         <div class="card principle reveal">
           <div class="p-icon">
@@ -1157,7 +1157,7 @@
             <h3>Claude Code</h3>
             <span class="tier tier-exp">Experimental</span>
           </div>
-          <p>Native waiter wake; deduplicated resume fallback.</p>
+          <p>Automatic wake while Claude is open, with recovery fallback.</p>
         </div>
       </div>
     </section>
@@ -1180,7 +1180,7 @@
         </div>
         <div class="card faq-item reveal">
           <h3>What does it require?</h3>
-          <p><code>tmux</code> must be installed. LMAS itself has no daemon, database, cloud scheduler, or project-specific callback. OpenCode wake-up still needs the owning OpenCode server/session alive at completion.</p>
+          <p><code>tmux</code> must be installed. LMAS itself has no daemon, database, cloud scheduler, or project-specific callback. Automatic wake-up also depends on the selected agent being available.</p>
         </div>
       </div>
     </section>
