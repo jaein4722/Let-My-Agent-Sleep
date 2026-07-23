@@ -2,6 +2,22 @@
 
 All notable changes to Let My Agent Sleep are documented here.
 
+## 0.4.0 - 2026-07-23
+
+### Added
+
+- Added experimental Claude Code wake-up through its native background-task support, allowing the same live session to continue when an LMAS job finishes.
+- Added a safe Claude recovery path that resumes the recorded session only when native delivery is definitely unavailable, while keeping the real job independent under tmux.
+
+### Changed
+
+- Simplified the public README and website around installation, expected behavior, and limitations while retaining advanced configuration in the adapter reference.
+
+### Fixed
+
+- Hardened Codex live wake-up so helper crashes fall back when nothing was sent, while uncertain delivery still suppresses a duplicate completion turn.
+- Added durable dispatch tracking across Codex live-wake attempts, including rejection and transport fallback paths.
+
 ## 0.3.6 - 2026-07-20
 
 ### Added
